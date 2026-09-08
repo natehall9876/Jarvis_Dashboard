@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS, BRAND } from "./nav-config";
+import { signOut } from "@/app/(auth)/login/actions";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -67,6 +68,15 @@ export function MobileNav() {
                 );
               })}
             </nav>
+            <form action={signOut} className="mt-4 border-t border-[var(--color-border)] pt-4">
+              <button
+                type="submit"
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+              >
+                <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
+                Sign out
+              </button>
+            </form>
           </div>
           <button
             type="button"
