@@ -69,6 +69,7 @@ src/
       routes/[id]/         Route stop order is editable (server action)
       quotes/[id]/
       invoices/[id]/
+      invoices/payments/     All payments across every client/invoice
       employees/[id]/
       equipment/[id]/
       expenses/
@@ -89,6 +90,7 @@ src/
                             { data, error } instead of throwing, so pages can
                             render loading/error/empty states cleanly
     ai/advisor.ts           Builds a live-data context and calls the AI provider
+    integrations/           Real (env-gated) Zapier + OpenWeatherMap calls
     calculations.ts         Production rate, gross profit, labor cost %, etc.
     format.ts / utils.ts    Formatting + class-name helpers
     env.ts                  Central env var reading + "is this configured" checks
@@ -100,26 +102,54 @@ src/
 
 ## Database
 
-`src/types/database.types.ts` is a best-effort schema based on the tables
-described in the project brief (clients, properties, services, employees,
-routes, service_agreements, route_stops, jobs, job_employees, time_entries,
-equipment, job_equipment, equipment_maintenance, quotes, quote_items,
-invoices, invoice_items, payments, expenses, job_materials, job_photos,
-integration_mappings). Once your live schema is confirmed, regenerate it with
-the Supabase CLI and nothing else needs to change:
+`src/types/database.types.ts` was reconciled against the **live** Supabase
+project (queried via `information_schema` — see column names, nullability,
+and foreign keys there) rather than guessed from the project brief. A few
+things worth knowing if you're touching the schema:
+
+- **`jobs` has no `client_id`.** The client is only reachable through
+  `jobs.property_id → properties.client_id`. Every job query joins through
+  `properties` to get client info.
+- **No crew-lead concept.** Neither `jobs` nor `routes` has a crew-lead
+  column — crew composition lives entirely in `job_employees`.
+- **The database also has a capitalized `"Properties"` table**, distinct
+  from `properties` (Postgres treats quoted-case identifiers as separate
+  tables). It has a subset of the real columns and looks like leftover
+  cruft from initial setup — Jarvis intentionally reads/writes only the
+  lowercase `properties` table and never touches `"Properties"`. Nothing
+  was dropped; if you confirm it's unused, it's safe to drop yourself.
+- **`job_photos.storage_path`** is a Supabase Storage path, not a URL —
+  `src/lib/supabase/storage.ts` assumes a public bucket named `job-photos`.
+  Update `JOB_PHOTOS_BUCKET` there if yours is named differently or private.
+
+If the schema changes, regenerate this file with the Supabase CLI and
+reconcile any renamed/added columns the same way:
 
 ```bash
-npx supabase gen types typescript --project-id <project-id> --schema public > src/types/database.types.ts
+npx supabase gen types typescript --project-id pmxzldcltkfjkmtatvlu --schema public > src/types/database.types.ts
 ```
 
 ## Integrations
 
 The Settings / Integrations page never marks an integration "Connected"
 unless Jarvis has actually verified it (currently: Supabase, via a live
-query). Everything else — Homeworks, QuickBooks, Zapier, Google Calendar,
-Weather, GitHub, and the AI provider — reports "Needs Setup" once credentials
-are present in the environment, and "Not Connected" otherwise. Wiring up the
-real sync/OAuth flows for those is the next phase of work.
+query). Two integrations are genuinely wired up beyond just status-checking:
+
+- **AI Advisor** — calls Anthropic's API with a live business-data context
+  once `AI_PROVIDER_API_KEY` is set (see `src/lib/ai/advisor.ts`).
+- **Weather** — calls OpenWeatherMap for the Command Center weather card
+  once `WEATHER_API_KEY`, `WEATHER_LOCATION_LAT`, and `WEATHER_LOCATION_LON`
+  are set (see `src/lib/integrations/weather.ts`). Properties already have
+  `latitude`/`longitude` columns, so per-route weather is a natural next step.
+- **Zapier** — `src/lib/integrations/zapier.ts` posts real webhook events to
+  `ZAPIER_WEBHOOK_URL` when called; no call sites are wired up yet (no events
+  currently trigger it), but the dispatcher itself is real, not a stub.
+
+Homeworks, QuickBooks, and Google Calendar report "Needs Setup" once
+credentials are present, but stay short of "Connected" — those need an
+actual OAuth flow and a place to persist tokens, which means a schema
+decision (a new table) and OAuth app credentials neither of which exist
+yet. Building those is the natural next phase.
 
 ## Security
 
