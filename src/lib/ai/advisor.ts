@@ -1,7 +1,7 @@
 import { integrationEnv, isIntegrationConfigured } from "@/lib/env";
 import { getBusinessPulse, getTodaysMission } from "@/lib/data/command-center";
 import { getOverdueInvoices } from "@/lib/data/invoices";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatPercent, clientDisplayName } from "@/lib/format";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
@@ -52,7 +52,7 @@ async function buildBusinessContext(): Promise<string> {
     lines.push(
       "Overdue invoices: " +
         overdue.data
-          .map((inv) => `${inv.client?.name ?? "Unknown client"} owes ${formatCurrency(inv.balance)} (${inv.days_overdue}d overdue)`)
+          .map((inv) => `${clientDisplayName(inv.client)} owes ${formatCurrency(inv.balance)} (${inv.days_overdue}d overdue)`)
           .join("; "),
     );
   } else {

@@ -1,19 +1,26 @@
 /**
- * Hand-authored TypeScript types for the WeedEater Lawn Care Supabase schema.
+ * TypeScript types for the WeedEater Lawn Care Supabase schema.
  *
- * These types are modeled directly on the table list and fields described in
- * the Jarvis project brief. They are shaped exactly like the output of
- * `supabase gen types typescript`, so once the real schema is confirmed you
- * can regenerate this file with the Supabase CLI and nothing else in the
- * codebase has to change:
+ * Reconciled against the LIVE schema (queried via information_schema on
+ * 2026-09-07) — column names, nullability, and foreign keys here match the
+ * real database, not the original project-brief guesses. Shaped like
+ * `supabase gen types typescript` output, so you can regenerate this file
+ * with the Supabase CLI later and nothing else needs to change:
  *
- *   npx supabase gen types typescript --project-id <project-id> \
+ *   npx supabase gen types typescript --project-id pmxzldcltkfjkmtatvlu \
  *     --schema public > src/types/database.types.ts
  *
- * Until then, treat this as the best-effort contract between the app and the
- * database — verify column names/types (and the Relationships below, which
- * drive typed joins/embeds) against the live schema before relying on it for
- * anything destructive.
+ * Note: the live database also has a capitalized "Properties" table
+ * (distinct from "properties" — Postgres treats quoted-case identifiers as
+ * separate tables). It has a subset of the real columns and appears to be
+ * leftover cruft from initial setup. This app intentionally targets the
+ * lowercase "properties" table and does not read from or modify "Properties".
+ *
+ * "Enum-like" text columns (status, role, frequency, etc.) are plain `text`
+ * in the database with no CHECK constraint we could confirm, so their Row
+ * type here is `string` — the exported *Status/*Role union types alongside
+ * them document the values this app actually writes and expects, but the
+ * database itself doesn't enforce them.
  */
 
 export type Json =
@@ -25,55 +32,20 @@ export type Json =
   | Json[];
 
 // ---------------------------------------------------------------------------
-// Shared enum-like string unions
+// Expected values for text columns (documentation, not DB-enforced)
 // ---------------------------------------------------------------------------
 
 export type ClientStatus = "active" | "inactive" | "prospect";
-export type ContactMethod = "phone" | "email" | "text";
-
+export type ContactMethod = "sms" | "email" | "phone";
 export type EmployeeRole = "owner" | "manager" | "crew_lead" | "crew_member" | "admin";
-
-export type DayOfWeek =
-  | "monday"
-  | "tuesday"
-  | "wednesday"
-  | "thursday"
-  | "friday"
-  | "saturday"
-  | "sunday";
-
-export type AgreementFrequency =
-  | "weekly"
-  | "biweekly"
-  | "monthly"
-  | "seasonal"
-  | "one_time";
-
+export type RouteDay = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+export type AgreementFrequency = "weekly" | "biweekly" | "monthly" | "seasonal" | "one_time";
 export type JobStatus = "scheduled" | "in_progress" | "completed" | "cancelled" | "skipped";
-
-export type EquipmentStatus = "operational" | "needs_maintenance" | "out_of_service";
-
+export type EquipmentStatus = "active" | "maintenance" | "out_of_service";
 export type QuoteStatus = "draft" | "sent" | "accepted" | "declined";
-
-export type InvoiceStatus = "draft" | "sent" | "partial" | "paid" | "overdue";
-
+export type InvoiceStatus = "draft" | "sent" | "paid" | "void";
 export type PaymentMethod = "cash" | "check" | "credit_card" | "ach" | "other";
-
 export type PhotoType = "before" | "after" | "issue" | "other";
-
-export type IntegrationName =
-  | "homeworks"
-  | "quickbooks"
-  | "zapier"
-  | "google_calendar";
-
-export type IntegrationEntityType =
-  | "client"
-  | "property"
-  | "invoice"
-  | "quote"
-  | "payment"
-  | "job";
 
 // ---------------------------------------------------------------------------
 // Database
@@ -87,24 +59,26 @@ export type Database = {
           id: string;
           created_at: string;
           updated_at: string;
-          name: string;
+          first_name: string | null;
+          last_name: string | null;
           company_name: string | null;
           email: string | null;
           phone: string | null;
-          preferred_contact_method: ContactMethod | null;
-          status: ClientStatus;
+          preferred_contact_method: string | null;
+          status: string | null;
           notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
-          name: string;
+          first_name?: string | null;
+          last_name?: string | null;
           company_name?: string | null;
           email?: string | null;
           phone?: string | null;
-          preferred_contact_method?: ContactMethod | null;
-          status?: ClientStatus;
+          preferred_contact_method?: string | null;
+          status?: string | null;
           notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["clients"]["Insert"]>;
@@ -114,33 +88,35 @@ export type Database = {
       properties: {
         Row: {
           id: string;
-          created_at: string;
+          created_at: string | null;
           updated_at: string;
-          client_id: string;
-          route_id: string | null;
-          address_line1: string;
-          address_line2: string | null;
-          city: string;
-          state: string;
-          postal_code: string;
-          property_notes: string | null;
+          client_id: string | null;
+          property_name: string | null;
+          street: string | null;
+          city: string | null;
+          state: string | null;
+          zip: string | null;
+          latitude: number | null;
+          longitude: number | null;
           access_notes: string | null;
-          is_active: boolean;
+          service_notes: string | null;
+          active: boolean;
         };
         Insert: {
           id?: string;
-          created_at?: string;
+          created_at?: string | null;
           updated_at?: string;
-          client_id: string;
-          route_id?: string | null;
-          address_line1: string;
-          address_line2?: string | null;
-          city: string;
-          state: string;
-          postal_code: string;
-          property_notes?: string | null;
+          client_id?: string | null;
+          property_name?: string | null;
+          street?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           access_notes?: string | null;
-          is_active?: boolean;
+          service_notes?: string | null;
+          active?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["properties"]["Insert"]>;
         Relationships: [
@@ -149,13 +125,6 @@ export type Database = {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "properties_route_id_fkey";
-            columns: ["route_id"];
-            isOneToOne: false;
-            referencedRelation: "routes";
             referencedColumns: ["id"];
           },
         ];
@@ -171,7 +140,8 @@ export type Database = {
           category: string | null;
           default_price: number | null;
           default_budgeted_hours: number | null;
-          is_active: boolean;
+          recurring_allowed: boolean;
+          active: boolean;
         };
         Insert: {
           id?: string;
@@ -182,7 +152,8 @@ export type Database = {
           category?: string | null;
           default_price?: number | null;
           default_budgeted_hours?: number | null;
-          is_active?: boolean;
+          recurring_allowed?: boolean;
+          active?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["services"]["Insert"]>;
         Relationships: [];
@@ -194,32 +165,30 @@ export type Database = {
           created_at: string;
           updated_at: string;
           first_name: string;
-          last_name: string;
-          role: EmployeeRole;
-          hourly_rate: number | null;
-          is_active: boolean;
+          last_name: string | null;
           phone: string | null;
           email: string | null;
-          drivers_license_number: string | null;
-          drivers_license_state: string | null;
+          role: string | null;
+          hourly_rate: number | null;
+          has_drivers_license: boolean;
+          active: boolean;
           hire_date: string | null;
-          user_id: string | null;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
           first_name: string;
-          last_name: string;
-          role?: EmployeeRole;
-          hourly_rate?: number | null;
-          is_active?: boolean;
+          last_name?: string | null;
           phone?: string | null;
           email?: string | null;
-          drivers_license_number?: string | null;
-          drivers_license_state?: string | null;
+          role?: string | null;
+          hourly_rate?: number | null;
+          has_drivers_license?: boolean;
+          active?: boolean;
           hire_date?: string | null;
-          user_id?: string | null;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["employees"]["Insert"]>;
         Relationships: [];
@@ -231,29 +200,23 @@ export type Database = {
           created_at: string;
           updated_at: string;
           name: string;
-          day_of_week: DayOfWeek;
-          crew_lead_id: string | null;
-          is_active: boolean;
+          route_day: string | null;
+          start_location: string | null;
+          active: boolean;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
           name: string;
-          day_of_week: DayOfWeek;
-          crew_lead_id?: string | null;
-          is_active?: boolean;
+          route_day?: string | null;
+          start_location?: string | null;
+          active?: boolean;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["routes"]["Insert"]>;
-        Relationships: [
-          {
-            foreignKeyName: "routes_crew_lead_id_fkey";
-            columns: ["crew_lead_id"];
-            isOneToOne: false;
-            referencedRelation: "employees";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
 
       service_agreements: {
@@ -261,41 +224,36 @@ export type Database = {
           id: string;
           created_at: string;
           updated_at: string;
-          client_id: string;
           property_id: string;
           service_id: string;
           route_id: string | null;
-          frequency: AgreementFrequency;
-          price: number;
+          recurring_price: number | null;
+          frequency: string | null;
+          preferred_day: string | null;
           budgeted_hours: number | null;
-          start_date: string;
+          start_date: string | null;
           end_date: string | null;
-          is_active: boolean;
+          active: boolean;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
-          client_id: string;
           property_id: string;
           service_id: string;
           route_id?: string | null;
-          frequency: AgreementFrequency;
-          price: number;
+          recurring_price?: number | null;
+          frequency?: string | null;
+          preferred_day?: string | null;
           budgeted_hours?: number | null;
-          start_date: string;
+          start_date?: string | null;
           end_date?: string | null;
-          is_active?: boolean;
+          active?: boolean;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["service_agreements"]["Insert"]>;
         Relationships: [
-          {
-            foreignKeyName: "service_agreements_client_id_fkey";
-            columns: ["client_id"];
-            isOneToOne: false;
-            referencedRelation: "clients";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "service_agreements_property_id_fkey";
             columns: ["property_id"];
@@ -324,24 +282,20 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
-          updated_at: string;
           route_id: string;
           property_id: string;
-          service_agreement_id: string | null;
-          stop_order: number;
-          estimated_price: number | null;
-          budgeted_minutes: number | null;
+          stop_order: number | null;
+          estimated_minutes: number | null;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
-          updated_at?: string;
           route_id: string;
           property_id: string;
-          service_agreement_id?: string | null;
-          stop_order: number;
-          estimated_price?: number | null;
-          budgeted_minutes?: number | null;
+          stop_order?: number | null;
+          estimated_minutes?: number | null;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["route_stops"]["Insert"]>;
         Relationships: [
@@ -359,13 +313,6 @@ export type Database = {
             referencedRelation: "properties";
             referencedColumns: ["id"];
           },
-          {
-            foreignKeyName: "route_stops_service_agreement_id_fkey";
-            columns: ["service_agreement_id"];
-            isOneToOne: false;
-            referencedRelation: "service_agreements";
-            referencedColumns: ["id"];
-          },
         ];
       };
 
@@ -374,53 +321,46 @@ export type Database = {
           id: string;
           created_at: string;
           updated_at: string;
-          client_id: string;
           property_id: string;
           service_id: string | null;
           service_agreement_id: string | null;
           route_id: string | null;
-          crew_lead_id: string | null;
-          status: JobStatus;
-          scheduled_date: string;
+          scheduled_date: string | null;
           scheduled_start_time: string | null;
-          scheduled_end_time: string | null;
-          actual_start_time: string | null;
-          actual_end_time: string | null;
-          price: number;
+          stop_order: number | null;
+          status: string;
+          price: number | null;
           budgeted_hours: number | null;
           actual_hours: number | null;
+          crew_size: number | null;
           notes: string | null;
+          completion_notes: string | null;
+          started_at: string | null;
+          completed_at: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
-          client_id: string;
           property_id: string;
           service_id?: string | null;
           service_agreement_id?: string | null;
           route_id?: string | null;
-          crew_lead_id?: string | null;
-          status?: JobStatus;
-          scheduled_date: string;
+          scheduled_date?: string | null;
           scheduled_start_time?: string | null;
-          scheduled_end_time?: string | null;
-          actual_start_time?: string | null;
-          actual_end_time?: string | null;
-          price: number;
+          stop_order?: number | null;
+          status?: string;
+          price?: number | null;
           budgeted_hours?: number | null;
           actual_hours?: number | null;
+          crew_size?: number | null;
           notes?: string | null;
+          completion_notes?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [
-          {
-            foreignKeyName: "jobs_client_id_fkey";
-            columns: ["client_id"];
-            isOneToOne: false;
-            referencedRelation: "clients";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "jobs_property_id_fkey";
             columns: ["property_id"];
@@ -449,30 +389,19 @@ export type Database = {
             referencedRelation: "routes";
             referencedColumns: ["id"];
           },
-          {
-            foreignKeyName: "jobs_crew_lead_id_fkey";
-            columns: ["crew_lead_id"];
-            isOneToOne: false;
-            referencedRelation: "employees";
-            referencedColumns: ["id"];
-          },
         ];
       };
 
       job_employees: {
         Row: {
-          id: string;
-          created_at: string;
           job_id: string;
           employee_id: string;
-          role_on_job: string | null;
+          hours_worked: number | null;
         };
         Insert: {
-          id?: string;
-          created_at?: string;
           job_id: string;
           employee_id: string;
-          role_on_job?: string | null;
+          hours_worked?: number | null;
         };
         Update: Partial<Database["public"]["Tables"]["job_employees"]["Insert"]>;
         Relationships: [
@@ -497,18 +426,24 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
-          job_id: string;
           employee_id: string;
-          clock_in: string;
+          job_id: string | null;
+          work_date: string | null;
+          clock_in: string | null;
           clock_out: string | null;
+          regular_hours: number | null;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
-          job_id: string;
           employee_id: string;
-          clock_in: string;
+          job_id?: string | null;
+          work_date?: string | null;
+          clock_in?: string | null;
           clock_out?: string | null;
+          regular_hours?: number | null;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["time_entries"]["Insert"]>;
         Relationships: [
@@ -535,12 +470,14 @@ export type Database = {
           created_at: string;
           updated_at: string;
           name: string;
+          category: string | null;
           manufacturer: string | null;
           model: string | null;
           serial_number: string | null;
-          status: EquipmentStatus;
-          current_hours: number | null;
           purchase_date: string | null;
+          purchase_price: number | null;
+          current_hours: number | null;
+          status: string | null;
           maintenance_due_date: string | null;
           maintenance_due_hours: number | null;
           notes: string | null;
@@ -550,12 +487,14 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           name: string;
+          category?: string | null;
           manufacturer?: string | null;
           model?: string | null;
           serial_number?: string | null;
-          status?: EquipmentStatus;
-          current_hours?: number | null;
           purchase_date?: string | null;
+          purchase_price?: number | null;
+          current_hours?: number | null;
+          status?: string | null;
           maintenance_due_date?: string | null;
           maintenance_due_hours?: number | null;
           notes?: string | null;
@@ -566,16 +505,14 @@ export type Database = {
 
       job_equipment: {
         Row: {
-          id: string;
-          created_at: string;
           job_id: string;
           equipment_id: string;
+          hours_used: number | null;
         };
         Insert: {
-          id?: string;
-          created_at?: string;
           job_id: string;
           equipment_id: string;
+          hours_used?: number | null;
         };
         Update: Partial<Database["public"]["Tables"]["job_equipment"]["Insert"]>;
         Relationships: [
@@ -601,10 +538,14 @@ export type Database = {
           id: string;
           created_at: string;
           equipment_id: string;
-          service_date: string;
-          service_type: string;
-          hours_at_service: number | null;
-          cost: number | null;
+          maintenance_date: string | null;
+          maintenance_type: string | null;
+          description: string | null;
+          equipment_hours: number | null;
+          parts_cost: number;
+          labor_cost: number;
+          next_service_hours: number | null;
+          next_service_date: string | null;
           vendor: string | null;
           notes: string | null;
         };
@@ -612,10 +553,14 @@ export type Database = {
           id?: string;
           created_at?: string;
           equipment_id: string;
-          service_date: string;
-          service_type: string;
-          hours_at_service?: number | null;
-          cost?: number | null;
+          maintenance_date?: string | null;
+          maintenance_type?: string | null;
+          description?: string | null;
+          equipment_hours?: number | null;
+          parts_cost?: number;
+          labor_cost?: number;
+          next_service_hours?: number | null;
+          next_service_date?: string | null;
           vendor?: string | null;
           notes?: string | null;
         };
@@ -636,28 +581,34 @@ export type Database = {
           id: string;
           created_at: string;
           updated_at: string;
-          quote_number: string;
           client_id: string;
           property_id: string | null;
-          status: QuoteStatus;
-          issue_date: string;
-          expiration_date: string | null;
+          quote_number: string | null;
+          status: string;
+          subtotal: number;
+          tax: number;
+          total: number;
+          valid_until: string | null;
           sent_at: string | null;
-          responded_at: string | null;
+          accepted_at: string | null;
+          declined_at: string | null;
           notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
-          quote_number: string;
           client_id: string;
           property_id?: string | null;
-          status?: QuoteStatus;
-          issue_date?: string;
-          expiration_date?: string | null;
+          quote_number?: string | null;
+          status?: string;
+          subtotal?: number;
+          tax?: number;
+          total?: number;
+          valid_until?: string | null;
           sent_at?: string | null;
-          responded_at?: string | null;
+          accepted_at?: string | null;
+          declined_at?: string | null;
           notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["quotes"]["Insert"]>;
@@ -688,9 +639,10 @@ export type Database = {
           description: string;
           quantity: number;
           unit_price: number;
+          total: number;
           budgeted_hours: number | null;
           is_optional: boolean;
-          sort_order: number;
+          sort_order: number | null;
         };
         Insert: {
           id?: string;
@@ -699,10 +651,11 @@ export type Database = {
           service_id?: string | null;
           description: string;
           quantity?: number;
-          unit_price: number;
+          unit_price?: number;
+          total?: number;
           budgeted_hours?: number | null;
           is_optional?: boolean;
-          sort_order?: number;
+          sort_order?: number | null;
         };
         Update: Partial<Database["public"]["Tables"]["quote_items"]["Insert"]>;
         Relationships: [
@@ -728,32 +681,36 @@ export type Database = {
           id: string;
           created_at: string;
           updated_at: string;
-          invoice_number: string;
           client_id: string;
           property_id: string | null;
-          job_id: string | null;
-          status: InvoiceStatus;
-          invoice_date: string;
-          due_date: string;
+          invoice_number: string | null;
+          status: string;
+          invoice_date: string | null;
+          due_date: string | null;
           subtotal: number;
-          tax_amount: number;
-          total_amount: number;
+          tax: number;
+          total: number;
+          amount_paid: number;
+          sent_at: string | null;
+          paid_at: string | null;
           notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           updated_at?: string;
-          invoice_number: string;
           client_id: string;
           property_id?: string | null;
-          job_id?: string | null;
-          status?: InvoiceStatus;
-          invoice_date?: string;
-          due_date: string;
+          invoice_number?: string | null;
+          status?: string;
+          invoice_date?: string | null;
+          due_date?: string | null;
           subtotal?: number;
-          tax_amount?: number;
-          total_amount?: number;
+          tax?: number;
+          total?: number;
+          amount_paid?: number;
+          sent_at?: string | null;
+          paid_at?: string | null;
           notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
@@ -772,13 +729,6 @@ export type Database = {
             referencedRelation: "properties";
             referencedColumns: ["id"];
           },
-          {
-            foreignKeyName: "invoices_job_id_fkey";
-            columns: ["job_id"];
-            isOneToOne: false;
-            referencedRelation: "jobs";
-            referencedColumns: ["id"];
-          },
         ];
       };
 
@@ -788,20 +738,22 @@ export type Database = {
           created_at: string;
           invoice_id: string;
           job_id: string | null;
+          service_id: string | null;
           description: string;
           quantity: number;
           unit_price: number;
-          sort_order: number;
+          total: number;
         };
         Insert: {
           id?: string;
           created_at?: string;
           invoice_id: string;
           job_id?: string | null;
+          service_id?: string | null;
           description: string;
           quantity?: number;
-          unit_price: number;
-          sort_order?: number;
+          unit_price?: number;
+          total?: number;
         };
         Update: Partial<Database["public"]["Tables"]["invoice_items"]["Insert"]>;
         Relationships: [
@@ -819,6 +771,13 @@ export type Database = {
             referencedRelation: "jobs";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "invoice_items_service_id_fkey";
+            columns: ["service_id"];
+            isOneToOne: false;
+            referencedRelation: "services";
+            referencedColumns: ["id"];
+          },
         ];
       };
 
@@ -826,22 +785,22 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
-          invoice_id: string;
+          invoice_id: string | null;
           client_id: string;
           amount: number;
-          payment_date: string;
-          method: PaymentMethod;
+          payment_date: string | null;
+          payment_method: string | null;
           external_reference: string | null;
           notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
-          invoice_id: string;
+          invoice_id?: string | null;
           client_id: string;
           amount: number;
-          payment_date?: string;
-          method?: PaymentMethod;
+          payment_date?: string | null;
+          payment_method?: string | null;
           external_reference?: string | null;
           notes?: string | null;
         };
@@ -868,26 +827,28 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
-          expense_date: string;
-          vendor: string;
-          category: string;
+          updated_at: string;
+          expense_date: string | null;
+          category: string | null;
+          vendor: string | null;
           description: string | null;
           amount: number;
           job_id: string | null;
           equipment_id: string | null;
-          receipt_url: string | null;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
-          expense_date: string;
-          vendor: string;
-          category: string;
+          updated_at?: string;
+          expense_date?: string | null;
+          category?: string | null;
+          vendor?: string | null;
           description?: string | null;
           amount: number;
           job_id?: string | null;
           equipment_id?: string | null;
-          receipt_url?: string | null;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [
@@ -914,18 +875,22 @@ export type Database = {
           created_at: string;
           job_id: string;
           material_name: string;
-          quantity: number;
+          quantity: number | null;
           unit: string | null;
           unit_cost: number | null;
+          total_cost: number | null;
+          notes: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           job_id: string;
           material_name: string;
-          quantity: number;
+          quantity?: number | null;
           unit?: string | null;
           unit_cost?: number | null;
+          total_cost?: number | null;
+          notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["job_materials"]["Insert"]>;
         Relationships: [
@@ -944,19 +909,17 @@ export type Database = {
           id: string;
           created_at: string;
           job_id: string;
-          photo_url: string;
-          photo_type: PhotoType;
+          photo_type: string | null;
+          storage_path: string;
           caption: string | null;
-          taken_at: string | null;
         };
         Insert: {
           id?: string;
           created_at?: string;
           job_id: string;
-          photo_url: string;
-          photo_type?: PhotoType;
+          photo_type?: string | null;
+          storage_path: string;
           caption?: string | null;
-          taken_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [
@@ -974,8 +937,8 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
-          integration: IntegrationName;
-          entity_type: IntegrationEntityType;
+          system_name: string;
+          entity_type: string;
           internal_id: string;
           external_id: string;
           last_synced_at: string | null;
@@ -984,8 +947,8 @@ export type Database = {
         Insert: {
           id?: string;
           created_at?: string;
-          integration: IntegrationName;
-          entity_type: IntegrationEntityType;
+          system_name: string;
+          entity_type: string;
           internal_id: string;
           external_id: string;
           last_synced_at?: string | null;

@@ -22,9 +22,9 @@ export default async function EmployeeDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${employee.first_name} ${employee.last_name}`}
-        description={<span className="capitalize">{employee.role.replace("_", " ")}</span>}
-        action={<Badge tone={employee.is_active ? "accent" : "neutral"}>{employee.is_active ? "Active" : "Inactive"}</Badge>}
+        title={[employee.first_name, employee.last_name].filter(Boolean).join(" ")}
+        description={<span className="capitalize">{(employee.role ?? "crew_member").replace("_", " ")}</span>}
+        action={<Badge tone={employee.active ? "accent" : "neutral"}>{employee.active ? "Active" : "Inactive"}</Badge>}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -45,7 +45,7 @@ export default async function EmployeeDetailPage({
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Driver&apos;s License</div>
             <div className="mt-1 text-sm text-[var(--color-text-primary)]">
-              {employee.drivers_license_number ?? "—"} {employee.drivers_license_state ? `(${employee.drivers_license_state})` : ""}
+              {employee.has_drivers_license ? "On file" : "Not on file"}
             </div>
           </CardBody>
         </Card>
@@ -55,15 +55,16 @@ export default async function EmployeeDetailPage({
             <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(employee.hire_date)}</div>
           </CardBody>
         </Card>
+      </div>
+
+      {employee.notes ? (
         <Card>
           <CardBody>
-            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Login Access</div>
-            <div className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              {employee.user_id ? "Linked to a user account" : "Not yet linked — employee logins are not set up"}
-            </div>
+            <div className="mb-1 text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Notes</div>
+            <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{employee.notes}</p>
           </CardBody>
         </Card>
-      </div>
+      ) : null}
     </div>
   );
 }

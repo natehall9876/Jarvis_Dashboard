@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatCurrency, formatDate, formatHours } from "@/lib/format";
+import { formatCurrency, formatDate, formatHours, clientDisplayName } from "@/lib/format";
 import { getJobs, jobProductionRate, type JobFilters } from "@/lib/data/jobs";
 import type { JobStatus, JobWithRelations } from "@/types/domain";
 
@@ -29,14 +29,10 @@ export default async function JobsPage({
 
   const columns: Column<JobWithRelations>[] = [
     { key: "date", header: "Date", render: (j) => formatDate(j.scheduled_date) },
-    { key: "client", header: "Client", render: (j) => j.client?.name ?? "—" },
-    { key: "property", header: "Property", render: (j) => j.property?.address_line1 ?? "—" },
+    { key: "client", header: "Client", render: (j) => clientDisplayName(j.property?.client) },
+    { key: "property", header: "Property", render: (j) => j.property?.street ?? j.property?.property_name ?? "—" },
     { key: "service", header: "Service", render: (j) => j.service?.name ?? "—" },
-    {
-      key: "crew",
-      header: "Crew Lead",
-      render: (j) => (j.crew_lead ? `${j.crew_lead.first_name} ${j.crew_lead.last_name}` : "—"),
-    },
+    { key: "crew_size", header: "Crew Size", align: "right", render: (j) => j.crew_size ?? "—" },
     { key: "price", header: "Price", align: "right", render: (j) => formatCurrency(j.price) },
     { key: "budgeted", header: "Budgeted", align: "right", render: (j) => formatHours(j.budgeted_hours) },
     { key: "actual", header: "Actual", align: "right", render: (j) => formatHours(j.actual_hours) },

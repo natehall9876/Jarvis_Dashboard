@@ -4,8 +4,8 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { getQuoteById, quoteTotal } from "@/lib/data/quotes";
+import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { getQuoteById } from "@/lib/data/quotes";
 import { FileDown } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +28,10 @@ export default async function QuoteDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Quote ${quote.quote_number}`}
+        title={`Quote ${quote.quote_number ?? ""}`}
         description={quote.client ? (
           <Link href={`/clients/${quote.client.id}`} className="hover:text-[var(--color-accent)]">
-            {quote.client.company_name ?? quote.client.name}
+            {clientDisplayName(quote.client)}
           </Link>
         ) : undefined}
         action={
@@ -48,20 +48,20 @@ export default async function QuoteDetailPage({
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardBody>
-            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Issue Date</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(quote.issue_date)}</div>
+            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Created</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(quote.created_at)}</div>
           </CardBody>
         </Card>
         <Card>
           <CardBody>
-            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Expires</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(quote.expiration_date)}</div>
+            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Valid Until</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(quote.valid_until)}</div>
           </CardBody>
         </Card>
         <Card>
           <CardBody>
-            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Total (incl. optional)</div>
-            <div className="mt-1 text-sm font-semibold text-[var(--color-accent)]">{formatCurrency(quoteTotal(quote, true))}</div>
+            <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Total</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--color-accent)]">{formatCurrency(quote.total)}</div>
           </CardBody>
         </Card>
       </div>
@@ -92,7 +92,7 @@ function LineItemTable({
   badge,
 }: {
   title: string;
-  items: { id: string; description: string; quantity: number; unit_price: number; budgeted_hours: number | null }[];
+  items: { id: string; description: string; quantity: number; unit_price: number; total: number; budgeted_hours: number | null }[];
   badge?: string;
 }) {
   if (items.length === 0) return null;
@@ -109,7 +109,7 @@ function LineItemTable({
               <td className="py-2 pr-4 text-right text-[var(--color-text-muted)]">{item.quantity}×</td>
               <td className="py-2 pr-4 text-right text-[var(--color-text-secondary)]">{formatCurrency(item.unit_price, true)}</td>
               <td className="py-2 text-right font-medium text-[var(--color-text-primary)]">
-                {formatCurrency(item.quantity * item.unit_price)}
+                {formatCurrency(item.total)}
               </td>
             </tr>
           ))}

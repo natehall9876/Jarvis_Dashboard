@@ -4,7 +4,7 @@ import { SearchForm } from "@/components/ui/search-form";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, clientPersonName } from "@/lib/format";
 import { getClients } from "@/lib/data/clients";
 import type { ClientWithBalance } from "@/types/domain";
 
@@ -22,12 +22,17 @@ export default async function ClientsPage({
     {
       key: "name",
       header: "Client",
-      render: (c) => (
-        <div>
-          <div className="font-medium text-[var(--color-text-primary)]">{c.name}</div>
-          {c.company_name ? <div className="text-xs text-[var(--color-text-muted)]">{c.company_name}</div> : null}
-        </div>
-      ),
+      render: (c) => {
+        const personName = clientPersonName(c);
+        return (
+          <div>
+            <div className="font-medium text-[var(--color-text-primary)]">{personName ?? c.company_name ?? "Unnamed client"}</div>
+            {personName && c.company_name ? (
+              <div className="text-xs text-[var(--color-text-muted)]">{c.company_name}</div>
+            ) : null}
+          </div>
+        );
+      },
     },
     { key: "phone", header: "Phone", render: (c) => c.phone ?? "—" },
     { key: "email", header: "Email", render: (c) => c.email ?? "—" },
@@ -36,7 +41,7 @@ export default async function ClientsPage({
       header: "Preferred Contact",
       render: (c) => c.preferred_contact_method ?? "—",
     },
-    { key: "status", header: "Status", render: (c) => <StatusBadge status={c.status} /> },
+    { key: "status", header: "Status", render: (c) => <StatusBadge status={c.status ?? "active"} /> },
     { key: "properties", header: "Properties", align: "right", render: (c) => c.properties_count },
     {
       key: "balance",

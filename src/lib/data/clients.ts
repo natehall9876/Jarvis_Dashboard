@@ -14,10 +14,12 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    let query = supabase.from("clients").select("*").order("name", { ascending: true });
+    let query = supabase.from("clients").select("*").order("first_name", { ascending: true });
     if (search && search.trim().length > 0) {
       const term = `%${search.trim()}%`;
-      query = query.or(`name.ilike.${term},company_name.ilike.${term},email.ilike.${term}`);
+      query = query.or(
+        `first_name.ilike.${term},last_name.ilike.${term},company_name.ilike.${term},email.ilike.${term}`,
+      );
     }
 
     const { data: clients, error } = await query;
@@ -26,39 +28,31 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
 
     const clientIds = clients.map((c) => c.id);
 
-    const [{ data: properties }, { data: invoices }, { data: payments }] = await Promise.all([
+    const [{ data: properties }, { data: invoices }] = await Promise.all([
       supabase.from("properties").select("id, client_id").in("client_id", clientIds),
       supabase
         .from("invoices")
-        .select("id, client_id, total_amount, status")
+        .select("client_id, total, amount_paid, status")
         .in("client_id", clientIds)
         .neq("status", "draft"),
-      supabase
-        .from("payments")
-        .select("invoice_id, client_id, amount")
-        .in("client_id", clientIds),
     ]);
 
     const propertyCountByClient = new Map<string, number>();
     for (const p of properties ?? []) {
+      if (!p.client_id) continue;
       propertyCountByClient.set(p.client_id, (propertyCountByClient.get(p.client_id) ?? 0) + 1);
     }
 
-    const invoicedByClient = new Map<string, number>();
+    const balanceByClient = new Map<string, number>();
     for (const inv of invoices ?? []) {
-      invoicedByClient.set(inv.client_id, (invoicedByClient.get(inv.client_id) ?? 0) + inv.total_amount);
-    }
-
-    const paidByClient = new Map<string, number>();
-    for (const pay of payments ?? []) {
-      paidByClient.set(pay.client_id, (paidByClient.get(pay.client_id) ?? 0) + pay.amount);
+      const balance = inv.total - inv.amount_paid;
+      balanceByClient.set(inv.client_id, (balanceByClient.get(inv.client_id) ?? 0) + balance);
     }
 
     return clients.map((client): ClientWithBalance => ({
       ...client,
       properties_count: propertyCountByClient.get(client.id) ?? 0,
-      outstanding_balance:
-        (invoicedByClient.get(client.id) ?? 0) - (paidByClient.get(client.id) ?? 0),
+      outstanding_balance: balanceByClient.get(client.id) ?? 0,
     }));
   });
 }
@@ -83,32 +77,30 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
       .single();
     if (error) throw error;
 
-    const [{ data: properties }, { data: jobs }, { data: quotes }, { data: invoices }, { data: payments }] =
-      await Promise.all([
-        supabase.from("properties").select("*").eq("client_id", id).order("address_line1"),
-        supabase
-          .from("jobs")
-          .select("*")
-          .eq("client_id", id)
-          .order("scheduled_date", { ascending: false })
-          .limit(50),
-        supabase
-          .from("quotes")
-          .select("*")
-          .eq("client_id", id)
-          .order("issue_date", { ascending: false }),
-        supabase
-          .from("invoices")
-          .select("*")
-          .eq("client_id", id)
-          .order("invoice_date", { ascending: false }),
-        supabase.from("payments").select("amount").eq("client_id", id),
-      ]);
+    const { data: properties } = await supabase
+      .from("properties")
+      .select("*")
+      .eq("client_id", id)
+      .order("street");
 
-    const totalInvoiced = (invoices ?? [])
+    const propertyIds = (properties ?? []).map((p) => p.id);
+
+    const [{ data: jobs }, { data: quotes }, { data: invoices }] = await Promise.all([
+      propertyIds.length
+        ? supabase
+            .from("jobs")
+            .select("*")
+            .in("property_id", propertyIds)
+            .order("scheduled_date", { ascending: false })
+            .limit(50)
+        : Promise.resolve({ data: [] as Job[] }),
+      supabase.from("quotes").select("*").eq("client_id", id).order("created_at", { ascending: false }),
+      supabase.from("invoices").select("*").eq("client_id", id).order("invoice_date", { ascending: false }),
+    ]);
+
+    const outstandingBalance = (invoices ?? [])
       .filter((inv) => inv.status !== "draft")
-      .reduce((sum, inv) => sum + inv.total_amount, 0);
-    const totalPaid = (payments ?? []).reduce((sum, p) => sum + p.amount, 0);
+      .reduce((sum, inv) => sum + (inv.total - inv.amount_paid), 0);
 
     return {
       client,
@@ -116,7 +108,7 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
       jobs: jobs ?? [],
       quotes: quotes ?? [],
       invoices: invoices ?? [],
-      outstanding_balance: totalInvoiced - totalPaid,
+      outstanding_balance: outstandingBalance,
     };
   });
 }

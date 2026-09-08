@@ -22,10 +22,10 @@ export default async function EmployeesPage() {
         </div>
       ),
     },
-    { key: "role", header: "Role", render: (e) => <span className="capitalize">{e.role.replace("_", " ")}</span> },
+    { key: "role", header: "Role", render: (e) => <span className="capitalize">{(e.role ?? "crew_member").replace("_", " ")}</span> },
     { key: "rate", header: "Hourly Rate", align: "right", render: (e) => formatCurrency(e.hourly_rate ?? 0, true) },
-    { key: "status", header: "Active", render: (e) => <Badge tone={e.is_active ? "accent" : "neutral"}>{e.is_active ? "Active" : "Inactive"}</Badge> },
-    { key: "license", header: "Driver's License", render: (e) => e.drivers_license_number ?? "—" },
+    { key: "status", header: "Active", render: (e) => <Badge tone={e.active ? "accent" : "neutral"}>{e.active ? "Active" : "Inactive"}</Badge> },
+    { key: "license", header: "Driver's License", render: (e) => (e.has_drivers_license ? "Yes" : "No") },
     { key: "hours", header: "Hours This Week", align: "right", render: (e) => formatHours(e.hours_this_week) },
     { key: "labor", header: "Labor Cost", align: "right", render: (e) => formatCurrency(e.labor_cost_this_week) },
     { key: "jobs", header: "Jobs This Week", align: "right", render: (e) => e.jobs_worked_this_week },

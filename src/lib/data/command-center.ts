@@ -12,6 +12,12 @@ import {
 import type { DataResult, InvoiceWithClient, JobWithRelations, QuoteWithItems } from "@/types/domain";
 import type { EquipmentWithMaintenanceFlag } from "@/lib/data/equipment";
 
+const JOB_RELATIONS_SELECT = `
+  *,
+  property:properties(*, client:clients(id, first_name, last_name, company_name)),
+  service:services(id, name)
+`;
+
 function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -63,9 +69,7 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
 
     const { data: jobs, error: jobsError } = await supabase
       .from("jobs")
-      .select(
-        `*, client:clients(id, name, company_name), property:properties(id, address_line1, city, state), service:services(id, name), crew_lead:employees(id, first_name, last_name)`,
-      )
+      .select(JOB_RELATIONS_SELECT)
       .eq("scheduled_date", today)
       .order("scheduled_start_time", { ascending: true, nullsFirst: true });
     if (jobsError) throw jobsError;
@@ -76,30 +80,25 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
 
     const jobIds = todaysJobs.map((j) => j.id);
     const { data: jobEmployees } = jobIds.length
-      ? await supabase
-          .from("job_employees")
-          .select("employee:employees(id, first_name, last_name)")
-          .in("job_id", jobIds)
+      ? await supabase.from("job_employees").select("employee:employees(id, first_name, last_name)").in("job_id", jobIds)
       : { data: [] };
 
     const crewMap = new Map<string, { id: string; name: string }>();
     for (const je of jobEmployees ?? []) {
-      const employee = (je as unknown as { employee: { id: string; first_name: string; last_name: string } | null })
+      const employee = (je as unknown as { employee: { id: string; first_name: string; last_name: string | null } | null })
         .employee;
-      if (employee) crewMap.set(employee.id, { id: employee.id, name: `${employee.first_name} ${employee.last_name}` });
+      if (employee) {
+        crewMap.set(employee.id, { id: employee.id, name: [employee.first_name, employee.last_name].filter(Boolean).join(" ") });
+      }
     }
 
     const routesRunning = Array.from(
-      new Set(
-        todaysJobs
-          .map((j) => j.route_id)
-          .filter((id): id is string => id !== null),
-      ),
+      new Set(todaysJobs.map((j) => j.route_id).filter((id): id is string => id !== null)),
     );
 
     const { data: quotes } = await supabase
       .from("quotes")
-      .select(`*, client:clients(id, name, company_name), items:quote_items(*)`)
+      .select(`*, client:clients(id, first_name, last_name, company_name), items:quote_items(*)`)
       .eq("status", "sent");
 
     const cutoff = new Date();
@@ -113,10 +112,10 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
 
     const overdueInvoices = overdueResult.data ?? [];
     const equipmentIssues = (equipmentResult.data ?? []).filter(
-      (e) => e.status !== "operational" || e.maintenance_warning,
+      (e) => e.status !== "active" || e.maintenance_warning,
     );
 
-    const expectedRevenue = activeJobs.reduce((sum, j) => sum + j.price, 0);
+    const expectedRevenue = activeJobs.reduce((sum, j) => sum + (j.price ?? 0), 0);
     const budgetedHours = activeJobs.reduce((sum, j) => sum + (j.budgeted_hours ?? 0), 0);
 
     const priorities = buildPriorities({
@@ -231,11 +230,11 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
 
     const revenueToday = completedJobs
       .filter((j) => j.scheduled_date === today)
-      .reduce((sum, j) => sum + j.price, 0);
+      .reduce((sum, j) => sum + (j.price ?? 0), 0);
     const revenueWeek = completedJobs
-      .filter((j) => j.scheduled_date >= weekStartStr)
-      .reduce((sum, j) => sum + j.price, 0);
-    const revenueMonth = completedJobs.reduce((sum, j) => sum + j.price, 0);
+      .filter((j) => (j.scheduled_date ?? "") >= weekStartStr)
+      .reduce((sum, j) => sum + (j.price ?? 0), 0);
+    const revenueMonth = completedJobs.reduce((sum, j) => sum + (j.price ?? 0), 0);
     const totalActualHoursMonth = completedJobs.reduce((sum, j) => sum + (j.actual_hours ?? 0), 0);
 
     const { data: payments } = await supabase
@@ -249,42 +248,32 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
 
     const { data: timeEntries } = await supabase
       .from("time_entries")
-      .select("employee_id, clock_in, clock_out")
-      .gte("clock_in", monthStartStr);
+      .select("employee_id, regular_hours, clock_in, clock_out, work_date")
+      .gte("work_date", monthStartStr);
 
-    const laborCostMonth = (timeEntries ?? [])
-      .filter((entry) => entry.clock_out)
-      .reduce((sum, entry) => {
-        const hours =
-          (new Date(entry.clock_out as string).getTime() - new Date(entry.clock_in).getTime()) / 3_600_000;
-        return sum + calcLaborCost(hours, rateByEmployee.get(entry.employee_id) ?? 0);
-      }, 0);
+    const laborCostMonth = (timeEntries ?? []).reduce((sum, entry) => {
+      const hours =
+        entry.regular_hours ??
+        (entry.clock_in && entry.clock_out
+          ? (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / 3_600_000
+          : 0);
+      return sum + calcLaborCost(hours, rateByEmployee.get(entry.employee_id) ?? 0);
+    }, 0);
 
     const [invoicesResult, quotesResponse] = await Promise.all([
-      supabase.from("invoices").select("id, total_amount, status"),
-      supabase.from("quotes").select("status, responded_at").gte("issue_date", monthStartStr),
+      supabase.from("invoices").select("total, amount_paid, status"),
+      supabase.from("quotes").select("status, accepted_at, declined_at").gte("created_at", monthStartStr),
     ]);
 
-    const { data: allPayments } = await supabase.from("payments").select("invoice_id, amount");
-    const paidByInvoice = new Map<string, number>();
-    for (const p of allPayments ?? []) {
-      paidByInvoice.set(p.invoice_id, (paidByInvoice.get(p.invoice_id) ?? 0) + p.amount);
-    }
-
     const nonDraftInvoices = (invoicesResult.data ?? []).filter((i) => i.status !== "draft");
-    const accountsReceivable = nonDraftInvoices.reduce((sum, inv) => {
-      const paid = paidByInvoice.get(inv.id) ?? 0;
-      return sum + Math.max(0, inv.total_amount - paid);
-    }, 0);
-    const outstandingInvoiceCount = nonDraftInvoices.filter((inv) => {
-      const paid = paidByInvoice.get(inv.id) ?? 0;
-      return inv.total_amount - paid > 0;
-    }).length;
-
-    const decidedQuotes = (quotesResponse.data ?? []).filter(
-      (q) => q.status === "accepted" || q.status === "declined",
+    const accountsReceivable = nonDraftInvoices.reduce(
+      (sum, inv) => sum + Math.max(0, inv.total - inv.amount_paid),
+      0,
     );
-    const acceptedQuotes = decidedQuotes.filter((q) => q.status === "accepted");
+    const outstandingInvoiceCount = nonDraftInvoices.filter((inv) => inv.total - inv.amount_paid > 0).length;
+
+    const decidedQuotes = (quotesResponse.data ?? []).filter((q) => q.accepted_at !== null || q.declined_at !== null);
+    const acceptedQuotes = decidedQuotes.filter((q) => q.accepted_at !== null);
 
     return {
       revenueToday,

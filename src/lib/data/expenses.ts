@@ -3,7 +3,7 @@ import { withDataResult } from "@/lib/data/shared";
 import type { DataResult, Expense } from "@/types/domain";
 
 export type ExpenseWithRelations = Expense & {
-  job: { id: string; scheduled_date: string } | null;
+  job: { id: string; scheduled_date: string | null } | null;
   equipment: { id: string; name: string } | null;
 };
 

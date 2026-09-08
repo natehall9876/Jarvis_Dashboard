@@ -25,7 +25,7 @@ export default async function EquipmentPage() {
     },
     { key: "manufacturer", header: "Manufacturer", render: (e) => e.manufacturer ?? "—" },
     { key: "model", header: "Model", render: (e) => e.model ?? "—" },
-    { key: "status", header: "Status", render: (e) => <StatusBadge status={e.status} /> },
+    { key: "status", header: "Status", render: (e) => <StatusBadge status={e.status ?? "active"} /> },
     { key: "hours", header: "Current Hours", align: "right", render: (e) => formatNumber(e.current_hours) },
     { key: "due_date", header: "Maintenance Due", render: (e) => formatDate(e.maintenance_due_date) },
     {

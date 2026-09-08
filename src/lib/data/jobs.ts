@@ -13,10 +13,8 @@ import type {
 
 const JOB_RELATIONS_SELECT = `
   *,
-  client:clients(id, name, company_name),
-  property:properties(id, address_line1, city, state),
-  service:services(id, name),
-  crew_lead:employees(id, first_name, last_name)
+  property:properties(*, client:clients(id, first_name, last_name, company_name)),
+  service:services(id, name)
 `;
 
 export type JobFilters = {
@@ -52,9 +50,9 @@ export async function getJobsForDate(date: string): Promise<DataResult<JobWithRe
 }
 
 export type JobDetail = JobWithRelations & {
-  crew: { id: string; first_name: string; last_name: string }[];
+  crew: { id: string; first_name: string; last_name: string | null; hours_worked: number | null }[];
   time_entries: TimeEntry[];
-  equipment: JobEquipment[];
+  equipment: (JobEquipment & { equipment: { id: string; name: string } | null })[];
   materials: JobMaterial[];
   photos: JobPhoto[];
 };
@@ -72,30 +70,39 @@ export async function getJobById(id: string): Promise<DataResult<JobDetail>> {
 
     const [{ data: jobEmployees }, { data: timeEntries }, { data: equipment }, { data: materials }, { data: photos }] =
       await Promise.all([
-        supabase.from("job_employees").select("employee:employees(id, first_name, last_name)").eq("job_id", id),
+        supabase
+          .from("job_employees")
+          .select("hours_worked, employee:employees(id, first_name, last_name)")
+          .eq("job_id", id),
         supabase.from("time_entries").select("*").eq("job_id", id),
-        supabase.from("job_equipment").select("*").eq("job_id", id),
+        supabase.from("job_equipment").select("*, equipment:equipment(id, name)").eq("job_id", id),
         supabase.from("job_materials").select("*").eq("job_id", id),
         supabase.from("job_photos").select("*").eq("job_id", id),
       ]);
 
     const crew = (jobEmployees ?? [])
-      .map((je) => (je as unknown as { employee: { id: string; first_name: string; last_name: string } | null }).employee)
-      .filter((e): e is { id: string; first_name: string; last_name: string } => e !== null);
+      .map((je) => {
+        const row = je as unknown as {
+          hours_worked: number | null;
+          employee: { id: string; first_name: string; last_name: string | null } | null;
+        };
+        return row.employee ? { ...row.employee, hours_worked: row.hours_worked } : null;
+      })
+      .filter((e): e is { id: string; first_name: string; last_name: string | null; hours_worked: number | null } => e !== null);
 
     return {
       ...(job as unknown as JobWithRelations),
       crew,
       time_entries: timeEntries ?? [],
-      equipment: equipment ?? [],
+      equipment: (equipment ?? []) as unknown as JobDetail["equipment"],
       materials: materials ?? [],
       photos: photos ?? [],
     };
   });
 }
 
-/** Production rate = job revenue / actual production hours, computed per job. */
+/** Production rate = job revenue / actual production hours. */
 export function jobProductionRate(job: Pick<Job, "price" | "actual_hours">): number | null {
-  if (!job.actual_hours || job.actual_hours <= 0) return null;
+  if (!job.actual_hours || job.actual_hours <= 0 || !job.price) return null;
   return job.price / job.actual_hours;
 }

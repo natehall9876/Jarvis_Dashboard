@@ -3,7 +3,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { getJobPhotoUrl } from "@/lib/supabase/storage";
 import { getPropertyById } from "@/lib/data/properties";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +26,9 @@ export default async function PropertyDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={property.address_line1}
-        description={`${property.city}, ${property.state} ${property.postal_code}`}
-        action={<Badge tone={property.is_active ? "accent" : "neutral"}>{property.is_active ? "Active" : "Inactive"}</Badge>}
+        title={property.property_name || property.street || "Unnamed property"}
+        description={[property.street, property.city, property.state, property.zip].filter(Boolean).join(", ")}
+        action={<Badge tone={property.active ? "accent" : "neutral"}>{property.active ? "Active" : "Inactive"}</Badge>}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -36,7 +37,7 @@ export default async function PropertyDetailPage({
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Client</div>
             {client ? (
               <Link href={`/clients/${client.id}`} className="mt-1 block text-sm text-[var(--color-accent)] hover:underline">
-                {client.company_name ?? client.name}
+                {clientDisplayName(client)}
               </Link>
             ) : (
               <div className="mt-1 text-sm text-[var(--color-text-secondary)]">—</div>
@@ -63,11 +64,11 @@ export default async function PropertyDetailPage({
         </Card>
       </div>
 
-      {property.property_notes ? (
+      {property.service_notes ? (
         <Card>
-          <CardHeader title="Property Notes" />
+          <CardHeader title="Service Notes" />
           <CardBody>
-            <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{property.property_notes}</p>
+            <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{property.service_notes}</p>
           </CardBody>
         </Card>
       ) : null}
@@ -81,8 +82,8 @@ export default async function PropertyDetailPage({
             <ul className="divide-y divide-[var(--color-border)]">
               {agreements.map((a) => (
                 <li key={a.id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-[var(--color-text-secondary)] capitalize">{a.frequency.replace("_", " ")}</span>
-                  <span className="font-medium text-[var(--color-text-primary)]">{formatCurrency(a.price)}</span>
+                  <span className="text-[var(--color-text-secondary)] capitalize">{(a.frequency ?? "").replace("_", " ")}</span>
+                  <span className="font-medium text-[var(--color-text-primary)]">{formatCurrency(a.recurring_price)}</span>
                 </li>
               ))}
             </ul>
@@ -162,7 +163,7 @@ export default async function PropertyDetailPage({
               {photos.map((photo) => (
                 <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.photo_url} alt={photo.caption ?? photo.photo_type} className="h-28 w-full object-cover" />
+                  <img src={getJobPhotoUrl(photo.storage_path)} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
                 </div>
               ))}
             </div>

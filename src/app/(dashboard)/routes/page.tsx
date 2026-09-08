@@ -27,9 +27,9 @@ export default async function RoutesPage() {
                   <CardHeader
                     title={route.name}
                     description={
-                      <span className="capitalize">{route.day_of_week}</span>
+                      <span className="capitalize">{route.route_day ?? "Unscheduled"}</span>
                     }
-                    action={<Badge tone={route.is_active ? "accent" : "neutral"}>{route.is_active ? "Active" : "Inactive"}</Badge>}
+                    action={<Badge tone={route.active ? "accent" : "neutral"}>{route.active ? "Active" : "Inactive"}</Badge>}
                   />
                   <CardBody>
                     <div className="mb-4 grid grid-cols-3 gap-3 text-center">

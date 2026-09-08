@@ -18,12 +18,12 @@ export async function getProperties(search?: string): Promise<DataResult<Propert
 
     let query = supabase
       .from("properties")
-      .select("*, client:clients(id, name, company_name)")
-      .order("address_line1", { ascending: true });
+      .select("*, client:clients(id, first_name, last_name, company_name)")
+      .order("street", { ascending: true });
 
     if (search && search.trim().length > 0) {
       const term = `%${search.trim()}%`;
-      query = query.or(`address_line1.ilike.${term},city.ilike.${term}`);
+      query = query.or(`street.ilike.${term},city.ilike.${term},property_name.ilike.${term}`);
     }
 
     const { data, error } = await query;
@@ -49,33 +49,33 @@ export async function getPropertyById(id: string): Promise<DataResult<PropertyDe
 
     const { data: property, error } = await supabase
       .from("properties")
-      .select("*, client:clients(id, name, company_name)")
+      .select("*, client:clients(id, first_name, last_name, company_name)")
       .eq("id", id)
       .single();
     if (error) throw error;
 
     const propertyRow = property as unknown as PropertyWithClient;
 
-    const [
-      { data: route },
-      { data: agreements },
-      { data: jobs },
-      { data: quotes },
-      { data: invoices },
-    ] = await Promise.all([
-      propertyRow.route_id
-        ? supabase.from("routes").select("*").eq("id", propertyRow.route_id).single()
-        : Promise.resolve({ data: null }),
-      supabase.from("service_agreements").select("*").eq("property_id", id),
-      supabase
-        .from("jobs")
-        .select("*")
-        .eq("property_id", id)
-        .order("scheduled_date", { ascending: false })
-        .limit(50),
-      supabase.from("quotes").select("*").eq("property_id", id).order("issue_date", { ascending: false }),
-      supabase.from("invoices").select("*").eq("property_id", id).order("invoice_date", { ascending: false }),
-    ]);
+    const [{ data: agreements }, { data: jobs }, { data: quotes }, { data: invoices }, { data: routeStop }] =
+      await Promise.all([
+        supabase.from("service_agreements").select("*").eq("property_id", id),
+        supabase
+          .from("jobs")
+          .select("*")
+          .eq("property_id", id)
+          .order("scheduled_date", { ascending: false })
+          .limit(50),
+        supabase.from("quotes").select("*").eq("property_id", id).order("created_at", { ascending: false }),
+        supabase.from("invoices").select("*").eq("property_id", id).order("invoice_date", { ascending: false }),
+        // properties don't carry a route_id directly — find the route via route_stops.
+        supabase.from("route_stops").select("route_id").eq("property_id", id).limit(1).maybeSingle(),
+      ]);
+
+    let route: Route | null = null;
+    if (routeStop?.route_id) {
+      const { data } = await supabase.from("routes").select("*").eq("id", routeStop.route_id).single();
+      route = data ?? null;
+    }
 
     const jobIds = (jobs ?? []).map((j) => j.id);
     const { data: photos } = jobIds.length
@@ -85,7 +85,7 @@ export async function getPropertyById(id: string): Promise<DataResult<PropertyDe
     return {
       property: propertyRow,
       client: propertyRow.client,
-      route: (route as Route | null) ?? null,
+      route,
       agreements: agreements ?? [],
       jobs: jobs ?? [],
       quotes: quotes ?? [],

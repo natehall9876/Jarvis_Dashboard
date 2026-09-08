@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withDataResult } from "@/lib/data/shared";
-import type { DataResult, Employee, EmployeeWithStats, Job } from "@/types/domain";
+import type { DataResult, Employee, EmployeeWithStats } from "@/types/domain";
 
 function startOfWeek(date = new Date()): string {
   const d = new Date(date);
@@ -9,6 +9,15 @@ function startOfWeek(date = new Date()): string {
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
+}
+
+/** Prefers the stored regular_hours figure; falls back to clock_in/clock_out difference. */
+function hoursForEntry(entry: { regular_hours: number | null; clock_in: string | null; clock_out: string | null }): number {
+  if (entry.regular_hours !== null) return entry.regular_hours;
+  if (entry.clock_in && entry.clock_out) {
+    return (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / 3_600_000;
+  }
+  return 0;
 }
 
 export async function getEmployees(): Promise<DataResult<EmployeeWithStats[]>> {
@@ -27,27 +36,24 @@ export async function getEmployees(): Promise<DataResult<EmployeeWithStats[]>> {
 
     const { data: timeEntries } = await supabase
       .from("time_entries")
-      .select("employee_id, clock_in, clock_out")
+      .select("employee_id, regular_hours, clock_in, clock_out, work_date")
       .in("employee_id", employeeIds)
-      .gte("clock_in", weekStart);
+      .gte("work_date", weekStart);
 
     const { data: jobEmployees } = await supabase
       .from("job_employees")
-      .select("employee_id, job:jobs(id, scheduled_date, price)")
+      .select("employee_id, job:jobs(id, scheduled_date)")
       .in("employee_id", employeeIds);
 
     const hoursByEmployee = new Map<string, number>();
     for (const entry of timeEntries ?? []) {
-      if (!entry.clock_out) continue;
-      const hours =
-        (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / 3_600_000;
-      hoursByEmployee.set(entry.employee_id, (hoursByEmployee.get(entry.employee_id) ?? 0) + hours);
+      hoursByEmployee.set(entry.employee_id, (hoursByEmployee.get(entry.employee_id) ?? 0) + hoursForEntry(entry));
     }
 
     const jobsThisWeekByEmployee = new Map<string, number>();
     for (const je of jobEmployees ?? []) {
-      const job = (je as unknown as { job: Pick<Job, "id" | "scheduled_date" | "price"> | null }).job;
-      if (!job || job.scheduled_date < weekStart) continue;
+      const job = (je as unknown as { job: { id: string; scheduled_date: string | null } | null }).job;
+      if (!job?.scheduled_date || job.scheduled_date < weekStart) continue;
       jobsThisWeekByEmployee.set(je.employee_id, (jobsThisWeekByEmployee.get(je.employee_id) ?? 0) + 1);
     }
 

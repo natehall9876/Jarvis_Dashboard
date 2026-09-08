@@ -4,7 +4,7 @@ import type { DataResult, QuoteWithItems } from "@/types/domain";
 
 const QUOTE_SELECT = `
   *,
-  client:clients(id, name, company_name),
+  client:clients(id, first_name, last_name, company_name),
   items:quote_items(*)
 `;
 
@@ -14,7 +14,7 @@ export async function getQuotes(): Promise<DataResult<QuoteWithItems[]>> {
     const { data, error } = await supabase
       .from("quotes")
       .select(QUOTE_SELECT)
-      .order("issue_date", { ascending: false });
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return (data ?? []) as unknown as QuoteWithItems[];
   });
@@ -33,8 +33,9 @@ export async function getQuoteById(id: string): Promise<DataResult<QuoteWithItem
   });
 }
 
-export function quoteTotal(quote: QuoteWithItems, includeOptional = false): number {
+/** Sums line-item totals — quotes.total is the stored authoritative figure; this recomputes from items for display breakdowns. */
+export function quoteItemsTotal(quote: QuoteWithItems, includeOptional = false): number {
   return quote.items
     .filter((item) => includeOptional || !item.is_optional)
-    .reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+    .reduce((sum, item) => sum + item.total, 0);
 }

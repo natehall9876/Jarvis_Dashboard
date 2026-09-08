@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
-import { formatCurrency, formatHours } from "@/lib/format";
+import { formatCurrency, formatHours, clientDisplayName, propertyAddress } from "@/lib/format";
 import { moveRouteStop } from "@/app/(dashboard)/routes/actions";
 import type { RouteWithStops } from "@/types/domain";
 
@@ -40,20 +40,20 @@ export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop
           <div className="min-w-0 flex-1">
             {stop.property ? (
               <Link href={`/properties/${stop.property.id}`} className="block truncate text-sm font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)]">
-                {stop.property.address_line1}
+                {propertyAddress(stop.property)}
               </Link>
             ) : (
               <span className="text-sm text-[var(--color-text-muted)]">Unknown property</span>
             )}
             <span className="text-xs text-[var(--color-text-muted)]">
-              {stop.property?.client?.name ?? "—"}
+              {clientDisplayName(stop.property?.client)}
             </span>
           </div>
           <span className="w-20 shrink-0 text-right text-sm text-[var(--color-text-secondary)]">
             {formatCurrency(stop.estimated_price)}
           </span>
           <span className="w-16 shrink-0 text-right text-sm text-[var(--color-text-secondary)]">
-            {formatHours(stop.budgeted_minutes !== null ? stop.budgeted_minutes / 60 : null)}
+            {formatHours(stop.budgeted_hours)}
           </span>
           <div className="flex shrink-0 gap-0.5">
             <button

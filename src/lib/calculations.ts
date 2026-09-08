@@ -41,3 +41,21 @@ export function laborCostPercent(totalLaborCost: number, totalRevenue: number): 
 export function invoiceBalance(totalAmount: number, amountPaid: number): number {
   return Math.max(0, totalAmount - amountPaid);
 }
+
+/**
+ * The `invoices.status` column only reliably holds what the app writes
+ * directly (draft/sent/paid/void) — "partial" and "overdue" are display
+ * states derived from balance and due date rather than stored values, so we
+ * compute them here instead of trusting the raw column for those cases.
+ */
+export function invoiceDisplayStatus(invoice: {
+  status: string;
+  balance: number;
+  days_overdue: number;
+}): "draft" | "sent" | "partial" | "paid" | "overdue" | "void" {
+  if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
+  if (invoice.balance <= 0) return "paid";
+  if (invoice.days_overdue > 0) return "overdue";
+  if (invoice.status === "sent") return "sent";
+  return "partial";
+}

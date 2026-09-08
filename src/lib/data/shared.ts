@@ -19,9 +19,22 @@ export async function withDataResult<T>(
     const data = await fn();
     return { data, error: null };
   } catch (err) {
-    return {
-      data: null,
-      error: err instanceof Error ? err.message : "Unknown error while loading data.",
-    };
+    const message = extractErrorMessage(err);
+    console.error("[jarvis:data]", message, err);
+    return { data: null, error: message };
   }
+}
+
+/**
+ * Supabase/PostgREST errors are plain objects with a `message` field, not
+ * instances of the native Error class — `err instanceof Error` misses them
+ * and silently swallows the real reason (missing relationship, RLS denial,
+ * bad column name, etc.) behind a generic message.
+ */
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err && typeof err.message === "string") {
+    return err.message;
+  }
+  return "Unknown error while loading data.";
 }

@@ -4,6 +4,7 @@ import { SearchForm } from "@/components/ui/search-form";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
+import { clientDisplayName } from "@/lib/format";
 import { getProperties } from "@/lib/data/properties";
 import type { PropertyWithClient } from "@/types/domain";
 
@@ -23,19 +24,19 @@ export default async function PropertiesPage({
       header: "Property",
       render: (p) => (
         <div>
-          <div className="font-medium text-[var(--color-text-primary)]">{p.address_line1}</div>
+          <div className="font-medium text-[var(--color-text-primary)]">{p.property_name || p.street || "Unnamed property"}</div>
           <div className="text-xs text-[var(--color-text-muted)]">
-            {p.city}, {p.state} {p.postal_code}
+            {[p.street, p.city, p.state, p.zip].filter(Boolean).join(", ")}
           </div>
         </div>
       ),
     },
-    { key: "client", header: "Client", render: (p) => p.client?.company_name ?? p.client?.name ?? "—" },
+    { key: "client", header: "Client", render: (p) => clientDisplayName(p.client) },
     { key: "access", header: "Access Notes", render: (p) => p.access_notes ?? "—" },
     {
       key: "status",
       header: "Status",
-      render: (p) => <Badge tone={p.is_active ? "accent" : "neutral"}>{p.is_active ? "Active" : "Inactive"}</Badge>,
+      render: (p) => <Badge tone={p.active ? "accent" : "neutral"}>{p.active ? "Active" : "Inactive"}</Badge>,
     },
   ];
 

@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatCurrency, formatHours, formatTime } from "@/lib/format";
+import { formatCurrency, formatHours, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getJobs } from "@/lib/data/jobs";
 import type { JobWithRelations } from "@/types/domain";
 
@@ -49,6 +49,7 @@ export default async function SchedulePage({
 
   const jobsByDate = new Map<string, JobWithRelations[]>();
   for (const job of jobs ?? []) {
+    if (!job.scheduled_date) continue;
     const list = jobsByDate.get(job.scheduled_date) ?? [];
     list.push(job);
     jobsByDate.set(job.scheduled_date, list);
@@ -97,15 +98,15 @@ export default async function SchedulePage({
                           <CardBody className="space-y-1.5 py-3">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-medium text-[var(--color-text-muted)]">
-                                {formatTime(job.scheduled_start_time)}
+                                {formatTimeString(job.scheduled_start_time)}
                               </span>
                               <StatusBadge status={job.status} />
                             </div>
                             <div className="truncate text-sm font-medium text-[var(--color-text-primary)]">
-                              {job.client?.name ?? "Unknown client"}
+                              {clientDisplayName(job.property?.client)}
                             </div>
                             <div className="truncate text-xs text-[var(--color-text-secondary)]">
-                              {job.property?.address_line1 ?? "—"} · {job.service?.name ?? "—"}
+                              {propertyAddress(job.property)} · {job.service?.name ?? "—"}
                             </div>
                             <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
                               <span>{formatCurrency(job.price)}</span>

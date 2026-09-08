@@ -26,7 +26,7 @@ export default async function EquipmentDetailPage({
         description={[equipment.manufacturer, equipment.model].filter(Boolean).join(" · ") || undefined}
         action={
           <div className="flex items-center gap-2">
-            <StatusBadge status={equipment.status} />
+            <StatusBadge status={equipment.status ?? "active"} />
             {equipment.maintenance_warning ? <Badge tone="warning">Maintenance Soon</Badge> : null}
           </div>
         }
@@ -74,12 +74,12 @@ export default async function EquipmentDetailPage({
               {equipment.maintenance_history.map((m) => (
                 <li key={m.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
-                    <div className="text-[var(--color-text-primary)]">{m.service_type}</div>
+                    <div className="text-[var(--color-text-primary)]">{m.maintenance_type ?? "Service"}</div>
                     <div className="text-xs text-[var(--color-text-muted)]">
-                      {formatDate(m.service_date)} {m.vendor ? `· ${m.vendor}` : ""}
+                      {formatDate(m.maintenance_date)} {m.vendor ? `· ${m.vendor}` : ""}
                     </div>
                   </div>
-                  <span className="font-medium text-[var(--color-text-secondary)]">{formatCurrency(m.cost)}</span>
+                  <span className="font-medium text-[var(--color-text-secondary)]">{formatCurrency(m.parts_cost + m.labor_cost)}</span>
                 </li>
               ))}
             </ul>

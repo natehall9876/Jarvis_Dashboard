@@ -29,8 +29,8 @@ export default async function RouteDetailPage({
     <div className="space-y-6">
       <PageHeader
         title={route.name}
-        description={<span className="capitalize">{route.day_of_week}</span>}
-        action={<Badge tone={route.is_active ? "accent" : "neutral"}>{route.is_active ? "Active" : "Inactive"}</Badge>}
+        description={<span className="capitalize">{route.route_day ?? "Unscheduled"}</span>}
+        action={<Badge tone={route.active ? "accent" : "neutral"}>{route.active ? "Active" : "Inactive"}</Badge>}
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

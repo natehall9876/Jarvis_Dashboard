@@ -63,7 +63,7 @@ export type {
   ClientStatus,
   ContactMethod,
   EmployeeRole,
-  DayOfWeek,
+  RouteDay,
   AgreementFrequency,
   JobStatus,
   EquipmentStatus,
@@ -71,8 +71,6 @@ export type {
   InvoiceStatus,
   PaymentMethod,
   PhotoType,
-  IntegrationName,
-  IntegrationEntityType,
 } from "./database.types";
 
 // ---------------------------------------------------------------------------
@@ -86,34 +84,38 @@ export type ClientWithBalance = Client & {
 };
 
 export type PropertyWithClient = Property & {
-  client: Pick<Client, "id" | "name" | "company_name"> | null;
+  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name"> | null;
 };
 
 export type JobWithRelations = Job & {
-  client: Pick<Client, "id" | "name" | "company_name"> | null;
-  property: Pick<Property, "id" | "address_line1" | "city" | "state"> | null;
+  property: PropertyWithClient | null;
   service: Pick<Service, "id" | "name"> | null;
-  crew_lead: Pick<Employee, "id" | "first_name" | "last_name"> | null;
 };
 
 export type RouteWithStops = Route & {
   stops: (RouteStop & {
     property: PropertyWithClient | null;
+    // route_stops has no price/hours column — these are derived by matching
+    // the stop's property_id + the route's id against service_agreements.
+    estimated_price: number | null;
+    budgeted_hours: number | null;
   })[];
 };
 
 export type QuoteWithItems = Quote & {
-  client: Pick<Client, "id" | "name" | "company_name"> | null;
+  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name"> | null;
   items: QuoteItem[];
 };
 
 export type InvoiceWithClient = Invoice & {
-  client: Pick<Client, "id" | "name" | "company_name"> | null;
-  property: Pick<Property, "id" | "address_line1"> | null;
-  amount_paid: number;
+  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name"> | null;
+  property: Pick<Property, "id" | "street"> | null;
   balance: number;
   days_overdue: number;
+  display_status: InvoiceDisplayStatus;
 };
+
+export type InvoiceDisplayStatus = "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
 
 export type EmployeeWithStats = Employee & {
   hours_this_week: number;

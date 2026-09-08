@@ -17,7 +17,7 @@ export async function getEquipment(): Promise<DataResult<EquipmentWithMaintenanc
 
     const now = Date.now();
     return (data ?? []).map((item) => {
-      let warning = item.status === "needs_maintenance";
+      let warning = item.status === "maintenance" || item.status === "out_of_service";
       if (!warning && item.maintenance_due_date) {
         const dueMs = new Date(item.maintenance_due_date).getTime();
         const daysUntilDue = (dueMs - now) / (1000 * 60 * 60 * 24);
@@ -46,7 +46,7 @@ export async function getEquipmentById(id: string): Promise<DataResult<Equipment
       .from("equipment_maintenance")
       .select("*")
       .eq("equipment_id", id)
-      .order("service_date", { ascending: false });
+      .order("maintenance_date", { ascending: false });
 
     const now = Date.now();
     let warning = item.status === "needs_maintenance";

@@ -1,33 +1,28 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withDataResult } from "@/lib/data/shared";
 import { daysOverdue } from "@/lib/format";
+import { invoiceDisplayStatus } from "@/lib/calculations";
 import type { DataResult, Invoice, InvoiceItem, InvoiceWithClient, Payment } from "@/types/domain";
 
 const INVOICE_SELECT = `
   *,
-  client:clients(id, name, company_name),
-  property:properties(id, address_line1)
+  client:clients(id, first_name, last_name, company_name),
+  property:properties(id, street)
 `;
 
-async function attachPaymentInfo(
-  invoices: (Invoice & { client: InvoiceWithClient["client"]; property: InvoiceWithClient["property"] })[],
-  payments: Pick<Payment, "invoice_id" | "amount">[],
-): Promise<InvoiceWithClient[]> {
-  const paidByInvoice = new Map<string, number>();
-  for (const p of payments) {
-    paidByInvoice.set(p.invoice_id, (paidByInvoice.get(p.invoice_id) ?? 0) + p.amount);
-  }
-
-  return invoices.map((invoice) => {
-    const amountPaid = paidByInvoice.get(invoice.id) ?? 0;
-    const balance = Math.max(0, invoice.total_amount - amountPaid);
-    return {
-      ...invoice,
-      amount_paid: amountPaid,
-      balance,
-      days_overdue: balance > 0 ? Math.max(0, daysOverdue(invoice.due_date)) : 0,
-    };
-  });
+function enrichInvoice(
+  invoice: Invoice & { client: InvoiceWithClient["client"]; property: InvoiceWithClient["property"] },
+): InvoiceWithClient {
+  const balance = Math.max(0, invoice.total - invoice.amount_paid);
+  const overdueDays = balance > 0 ? Math.max(0, daysOverdue(invoice.due_date)) : 0;
+  const enriched: InvoiceWithClient = {
+    ...invoice,
+    balance,
+    days_overdue: overdueDays,
+    display_status: "draft",
+  };
+  enriched.display_status = invoiceDisplayStatus(enriched);
+  return enriched;
 }
 
 export async function getInvoices(): Promise<DataResult<InvoiceWithClient[]>> {
@@ -39,21 +34,11 @@ export async function getInvoices(): Promise<DataResult<InvoiceWithClient[]>> {
       .select(INVOICE_SELECT)
       .order("invoice_date", { ascending: false });
     if (error) throw error;
-    if (!invoices || invoices.length === 0) return [];
 
-    const invoiceIds = invoices.map((i) => i.id);
-    const { data: payments } = await supabase
-      .from("payments")
-      .select("invoice_id, amount")
-      .in("invoice_id", invoiceIds);
-
-    return attachPaymentInfo(
-      invoices as unknown as (Invoice & {
-        client: InvoiceWithClient["client"];
-        property: InvoiceWithClient["property"];
-      })[],
-      payments ?? [],
-    );
+    return ((invoices ?? []) as unknown as (Invoice & {
+      client: InvoiceWithClient["client"];
+      property: InvoiceWithClient["property"];
+    })[]).map(enrichInvoice);
   });
 }
 
@@ -74,13 +59,15 @@ export async function getInvoiceById(id: string): Promise<DataResult<InvoiceDeta
     if (error) throw error;
 
     const [{ data: items }, { data: payments }] = await Promise.all([
-      supabase.from("invoice_items").select("*").eq("invoice_id", id).order("sort_order"),
+      supabase.from("invoice_items").select("*").eq("invoice_id", id).order("created_at"),
       supabase.from("payments").select("*").eq("invoice_id", id).order("payment_date", { ascending: false }),
     ]);
 
-    const [enriched] = await attachPaymentInfo(
-      [invoice as unknown as Invoice & { client: InvoiceWithClient["client"]; property: InvoiceWithClient["property"] }],
-      payments ?? [],
+    const enriched = enrichInvoice(
+      invoice as unknown as Invoice & {
+        client: InvoiceWithClient["client"];
+        property: InvoiceWithClient["property"];
+      },
     );
 
     return {

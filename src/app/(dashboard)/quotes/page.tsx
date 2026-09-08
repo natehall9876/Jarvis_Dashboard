@@ -3,8 +3,8 @@ import { Card } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { getQuotes, quoteTotal } from "@/lib/data/quotes";
+import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { getQuotes } from "@/lib/data/quotes";
 import type { QuoteWithItems } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,12 @@ export default async function QuotesPage() {
   const { data: quotes, error } = await getQuotes();
 
   const columns: Column<QuoteWithItems>[] = [
-    { key: "number", header: "Quote #", render: (q) => q.quote_number },
-    { key: "client", header: "Client", render: (q) => q.client?.company_name ?? q.client?.name ?? "—" },
-    { key: "issue_date", header: "Issue Date", render: (q) => formatDate(q.issue_date) },
-    { key: "expiration", header: "Expires", render: (q) => formatDate(q.expiration_date) },
+    { key: "number", header: "Quote #", render: (q) => q.quote_number ?? "—" },
+    { key: "client", header: "Client", render: (q) => clientDisplayName(q.client) },
+    { key: "created", header: "Created", align: "left", render: (q) => formatDate(q.created_at) },
+    { key: "expiration", header: "Valid Until", render: (q) => formatDate(q.valid_until) },
     { key: "items", header: "Line Items", align: "right", render: (q) => q.items.length },
-    { key: "total", header: "Total", align: "right", render: (q) => formatCurrency(quoteTotal(q, true)) },
+    { key: "total", header: "Total", align: "right", render: (q) => formatCurrency(q.total) },
     { key: "status", header: "Status", render: (q) => <StatusBadge status={q.status} /> },
   ];
 

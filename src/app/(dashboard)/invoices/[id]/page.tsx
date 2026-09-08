@@ -4,7 +4,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
 import { getInvoiceById } from "@/lib/data/invoices";
 
 export const dynamic = "force-dynamic";
@@ -24,17 +24,17 @@ export default async function InvoiceDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Invoice #${invoice.invoice_number}`}
+        title={`Invoice #${invoice.invoice_number ?? ""}`}
         description={invoice.client ? (
           <Link href={`/clients/${invoice.client.id}`} className="hover:text-[var(--color-accent)]">
-            {invoice.client.company_name ?? invoice.client.name}
+            {clientDisplayName(invoice.client)}
           </Link>
         ) : undefined}
-        action={<StatusBadge status={invoice.status} />}
+        action={<StatusBadge status={invoice.display_status} />}
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Total" value={formatCurrency(invoice.total_amount)} />
+        <StatTile label="Total" value={formatCurrency(invoice.total)} />
         <StatTile label="Paid" value={formatCurrency(invoice.amount_paid)} tone="accent" />
         <StatTile label="Balance" value={formatCurrency(invoice.balance)} tone={invoice.balance > 0 ? "warning" : "neutral"} />
         <StatTile
@@ -73,7 +73,7 @@ export default async function InvoiceDetailPage({
                     <td className="py-2 pr-4 text-right text-[var(--color-text-muted)]">{item.quantity}×</td>
                     <td className="py-2 pr-4 text-right text-[var(--color-text-secondary)]">{formatCurrency(item.unit_price, true)}</td>
                     <td className="py-2 text-right font-medium text-[var(--color-text-primary)]">
-                      {formatCurrency(item.quantity * item.unit_price)}
+                      {formatCurrency(item.total)}
                     </td>
                   </tr>
                 ))}
@@ -93,7 +93,7 @@ export default async function InvoiceDetailPage({
               {invoice.payments.map((p) => (
                 <li key={p.id} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-[var(--color-text-secondary)]">
-                    {formatDate(p.payment_date)} — <span className="capitalize">{p.method.replace("_", " ")}</span>
+                    {formatDate(p.payment_date)} — <span className="capitalize">{(p.payment_method ?? "unknown").replace("_", " ")}</span>
                     {p.external_reference ? ` (${p.external_reference})` : ""}
                   </span>
                   <span className="font-medium text-[var(--color-accent)]">{formatCurrency(p.amount)}</span>

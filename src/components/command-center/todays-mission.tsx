@@ -3,7 +3,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Badge, StatusBadge } from "@/components/ui/badge";
-import { formatCurrency, formatHours, formatTime } from "@/lib/format";
+import { formatCurrency, formatHours, formatTime, clientDisplayName, propertyAddress } from "@/lib/format";
 import type { TodaysMission as TodaysMissionData } from "@/lib/data/command-center";
 import {
   AlertTriangle,
@@ -99,7 +99,7 @@ export function TodaysMission({
                   {data.scheduleChanges.map((job) => (
                     <li key={job.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
                       <span className="truncate text-[var(--color-text-secondary)]">
-                        {job.client?.name ?? "Unknown client"} — {job.property?.address_line1 ?? "—"}
+                        {clientDisplayName(job.property?.client)} — {propertyAddress(job.property)}
                       </span>
                       <StatusBadge status={job.status} />
                     </li>
@@ -115,7 +115,7 @@ export function TodaysMission({
                   {data.quotesNeedingFollowUp.map((quote) => (
                     <li key={quote.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
                       <span className="truncate text-[var(--color-text-secondary)]">
-                        {quote.client?.name ?? "Unknown client"} — {quote.quote_number}
+                        {clientDisplayName(quote.client)} — {quote.quote_number}
                       </span>
                       <span className="text-[var(--color-text-muted)]">{formatTime(quote.sent_at)}</span>
                     </li>
@@ -131,7 +131,7 @@ export function TodaysMission({
                   {data.overdueInvoices.map((inv) => (
                     <li key={inv.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
                       <span className="truncate text-[var(--color-text-secondary)]">
-                        {inv.client?.name ?? "Unknown client"} — #{inv.invoice_number}
+                        {clientDisplayName(inv.client)} — #{inv.invoice_number}
                       </span>
                       <Badge tone="critical">{formatCurrency(inv.balance)}</Badge>
                     </li>
@@ -147,7 +147,7 @@ export function TodaysMission({
                   {data.equipmentIssues.map((eq) => (
                     <li key={eq.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
                       <span className="truncate text-[var(--color-text-secondary)]">{eq.name}</span>
-                      <StatusBadge status={eq.status} />
+                      <StatusBadge status={eq.status ?? "active"} />
                     </li>
                   ))}
                 </MissionList>

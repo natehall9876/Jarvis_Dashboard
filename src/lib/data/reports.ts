@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withDataResult } from "@/lib/data/shared";
+import { clientDisplayName } from "@/lib/format";
 import { laborCostPercent, quoteAcceptanceRate } from "@/lib/calculations";
 import type { DataResult } from "@/types/domain";
 
@@ -51,7 +52,10 @@ export async function getReportsSummary(days = 90): Promise<DataResult<ReportsSu
     const { data: jobs, error } = await supabase
       .from("jobs")
       .select(
-        `id, price, actual_hours, status, route_id, client_id, service_id, service:services(id, name), client:clients(id, name, company_name), route:routes(id, name)`,
+        `id, price, actual_hours, status, route_id, service_id,
+         service:services(id, name),
+         property:properties(id, client:clients(id, first_name, last_name, company_name)),
+         route:routes(id, name)`,
       )
       .eq("status", "completed")
       .gte("scheduled_date", sinceStr);
@@ -64,14 +68,14 @@ export async function getReportsSummary(days = 90): Promise<DataResult<ReportsSu
 
     const jobIds = completed.map((j) => j.id);
     const { data: jobEmployees } = jobIds.length
-      ? await supabase.from("job_employees").select("job_id, employee_id").in("job_id", jobIds)
+      ? await supabase.from("job_employees").select("job_id, employee_id, hours_worked").in("job_id", jobIds)
       : { data: [] };
 
-    const employeesPerJob = new Map<string, string[]>();
+    const laborByJob = new Map<string, number>();
     for (const je of jobEmployees ?? []) {
-      const list = employeesPerJob.get(je.job_id) ?? [];
-      list.push(je.employee_id);
-      employeesPerJob.set(je.job_id, list);
+      const rate = rateByEmployee.get(je.employee_id) ?? 0;
+      const cost = (je.hours_worked ?? 0) * rate;
+      laborByJob.set(je.job_id, (laborByJob.get(je.job_id) ?? 0) + cost);
     }
 
     let totalRevenue = 0;
@@ -82,15 +86,10 @@ export async function getReportsSummary(days = 90): Promise<DataResult<ReportsSu
     const routeMap = new Map<string, RouteRevenueRow>();
 
     for (const job of completed) {
-      totalRevenue += job.price;
+      const price = job.price ?? 0;
+      totalRevenue += price;
+      totalLaborCost += laborByJob.get(job.id) ?? 0;
       const hours = job.actual_hours ?? 0;
-      const crew = employeesPerJob.get(job.id) ?? [];
-      if (crew.length > 0 && hours > 0) {
-        const hoursPerPerson = hours / crew.length;
-        for (const employeeId of crew) {
-          totalLaborCost += hoursPerPerson * (rateByEmployee.get(employeeId) ?? 0);
-        }
-      }
 
       const service = job.service as unknown as { id: string; name: string } | null;
       const serviceKey = service?.id ?? "unassigned";
@@ -105,17 +104,21 @@ export async function getReportsSummary(days = 90): Promise<DataResult<ReportsSu
           revenuePerHour: null,
         } satisfies ServiceRevenueRow);
       serviceRow.jobCount += 1;
-      serviceRow.revenue += job.price;
+      serviceRow.revenue += price;
       serviceRow.actualHours += hours;
       serviceMap.set(serviceKey, serviceRow);
 
-      const client = job.client as unknown as { id: string; name: string; company_name: string | null } | null;
+      const property = job.property as unknown as {
+        id: string;
+        client: { id: string; first_name: string | null; last_name: string | null; company_name: string | null } | null;
+      } | null;
+      const client = property?.client ?? null;
       if (client) {
         const clientRow =
           clientMap.get(client.id) ??
-          ({ clientId: client.id, clientName: client.company_name ?? client.name, jobCount: 0, revenue: 0 } satisfies ClientRevenueRow);
+          ({ clientId: client.id, clientName: clientDisplayName(client), jobCount: 0, revenue: 0 } satisfies ClientRevenueRow);
         clientRow.jobCount += 1;
-        clientRow.revenue += job.price;
+        clientRow.revenue += price;
         clientMap.set(client.id, clientRow);
       }
 
@@ -125,7 +128,7 @@ export async function getReportsSummary(days = 90): Promise<DataResult<ReportsSu
           routeMap.get(route.id) ??
           ({ routeId: route.id, routeName: route.name, jobCount: 0, revenue: 0, actualHours: 0, revenuePerHour: null } satisfies RouteRevenueRow);
         routeRow.jobCount += 1;
-        routeRow.revenue += job.price;
+        routeRow.revenue += price;
         routeRow.actualHours += hours;
         routeMap.set(route.id, routeRow);
       }
@@ -143,10 +146,10 @@ export async function getReportsSummary(days = 90): Promise<DataResult<ReportsSu
 
     const { data: quotes } = await supabase
       .from("quotes")
-      .select("status")
-      .gte("issue_date", sinceStr)
-      .in("status", ["accepted", "declined"]);
-    const accepted = (quotes ?? []).filter((q) => q.status === "accepted").length;
+      .select("accepted_at, declined_at")
+      .gte("created_at", sinceStr)
+      .or("accepted_at.not.is.null,declined_at.not.is.null");
+    const accepted = (quotes ?? []).filter((q) => q.accepted_at !== null).length;
     const decided = quotes?.length ?? 0;
 
     return {

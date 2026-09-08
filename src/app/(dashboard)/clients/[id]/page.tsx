@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getClientById } from "@/lib/data/clients";
 
 export const dynamic = "force-dynamic";
@@ -26,9 +26,9 @@ export default async function ClientDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={client.name}
-        description={client.company_name ?? undefined}
-        action={<StatusBadge status={client.status} />}
+        title={clientDisplayName(client)}
+        description={client.company_name && (client.first_name || client.last_name) ? client.company_name : undefined}
+        action={<StatusBadge status={client.status ?? "active"} />}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -73,7 +73,7 @@ export default async function ClientDetailPage({
               {properties.map((p) => (
                 <li key={p.id} className="py-2.5">
                   <Link href={`/properties/${p.id}`} className="text-sm font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)]">
-                    {p.address_line1}, {p.city}, {p.state}
+                    {propertyAddress(p)}
                   </Link>
                 </li>
               ))}
