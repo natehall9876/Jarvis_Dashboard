@@ -32,10 +32,3 @@ export async function getQuoteById(id: string): Promise<DataResult<QuoteWithItem
     return data as unknown as QuoteWithItems;
   });
 }
-
-/** Sums line-item totals — quotes.total is the stored authoritative figure; this recomputes from items for display breakdowns. */
-export function quoteItemsTotal(quote: QuoteWithItems, includeOptional = false): number {
-  return quote.items
-    .filter((item) => includeOptional || !item.is_optional)
-    .reduce((sum, item) => sum + item.total, 0);
-}
