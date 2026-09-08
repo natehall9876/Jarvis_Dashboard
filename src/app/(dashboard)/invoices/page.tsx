@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
@@ -40,7 +41,15 @@ export default async function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Invoices" description="Every invoice with payment status and days overdue." />
+      <PageHeader
+        title="Invoices"
+        description="Every invoice with payment status and days overdue."
+        action={
+          <Link href="/invoices/payments" className="text-sm text-[var(--color-accent)] hover:underline">
+            View all payments →
+          </Link>
+        }
+      />
       <Card>
         <DataStateGate error={error} isEmpty={!!invoices && invoices.length === 0} emptyTitle="No invoices yet">
           {invoices ? <DataTable columns={columns} rows={invoices} getRowKey={(i) => i.id} onRowHref={(i) => `/invoices/${i.id}`} /> : null}

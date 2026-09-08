@@ -39,6 +39,10 @@ export const integrationEnv = {
   weather: {
     apiKey: process.env.WEATHER_API_KEY ?? "",
   },
+  weatherLocation: {
+    lat: process.env.WEATHER_LOCATION_LAT ?? "",
+    lon: process.env.WEATHER_LOCATION_LON ?? "",
+  },
   github: {
     token: process.env.GITHUB_TOKEN ?? "",
   },
