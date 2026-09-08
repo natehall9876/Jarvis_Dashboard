@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured, isIntegrationConfigured, integrationEnv } from "@/lib/env";
+import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
 type IntegrationKey = keyof typeof integrationEnv;
 
@@ -61,6 +62,42 @@ async function getSupabaseStatus(): Promise<IntegrationCard> {
   }
 }
 
+/**
+ * Weather (National Weather Service) needs no API key, only a location, and
+ * we can actually verify it with a live call — same treatment as Supabase.
+ */
+async function getWeatherStatus(): Promise<IntegrationCard> {
+  const description = "Rain alerts and route-planning warnings (National Weather Service — free, no key).";
+  if (!isIntegrationConfigured("weather")) {
+    return {
+      key: "weather",
+      name: "Weather",
+      description,
+      status: "not_connected",
+      statusDetail: "Add WEATHER_LOCATION_LAT and WEATHER_LOCATION_LON to .env.local.",
+    };
+  }
+
+  const snapshot = await getWeatherForCoordinates(Number(integrationEnv.weather.lat), Number(integrationEnv.weather.lon));
+  if (!snapshot) {
+    return {
+      key: "weather",
+      name: "Weather",
+      description,
+      status: "needs_setup",
+      statusDetail: "Location configured but the National Weather Service call failed — check the coordinates.",
+    };
+  }
+
+  return {
+    key: "weather",
+    name: "Weather",
+    description,
+    status: "connected",
+    statusDetail: `Verified with a live call — currently ${snapshot.temperatureF}°F in ${snapshot.location}.`,
+  };
+}
+
 function credentialOnlyCard(
   key: IntegrationKey,
   name: string,
@@ -80,7 +117,7 @@ function credentialOnlyCard(
 }
 
 export async function getIntegrationCards(): Promise<IntegrationCard[]> {
-  const supabase = await getSupabaseStatus();
+  const [supabase, weather] = await Promise.all([getSupabaseStatus(), getWeatherStatus()]);
 
   return [
     supabase,
@@ -108,12 +145,7 @@ export async function getIntegrationCards(): Promise<IntegrationCard[]> {
       "Two-way sync for the job schedule.",
       "Client credentials found — OAuth connection flow isn't implemented yet.",
     ),
-    credentialOnlyCard(
-      "weather",
-      "Weather",
-      "Rain alerts and route-planning warnings.",
-      "API key found — route weather warnings aren't wired up yet.",
-    ),
+    weather,
     credentialOnlyCard(
       "github",
       "GitHub",

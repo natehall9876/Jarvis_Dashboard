@@ -5,22 +5,20 @@ import { integrationEnv, isIntegrationConfigured } from "@/lib/env";
 import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
 export async function WeatherCard() {
-  const lat = Number(integrationEnv.weatherLocation.lat);
-  const lon = Number(integrationEnv.weatherLocation.lon);
-  const locationConfigured = integrationEnv.weatherLocation.lat !== "" && integrationEnv.weatherLocation.lon !== "";
-
-  if (!isIntegrationConfigured("weather") || !locationConfigured) {
+  if (!isIntegrationConfigured("weather")) {
     return (
       <Card>
         <CardHeader title="Weather" description="Route-planning warnings for today" />
         <CardBody className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
           <CloudOff className="h-4 w-4 shrink-0" />
-          Not connected — add WEATHER_API_KEY, WEATHER_LOCATION_LAT, and WEATHER_LOCATION_LON to enable.
+          Not connected — add WEATHER_LOCATION_LAT and WEATHER_LOCATION_LON to enable (free, no API key needed).
         </CardBody>
       </Card>
     );
   }
 
+  const lat = Number(integrationEnv.weather.lat);
+  const lon = Number(integrationEnv.weather.lon);
   const snapshot = await getWeatherForCoordinates(lat, lon);
 
   return (
@@ -30,7 +28,7 @@ export async function WeatherCard() {
         {!snapshot ? (
           <p className="flex items-center gap-2 text-sm text-[var(--color-warning)]">
             <TriangleAlert className="h-4 w-4 shrink-0" />
-            Couldn&apos;t reach the weather provider right now.
+            Couldn&apos;t reach the National Weather Service right now.
           </p>
         ) : (
           <div className="space-y-3">

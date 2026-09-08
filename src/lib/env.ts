@@ -36,10 +36,9 @@ export const integrationEnv = {
     clientId: process.env.GOOGLE_CALENDAR_CLIENT_ID ?? "",
     clientSecret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "",
   },
+  // National Weather Service (api.weather.gov) needs no API key — just a
+  // location. Requiring only lat/lon here is intentional, not an oversight.
   weather: {
-    apiKey: process.env.WEATHER_API_KEY ?? "",
-  },
-  weatherLocation: {
     lat: process.env.WEATHER_LOCATION_LAT ?? "",
     lon: process.env.WEATHER_LOCATION_LON ?? "",
   },
