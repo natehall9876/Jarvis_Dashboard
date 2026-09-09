@@ -77,3 +77,42 @@ export async function getEmployeeById(id: string): Promise<DataResult<Employee>>
     return data;
   });
 }
+
+export type EmployeeJobRow = {
+  id: string;
+  scheduled_date: string | null;
+  status: string;
+  hours_worked: number | null;
+  service: { name: string } | null;
+};
+
+export async function getEmployeeRecentJobs(employeeId: string): Promise<DataResult<EmployeeJobRow[]>> {
+  return withDataResult(async () => {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("job_employees")
+      .select("hours_worked, job:jobs(id, scheduled_date, status, service:services(name))")
+      .eq("employee_id", employeeId);
+    if (error) throw error;
+
+    const rows = (data ?? [])
+      .map((row) => {
+        const je = row as unknown as {
+          hours_worked: number | null;
+          job: { id: string; scheduled_date: string | null; status: string; service: { name: string } | null } | null;
+        };
+        if (!je.job) return null;
+        return {
+          id: je.job.id,
+          scheduled_date: je.job.scheduled_date,
+          status: je.job.status,
+          hours_worked: je.hours_worked,
+          service: je.job.service,
+        };
+      })
+      .filter((row): row is EmployeeJobRow => row !== null);
+
+    rows.sort((a, b) => (b.scheduled_date ?? "").localeCompare(a.scheduled_date ?? ""));
+    return rows.slice(0, 15);
+  });
+}

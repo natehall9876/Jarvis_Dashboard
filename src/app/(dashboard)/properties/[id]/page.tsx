@@ -1,34 +1,67 @@
 import Link from "next/link";
+import { Pencil, Archive } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { Modal } from "@/components/ui/modal";
+import { PropertyForm } from "@/components/properties/property-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
 import { getJobPhotoUrl } from "@/lib/supabase/storage";
 import { getPropertyById } from "@/lib/data/properties";
+import { getClientOptions } from "@/lib/data/options";
+import { updateProperty, archiveProperty } from "@/lib/actions/properties";
 
 export const dynamic = "force-dynamic";
 
 export default async function PropertyDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { data, error } = await getPropertyById(id);
+  const { edit: isEditing, error: formError } = await searchParams;
+  const [{ data, error }, clientsResult] = await Promise.all([
+    getPropertyById(id),
+    isEditing ? getClientOptions() : Promise.resolve({ data: [], error: null }),
+  ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
   if (!data) return null;
 
   const { property, client, route, agreements, jobs, quotes, invoices, photos } = data;
+  const updatePropertyWithId = updateProperty.bind(null, id);
+  const archivePropertyWithId = archiveProperty.bind(null, id);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={property.property_name || property.street || "Unnamed property"}
         description={[property.street, property.city, property.state, property.zip].filter(Boolean).join(", ")}
-        action={<Badge tone={property.active ? "accent" : "neutral"}>{property.active ? "Active" : "Inactive"}</Badge>}
+        action={
+          <div className="flex items-center gap-2">
+            <Badge tone={property.active ? "accent" : "neutral"}>{property.active ? "Active" : "Inactive"}</Badge>
+            <Link href={`/properties/${id}?edit=1`}>
+              <Button variant="secondary">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </Link>
+            {property.active ? (
+              <form action={archivePropertyWithId}>
+                <ConfirmSubmit confirmMessage="Archive this property? Its history stays intact, but it'll be marked inactive.">
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive
+                </ConfirmSubmit>
+              </form>
+            ) : null}
+          </div>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -170,6 +203,12 @@ export default async function PropertyDetailPage({
           )}
         </CardBody>
       </Card>
+
+      {isEditing ? (
+        <Modal title="Edit Property" closeHref={`/properties/${id}`}>
+          <PropertyForm action={updatePropertyWithId} property={property} clients={clientsResult.data ?? []} error={formError} />
+        </Modal>
+      ) : null}
     </div>
   );
 }

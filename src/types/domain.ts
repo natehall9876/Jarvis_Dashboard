@@ -36,6 +36,7 @@ export type TimeEntry = Tables["time_entries"]["Row"];
 
 export type Equipment = Tables["equipment"]["Row"];
 export type EquipmentInsert = Tables["equipment"]["Insert"];
+export type EquipmentUpdate = Tables["equipment"]["Update"];
 
 export type JobEquipment = Tables["job_equipment"]["Row"];
 export type EquipmentMaintenance = Tables["equipment_maintenance"]["Row"];

@@ -1,30 +1,64 @@
+import Link from "next/link";
+import { Pencil, Archive } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardBody } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { getEmployeeById } from "@/lib/data/employees";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Badge, StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { Modal } from "@/components/ui/modal";
+import { EmployeeForm } from "@/components/employees/employee-form";
+import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
+import { formatCurrency, formatDate, formatHours } from "@/lib/format";
+import { getEmployeeById, getEmployeeRecentJobs } from "@/lib/data/employees";
+import { updateEmployee, archiveEmployee } from "@/lib/actions/employees";
 
 export const dynamic = "force-dynamic";
 
 export default async function EmployeeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { data: employee, error } = await getEmployeeById(id);
+  const { edit: isEditing, error: formError } = await searchParams;
+  const [{ data: employee, error }, { data: recentJobs }] = await Promise.all([
+    getEmployeeById(id),
+    getEmployeeRecentJobs(id),
+  ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
   if (!employee) return null;
+
+  const updateEmployeeWithId = updateEmployee.bind(null, id);
+  const archiveEmployeeWithId = archiveEmployee.bind(null, id);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={[employee.first_name, employee.last_name].filter(Boolean).join(" ")}
         description={<span className="capitalize">{(employee.role ?? "crew_member").replace("_", " ")}</span>}
-        action={<Badge tone={employee.active ? "accent" : "neutral"}>{employee.active ? "Active" : "Inactive"}</Badge>}
+        action={
+          <div className="flex items-center gap-2">
+            <Badge tone={employee.active ? "accent" : "neutral"}>{employee.active ? "Active" : "Inactive"}</Badge>
+            <Link href={`/employees/${id}?edit=1`}>
+              <Button variant="secondary">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </Link>
+            {employee.active ? (
+              <form action={archiveEmployeeWithId}>
+                <ConfirmSubmit confirmMessage={`Mark ${employee.first_name} as inactive? Their job history stays intact.`}>
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive
+                </ConfirmSubmit>
+              </form>
+            ) : null}
+          </div>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -64,6 +98,37 @@ export default async function EmployeeDetailPage({
             <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{employee.notes}</p>
           </CardBody>
         </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader title="Assigned Jobs" description="Most recent 15" />
+        <CardBody>
+          {!recentJobs || recentJobs.length === 0 ? (
+            <EmptyState title="No jobs assigned yet" />
+          ) : (
+            <ul className="divide-y divide-[var(--color-border)]">
+              {recentJobs.map((j) => (
+                <li key={j.id} className="flex items-center justify-between py-2 text-sm">
+                  <Link href={`/jobs/${j.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
+                    {formatDate(j.scheduled_date)} — {j.service?.name ?? "Job"}
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    {j.hours_worked !== null ? (
+                      <span className="text-xs text-[var(--color-text-muted)]">{formatHours(j.hours_worked)}</span>
+                    ) : null}
+                    <StatusBadge status={j.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      {isEditing ? (
+        <Modal title="Edit Employee" closeHref={`/employees/${id}`}>
+          <EmployeeForm action={updateEmployeeWithId} employee={employee} error={formError} />
+        </Modal>
       ) : null}
     </div>
   );

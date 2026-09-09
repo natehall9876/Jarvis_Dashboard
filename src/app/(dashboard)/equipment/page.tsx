@@ -1,15 +1,25 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge, StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { EquipmentForm } from "@/components/equipment/equipment-form";
 import { formatDate, formatNumber } from "@/lib/format";
 import { getEquipment, type EquipmentWithMaintenanceFlag } from "@/lib/data/equipment";
-import { TriangleAlert } from "lucide-react";
+import { createEquipment } from "@/lib/actions/equipment";
+import { TriangleAlert, Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function EquipmentPage() {
+export default async function EquipmentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string; error?: string }>;
+}) {
+  const { new: isNew, error: formError } = await searchParams;
   const { data: equipment, error } = await getEquipment();
 
   const columns: Column<EquipmentWithMaintenanceFlag>[] = [
@@ -43,12 +53,29 @@ export default async function EquipmentPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Equipment" description="Fleet status, hours, and upcoming maintenance." />
+      <PageHeader
+        title="Equipment"
+        description="Fleet status, hours, and upcoming maintenance."
+        action={
+          <Link href="/equipment?new=1">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Add Equipment
+            </Button>
+          </Link>
+        }
+      />
       <Card>
         <DataStateGate error={error} isEmpty={!!equipment && equipment.length === 0} emptyTitle="No equipment yet">
           {equipment ? <DataTable columns={columns} rows={equipment} getRowKey={(e) => e.id} onRowHref={(e) => `/equipment/${e.id}`} /> : null}
         </DataStateGate>
       </Card>
+
+      {isNew ? (
+        <Modal title="Add Equipment" closeHref="/equipment">
+          <EquipmentForm action={createEquipment} error={formError} />
+        </Modal>
+      ) : null}
     </div>
   );
 }
