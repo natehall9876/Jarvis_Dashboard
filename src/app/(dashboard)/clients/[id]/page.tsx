@@ -128,11 +128,14 @@ export default async function ClientDetailPage({
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {jobs.slice(0, 8).map((j) => (
-                  <li key={j.id} className="flex items-center justify-between py-2 text-sm">
-                    <Link href={`/jobs/${j.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                      {formatDateOnly(j.scheduled_date)}
+                  <li key={j.id}>
+                    <Link
+                      href={`/jobs/${j.id}`}
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                    >
+                      <span>{formatDateOnly(j.scheduled_date)}</span>
+                      <StatusBadge status={j.status} />
                     </Link>
-                    <StatusBadge status={j.status} />
                   </li>
                 ))}
               </ul>
@@ -148,11 +151,14 @@ export default async function ClientDetailPage({
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {quotes.slice(0, 8).map((qt) => (
-                  <li key={qt.id} className="flex items-center justify-between py-2 text-sm">
-                    <Link href={`/quotes/${qt.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                      {qt.quote_number}
+                  <li key={qt.id}>
+                    <Link
+                      href={`/quotes/${qt.id}`}
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                    >
+                      <span>{qt.quote_number}</span>
+                      <StatusBadge status={qt.status} />
                     </Link>
-                    <StatusBadge status={qt.status} />
                   </li>
                 ))}
               </ul>
@@ -168,11 +174,14 @@ export default async function ClientDetailPage({
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {invoices.slice(0, 8).map((inv) => (
-                  <li key={inv.id} className="flex items-center justify-between py-2 text-sm">
-                    <Link href={`/invoices/${inv.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                      #{inv.invoice_number}
+                  <li key={inv.id}>
+                    <Link
+                      href={`/invoices/${inv.id}`}
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                    >
+                      <span>#{inv.invoice_number}</span>
+                      <StatusBadge status={inv.status} />
                     </Link>
-                    <StatusBadge status={inv.status} />
                   </li>
                 ))}
               </ul>

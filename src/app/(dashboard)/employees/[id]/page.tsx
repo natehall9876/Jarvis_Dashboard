@@ -108,16 +108,19 @@ export default async function EmployeeDetailPage({
           ) : (
             <ul className="divide-y divide-[var(--color-border)]">
               {recentJobs.map((j) => (
-                <li key={j.id} className="flex items-center justify-between py-2 text-sm">
-                  <Link href={`/jobs/${j.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                    {formatDateOnly(j.scheduled_date)} — {j.service?.name ?? "Job"}
+                <li key={j.id}>
+                  <Link
+                    href={`/jobs/${j.id}`}
+                    className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                  >
+                    <span>{formatDateOnly(j.scheduled_date)} — {j.service?.name ?? "Job"}</span>
+                    <div className="flex items-center gap-3">
+                      {j.hours_worked !== null ? (
+                        <span className="text-xs text-[var(--color-text-muted)]">{formatHours(j.hours_worked)}</span>
+                      ) : null}
+                      <StatusBadge status={j.status} />
+                    </div>
                   </Link>
-                  <div className="flex items-center gap-3">
-                    {j.hours_worked !== null ? (
-                      <span className="text-xs text-[var(--color-text-muted)]">{formatHours(j.hours_worked)}</span>
-                    ) : null}
-                    <StatusBadge status={j.status} />
-                  </div>
                 </li>
               ))}
             </ul>

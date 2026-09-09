@@ -44,37 +44,37 @@ export default async function RoutesPage({
               const hours = routeEstimatedHours(route);
               const perHour = routeProductionPerHour(route);
               return (
-                <Card key={route.id}>
-                  <CardHeader
-                    title={route.name}
-                    description={
-                      <span className="capitalize">{route.route_day ?? "Unscheduled"}</span>
-                    }
-                    action={<Badge tone={route.active ? "accent" : "neutral"}>{route.active ? "Active" : "Inactive"}</Badge>}
-                  />
-                  <CardBody>
-                    <div className="mb-4 grid grid-cols-3 gap-3 text-center">
-                      <div>
-                        <div className="text-lg font-semibold text-[var(--color-text-primary)]">{route.stops.length}</div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Stops</div>
-                      </div>
-                      <div>
-                        <div className="text-lg font-semibold text-[var(--color-accent)]">{formatCurrency(revenue)}</div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Revenue</div>
-                      </div>
-                      <div>
-                        <div className="text-lg font-semibold text-[var(--color-text-primary)]">
-                          {perHour !== null ? formatCurrency(perHour, true) : "—"}
+                <Link key={route.id} href={`/routes/${route.id}`} className="block">
+                  <Card className="h-full transition-colors hover:border-[var(--color-accent)]">
+                    <CardHeader
+                      title={route.name}
+                      description={
+                        <span className="capitalize">{route.route_day ?? "Unscheduled"}</span>
+                      }
+                      action={<Badge tone={route.active ? "accent" : "neutral"}>{route.active ? "Active" : "Inactive"}</Badge>}
+                    />
+                    <CardBody>
+                      <div className="mb-4 grid grid-cols-3 gap-3 text-center">
+                        <div>
+                          <div className="text-lg font-semibold text-[var(--color-text-primary)]">{route.stops.length}</div>
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Stops</div>
                         </div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">$ / Hour</div>
+                        <div>
+                          <div className="text-lg font-semibold text-[var(--color-accent)]">{formatCurrency(revenue)}</div>
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">Revenue</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-semibold text-[var(--color-text-primary)]">
+                            {perHour !== null ? formatCurrency(perHour, true) : "—"}
+                          </div>
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">$ / Hour</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="mb-3 text-xs text-[var(--color-text-muted)]">{formatHours(hours)} budgeted</div>
-                    <Link href={`/routes/${route.id}`} className="text-sm text-[var(--color-accent)] hover:underline">
-                      View & edit stop order →
-                    </Link>
-                  </CardBody>
-                </Card>
+                      <div className="mb-3 text-xs text-[var(--color-text-muted)]">{formatHours(hours)} budgeted</div>
+                      <span className="text-sm text-[var(--color-accent)]">View & edit stop order →</span>
+                    </CardBody>
+                  </Card>
+                </Link>
               );
             })}
           </div>

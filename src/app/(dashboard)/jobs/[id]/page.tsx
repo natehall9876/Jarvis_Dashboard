@@ -89,9 +89,14 @@ export default async function JobDetailPage({
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {job.crew.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between py-2 text-sm text-[var(--color-text-secondary)]">
-                    <span>{[c.first_name, c.last_name].filter(Boolean).join(" ")}</span>
-                    <span>{formatHours(c.hours_worked)}</span>
+                  <li key={c.id}>
+                    <Link
+                      href={`/employees/${c.id}`}
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                    >
+                      <span>{[c.first_name, c.last_name].filter(Boolean).join(" ")}</span>
+                      <span>{formatHours(c.hours_worked)}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -107,9 +112,21 @@ export default async function JobDetailPage({
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {job.equipment.map((e, i) => (
-                  <li key={i} className="flex items-center justify-between py-2 text-sm text-[var(--color-text-secondary)]">
-                    <span>{e.equipment?.name ?? "Unknown equipment"}</span>
-                    <span>{formatHours(e.hours_used)}</span>
+                  <li key={i}>
+                    {e.equipment ? (
+                      <Link
+                        href={`/equipment/${e.equipment.id}`}
+                        className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                      >
+                        <span>{e.equipment.name}</span>
+                        <span>{formatHours(e.hours_used)}</span>
+                      </Link>
+                    ) : (
+                      <div className="flex items-center justify-between px-2 py-2 text-sm text-[var(--color-text-secondary)]">
+                        <span>Unknown equipment</span>
+                        <span>{formatHours(e.hours_used)}</span>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
