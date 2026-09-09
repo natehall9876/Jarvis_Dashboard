@@ -1,22 +1,37 @@
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { JobForm } from "@/components/jobs/job-form";
+import { StatusQuickChange } from "@/components/jobs/status-quick-change";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
 import { formatCurrency, formatDate, formatHours, formatTime, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getJobPhotoUrl } from "@/lib/supabase/storage";
 import { getJobById, jobProductionRate } from "@/lib/data/jobs";
+import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
+import { updateJob, changeJobStatus } from "@/lib/actions/jobs";
 
 export const dynamic = "force-dynamic";
 
 export default async function JobDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { data: job, error } = await getJobById(id);
+  const { edit: isEditing, error: formError } = await searchParams;
+  const [{ data: job, error }, properties, services, routes, employees] = await Promise.all([
+    getJobById(id),
+    isEditing ? getPropertyOptions() : Promise.resolve({ data: [] }),
+    isEditing ? getServiceOptions() : Promise.resolve({ data: [] }),
+    isEditing ? getRouteOptions() : Promise.resolve({ data: [] }),
+    isEditing ? getEmployeeOptions() : Promise.resolve({ data: [] }),
+  ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
@@ -24,13 +39,25 @@ export default async function JobDetailPage({
 
   const rate = jobProductionRate(job);
   const client = job.property?.client ?? null;
+  const updateJobWithId = updateJob.bind(null, id);
+  const changeStatus = changeJobStatus.bind(null, id, `/jobs/${id}`);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={job.service?.name ?? "Job"}
         description={`${clientDisplayName(client)} — ${propertyAddress(job.property)}`}
-        action={<StatusBadge status={job.status} />}
+        action={
+          <div className="flex items-center gap-2">
+            <StatusQuickChange action={changeStatus} currentStatus={job.status} />
+            <Link href={`/jobs/${id}?edit=1`}>
+              <Button variant="secondary">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </Link>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -149,6 +176,20 @@ export default async function JobDetailPage({
           )}
         </CardBody>
       </Card>
+
+      {isEditing ? (
+        <Modal title="Edit Job" closeHref={`/jobs/${id}`} wide>
+          <JobForm
+            action={updateJobWithId}
+            job={job}
+            properties={properties.data ?? []}
+            services={services.data ?? []}
+            routes={routes.data ?? []}
+            employees={employees.data ?? []}
+            error={formError}
+          />
+        </Modal>
+      ) : null}
     </div>
   );
 }
