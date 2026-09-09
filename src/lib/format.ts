@@ -60,7 +60,7 @@ export function formatDate(value: string | Date | null | undefined): string {
  * the previous calendar day. Parsing the Y/M/D components directly and
  * building a local-time Date avoids that shift.
  */
-function parseDateOnly(value: string): Date | null {
+export function parseDateOnly(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!match) return null;
   const [, year, month, day] = match;
@@ -109,10 +109,15 @@ export function formatHours(value: number | null | undefined): string {
 /** Days between a due date and now — positive means overdue. */
 export function daysOverdue(dueDate: string | null | undefined): number {
   if (!dueDate) return 0;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return 0;
+  // due_date is a date-only column — new Date(string) reads it as UTC
+  // midnight, which .setHours(0,0,0,0) would then re-anchor to the previous
+  // local calendar day in any timezone behind UTC, undercounting how many
+  // days overdue an invoice actually is (or flagging it a day early).
+  const due = parseDateOnly(dueDate);
+  if (!due) return 0;
   const now = new Date();
-  const diffMs = now.setHours(0, 0, 0, 0) - due.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  const diffMs = now.getTime() - due.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
