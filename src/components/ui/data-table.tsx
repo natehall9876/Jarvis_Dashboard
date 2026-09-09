@@ -106,7 +106,13 @@ export function DataTable<T>({
       <div className={cn("space-y-2 sm:hidden", className)}>
         {rows.map((row) => {
           const href = onRowHref?.(row);
-          const visibleColumns = columns.filter((col) => !col.hideOnMobile);
+          // Skip a labeled line entirely when there's nothing to show next to
+          // it (e.g. a "Flag" column that's only populated for some rows) —
+          // a bare label with no value looks broken, not just empty.
+          const visibleFields = columns
+            .filter((col) => !col.hideOnMobile)
+            .map((col) => ({ col, value: col.render(row) }))
+            .filter(({ value }) => value !== null && value !== undefined && value !== "");
           const body = (
             <div
               className={cn(
@@ -114,7 +120,7 @@ export function DataTable<T>({
                 href && "transition-colors active:border-[var(--color-accent)]",
               )}
             >
-              {visibleColumns.map((col, i) => (
+              {visibleFields.map(({ col, value }, i) => (
                 <div
                   key={col.key}
                   className={cn(
@@ -125,7 +131,7 @@ export function DataTable<T>({
                   <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
                     {col.header}
                   </span>
-                  <span className="min-w-0 text-right text-sm text-[var(--color-text-primary)]">{col.render(row)}</span>
+                  <span className="min-w-0 text-right text-sm text-[var(--color-text-primary)]">{value}</span>
                 </div>
               ))}
             </div>
