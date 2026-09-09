@@ -11,12 +11,12 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-1)] lg:flex">
-      <div className="flex items-center gap-2.5 border-b border-[var(--color-border)] px-5 py-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+      <div className="accent-glow flex items-center gap-2.5 border-b border-[var(--color-border)] px-5 py-5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[0_0_0_1px_rgba(45,214,111,0.15)]">
           <BrandIcon className="h-4.5 w-4.5" strokeWidth={2} />
         </div>
         <div>
-          <div className="text-sm font-semibold leading-tight text-[var(--color-text-primary)]">
+          <div className="text-sm font-semibold leading-tight tracking-tight text-[var(--color-text-primary)]">
             {BRAND.name}
           </div>
           <div className="text-[11px] leading-tight text-[var(--color-text-muted)]">{BRAND.subtitle}</div>
@@ -32,12 +32,15 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                "relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors duration-150",
                 isActive
                   ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]",
               )}
             >
+              {isActive ? (
+                <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-[var(--color-accent)]" aria-hidden />
+              ) : null}
               <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
               <span className="truncate">{item.label}</span>
             </Link>

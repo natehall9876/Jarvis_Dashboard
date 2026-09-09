@@ -1,20 +1,29 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Pencil, Archive, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmSubmit } from "@/components/ui/confirm-submit";
+import { Modal } from "@/components/ui/modal";
+import { ClientForm } from "@/components/clients/client-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { formatCurrency, formatDate, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getClientById } from "@/lib/data/clients";
+import { updateClient, archiveClient } from "@/lib/actions/clients";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string; error?: string }>;
 }) {
   const { id } = await params;
+  const { edit: isEditing, error: formError } = await searchParams;
   const { data, error } = await getClientById(id);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
@@ -22,13 +31,33 @@ export default async function ClientDetailPage({
   if (!data) notFound();
 
   const { client, properties, jobs, quotes, invoices, outstanding_balance } = data;
+  const updateClientWithId = updateClient.bind(null, id);
+  const archiveClientWithId = archiveClient.bind(null, id);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={clientDisplayName(client)}
         description={client.company_name && (client.first_name || client.last_name) ? client.company_name : undefined}
-        action={<StatusBadge status={client.status ?? "active"} />}
+        action={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={client.status ?? "active"} />
+            <Link href={`/clients/${id}?edit=1`}>
+              <Button variant="secondary">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </Link>
+            {client.status !== "inactive" ? (
+              <form action={archiveClientWithId}>
+                <ConfirmSubmit confirmMessage={`Archive ${clientDisplayName(client)}? They'll be marked inactive but their history stays intact.`}>
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive
+                </ConfirmSubmit>
+              </form>
+            ) : null}
+          </div>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -64,7 +93,15 @@ export default async function ClientDetailPage({
       ) : null}
 
       <Card>
-        <CardHeader title="Properties" description={`${properties.length} on file`} />
+        <CardHeader
+          title="Properties"
+          description={`${properties.length} on file`}
+          action={
+            <Link href={`/properties?new=1&client=${id}`} className="text-xs text-[var(--color-accent)] hover:underline">
+              + Add property
+            </Link>
+          }
+        />
         <CardBody>
           {properties.length === 0 ? (
             <EmptyState title="No properties yet" />
@@ -143,6 +180,12 @@ export default async function ClientDetailPage({
           </CardBody>
         </Card>
       </div>
+
+      {isEditing ? (
+        <Modal title="Edit Client" closeHref={`/clients/${id}`}>
+          <ClientForm action={updateClientWithId} client={client} error={formError} />
+        </Modal>
+      ) : null}
     </div>
   );
 }

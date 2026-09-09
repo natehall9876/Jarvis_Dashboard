@@ -1,11 +1,17 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { SearchForm } from "@/components/ui/search-form";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { ClientForm } from "@/components/clients/client-form";
 import { formatCurrency, clientPersonName } from "@/lib/format";
 import { getClients } from "@/lib/data/clients";
+import { createClient } from "@/lib/actions/clients";
 import type { ClientWithBalance } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +19,9 @@ export const dynamic = "force-dynamic";
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; new?: string; error?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, new: isNew, error: formError } = await searchParams;
   const { data: clients, error } = await getClients(q);
 
   const columns: Column<ClientWithBalance>[] = [
@@ -60,7 +66,17 @@ export default async function ClientsPage({
       <PageHeader
         title="Clients"
         description="Every client relationship — contact info, properties, and account balance."
-        action={<SearchForm placeholder="Search clients..." defaultValue={q} />}
+        action={
+          <div className="flex items-center gap-2">
+            <SearchForm placeholder="Search clients..." defaultValue={q} />
+            <Link href="/clients?new=1">
+              <Button>
+                <Plus className="h-4 w-4" />
+                Add Client
+              </Button>
+            </Link>
+          </div>
+        }
       />
 
       <Card>
@@ -68,7 +84,7 @@ export default async function ClientsPage({
           error={error}
           isEmpty={!!clients && clients.length === 0}
           emptyTitle={q ? "No clients match your search" : "No clients yet"}
-          emptyDescription={q ? undefined : "Clients synced from Supabase will appear here."}
+          emptyDescription={q ? undefined : "Add your first client to get started."}
         >
           {clients ? (
             <DataTable
@@ -80,6 +96,12 @@ export default async function ClientsPage({
           ) : null}
         </DataStateGate>
       </Card>
+
+      {isNew ? (
+        <Modal title="Add Client" closeHref="/clients">
+          <ClientForm action={createClient} error={formError} />
+        </Modal>
+      ) : null}
     </div>
   );
 }

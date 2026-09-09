@@ -18,14 +18,16 @@ function StateShell({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-6 py-12 text-center",
+        "flex animate-fade-in flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-6 py-12 text-center",
         className,
       )}
     >
-      <div className="mb-1 text-[var(--color-text-muted)]">{icon}</div>
+      <div className="mb-1.5 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
+        {icon}
+      </div>
       <p className="text-sm font-medium text-[var(--color-text-primary)]">{title}</p>
       {description ? (
-        <p className="max-w-sm text-xs text-[var(--color-text-secondary)]">{description}</p>
+        <p className="max-w-sm text-xs leading-relaxed text-[var(--color-text-secondary)]">{description}</p>
       ) : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
