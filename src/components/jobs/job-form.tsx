@@ -9,6 +9,7 @@ export function JobForm({
   services,
   routes,
   employees,
+  defaultDate,
   error,
 }: {
   action: (formData: FormData) => void;
@@ -17,6 +18,7 @@ export function JobForm({
   services: { id: string; name: string; default_price: number | null; default_budgeted_hours: number | null }[];
   routes: { id: string; name: string }[];
   employees: { id: string; label: string }[];
+  defaultDate?: string;
   error?: string;
 }) {
   const assignedIds = new Set((job?.crew ?? []).map((c) => c.id));
@@ -63,7 +65,7 @@ export function JobForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Scheduled Date" htmlFor="scheduled_date" required>
-          <TextInput id="scheduled_date" name="scheduled_date" type="date" defaultValue={job?.scheduled_date ?? ""} required />
+          <TextInput id="scheduled_date" name="scheduled_date" type="date" defaultValue={job?.scheduled_date ?? defaultDate ?? ""} required />
         </Field>
         <Field label="Start Time" htmlFor="scheduled_start_time">
           <TextInput id="scheduled_start_time" name="scheduled_start_time" type="time" defaultValue={job?.scheduled_start_time?.slice(0, 5) ?? ""} />
