@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SUGGESTED_QUESTIONS } from "@/lib/ai/questions";
+import { getContextualQuestions, getPageContextLabel } from "@/lib/ai/questions";
 
 type Exchange = { question: string; answer: string | null; error: string | null };
 
@@ -41,10 +41,18 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  const questionsToShow = compact ? SUGGESTED_QUESTIONS.slice(0, 4) : SUGGESTED_QUESTIONS;
+  const contextualQuestions = getContextualQuestions(pathname);
+  const questionsToShow = compact ? contextualQuestions.slice(0, 4) : contextualQuestions;
+  const contextLabel = getPageContextLabel(pathname);
 
   return (
     <div className="flex flex-col gap-4">
+      {contextLabel ? (
+        <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+          <Sparkles className="h-3 w-3" />
+          Grounded in {contextLabel}
+        </div>
+      ) : null}
       <form
         onSubmit={(e) => {
           e.preventDefault();
