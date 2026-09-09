@@ -7,7 +7,7 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { EquipmentForm } from "@/components/equipment/equipment-form";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDateOnly, formatNumber } from "@/lib/format";
 import { getEquipment, type EquipmentWithMaintenanceFlag } from "@/lib/data/equipment";
 import { createEquipment } from "@/lib/actions/equipment";
 import { TriangleAlert, Plus } from "lucide-react";
@@ -37,7 +37,7 @@ export default async function EquipmentPage({
     { key: "model", header: "Model", render: (e) => e.model ?? "—" },
     { key: "status", header: "Status", render: (e) => <StatusBadge status={e.status ?? "active"} /> },
     { key: "hours", header: "Current Hours", align: "right", render: (e) => formatNumber(e.current_hours) },
-    { key: "due_date", header: "Maintenance Due", render: (e) => formatDate(e.maintenance_due_date) },
+    { key: "due_date", header: "Maintenance Due", render: (e) => formatDateOnly(e.maintenance_due_date) },
     {
       key: "due_hours",
       header: "Due At (Hours)",

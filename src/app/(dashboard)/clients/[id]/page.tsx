@@ -9,7 +9,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Modal } from "@/components/ui/modal";
 import { ClientForm } from "@/components/clients/client-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate, clientDisplayName, propertyAddress } from "@/lib/format";
+import { formatCurrency, formatDateOnly, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getClientById } from "@/lib/data/clients";
 import { updateClient, archiveClient } from "@/lib/actions/clients";
 
@@ -130,7 +130,7 @@ export default async function ClientDetailPage({
                 {jobs.slice(0, 8).map((j) => (
                   <li key={j.id} className="flex items-center justify-between py-2 text-sm">
                     <Link href={`/jobs/${j.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                      {formatDate(j.scheduled_date)}
+                      {formatDateOnly(j.scheduled_date)}
                     </Link>
                     <StatusBadge status={j.status} />
                   </li>

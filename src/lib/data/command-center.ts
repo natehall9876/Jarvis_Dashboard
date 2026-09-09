@@ -270,7 +270,8 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
       supabase.from("quotes").select("status, accepted_at, declined_at").gte("created_at", monthStartStr),
     ]);
 
-    const nonDraftInvoices = (invoicesResult.data ?? []).filter((i) => i.status !== "draft");
+    // Void invoices are cancelled debt, not outstanding receivables.
+    const nonDraftInvoices = (invoicesResult.data ?? []).filter((i) => i.status !== "draft" && i.status !== "void");
     const accountsReceivable = nonDraftInvoices.reduce(
       (sum, inv) => sum + Math.max(0, inv.total - inv.amount_paid),
       0,

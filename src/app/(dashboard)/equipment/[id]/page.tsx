@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { EquipmentForm } from "@/components/equipment/equipment-form";
 import { MaintenanceForm } from "@/components/equipment/maintenance-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatNumber } from "@/lib/format";
 import { getEquipmentById } from "@/lib/data/equipment";
 import { updateEquipment, retireEquipment, logMaintenance } from "@/lib/actions/equipment";
 
@@ -77,7 +77,7 @@ export default async function EquipmentDetailPage({
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Maintenance Due Date</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(equipment.maintenance_due_date)}</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDateOnly(equipment.maintenance_due_date)}</div>
           </CardBody>
         </Card>
         <Card>
@@ -111,7 +111,7 @@ export default async function EquipmentDetailPage({
                   <div>
                     <div className="text-[var(--color-text-primary)]">{m.maintenance_type ?? "Service"}</div>
                     <div className="text-xs text-[var(--color-text-muted)]">
-                      {formatDate(m.maintenance_date)} {m.vendor ? `· ${m.vendor}` : ""}
+                      {formatDateOnly(m.maintenance_date)} {m.vendor ? `· ${m.vendor}` : ""}
                     </div>
                   </div>
                   <span className="font-medium text-[var(--color-text-secondary)]">{formatCurrency(m.parts_cost + m.labor_cost)}</span>

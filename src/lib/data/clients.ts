@@ -34,7 +34,8 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
         .from("invoices")
         .select("client_id, total, amount_paid, status")
         .in("client_id", clientIds)
-        .neq("status", "draft"),
+        .neq("status", "draft")
+        .neq("status", "void"),
     ]);
 
     const propertyCountByClient = new Map<string, number>();
@@ -99,7 +100,7 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
     ]);
 
     const outstandingBalance = (invoices ?? [])
-      .filter((inv) => inv.status !== "draft")
+      .filter((inv) => inv.status !== "draft" && inv.status !== "void")
       .reduce((sum, inv) => sum + (inv.total - inv.amount_paid), 0);
 
     return {

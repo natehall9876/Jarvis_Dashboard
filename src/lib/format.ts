@@ -53,6 +53,23 @@ export function formatDate(value: string | Date | null | undefined): string {
   return dateFormatter.format(date);
 }
 
+/**
+ * For date-only columns (no time-of-day, e.g. `scheduled_date`, `hire_date`,
+ * `due_date`). `new Date("2026-09-15")` parses as UTC midnight, and
+ * formatting that in a timezone behind UTC (all of the US) rolls it back to
+ * the previous calendar day. Parsing the Y/M/D components directly and
+ * building a local-time Date avoids that shift.
+ */
+export function formatDateOnly(value: string | null | undefined): string {
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return formatDate(value);
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (Number.isNaN(date.getTime())) return "—";
+  return dateFormatter.format(date);
+}
+
 export function formatShortDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const date = typeof value === "string" ? new Date(value) : value;

@@ -8,7 +8,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Modal } from "@/components/ui/modal";
 import { PropertyForm } from "@/components/properties/property-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getJobPhotoUrl } from "@/lib/supabase/storage";
 import { getPropertyById } from "@/lib/data/properties";
 import { getClientOptions } from "@/lib/data/options";
@@ -135,7 +135,7 @@ export default async function PropertyDetailPage({
                 {jobs.slice(0, 8).map((j) => (
                   <li key={j.id} className="flex items-center justify-between py-2 text-sm">
                     <Link href={`/jobs/${j.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                      {formatDate(j.scheduled_date)}
+                      {formatDateOnly(j.scheduled_date)}
                     </Link>
                     <StatusBadge status={j.status} />
                   </li>

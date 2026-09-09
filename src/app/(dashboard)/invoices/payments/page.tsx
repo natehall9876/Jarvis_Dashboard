@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getPayments, type PaymentWithRelations } from "@/lib/data/payments";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export default async function PaymentsPage() {
   const { data: payments, error } = await getPayments();
 
   const columns: Column<PaymentWithRelations>[] = [
-    { key: "date", header: "Date", render: (p) => formatDate(p.payment_date) },
+    { key: "date", header: "Date", render: (p) => formatDateOnly(p.payment_date) },
     { key: "client", header: "Client", render: (p) => clientDisplayName(p.client) },
     {
       key: "invoice",

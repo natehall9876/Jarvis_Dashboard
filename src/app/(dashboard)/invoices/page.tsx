@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { InvoiceForm } from "@/components/invoices/invoice-form";
-import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getInvoices } from "@/lib/data/invoices";
 import { getClientOptions, getPropertyOptions } from "@/lib/data/options";
 import { createInvoice } from "@/lib/actions/invoices";
@@ -31,8 +31,8 @@ export default async function InvoicesPage({
   const columns: Column<InvoiceWithClient>[] = [
     { key: "number", header: "Invoice #", render: (i) => i.invoice_number ?? "—" },
     { key: "client", header: "Client", render: (i) => clientDisplayName(i.client) },
-    { key: "date", header: "Invoice Date", render: (i) => formatDate(i.invoice_date) },
-    { key: "due", header: "Due Date", render: (i) => formatDate(i.due_date) },
+    { key: "date", header: "Invoice Date", render: (i) => formatDateOnly(i.invoice_date) },
+    { key: "due", header: "Due Date", render: (i) => formatDateOnly(i.due_date) },
     { key: "amount", header: "Amount", align: "right", render: (i) => formatCurrency(i.total) },
     { key: "paid", header: "Paid", align: "right", render: (i) => formatCurrency(i.amount_paid) },
     {

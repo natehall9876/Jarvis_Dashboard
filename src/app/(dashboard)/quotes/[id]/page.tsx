@@ -9,7 +9,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Modal } from "@/components/ui/modal";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { QuoteItemForm } from "@/components/quotes/quote-item-form";
-import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getQuoteById } from "@/lib/data/quotes";
 import { getClientOptions, getPropertyOptions, getServiceOptions } from "@/lib/data/options";
 import {
@@ -143,7 +143,7 @@ export default async function QuoteDetailPage({
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Valid Until</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(quote.valid_until)}</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDateOnly(quote.valid_until)}</div>
           </CardBody>
         </Card>
         <Card>

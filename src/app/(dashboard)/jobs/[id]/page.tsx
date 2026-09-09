@@ -8,7 +8,7 @@ import { JobForm } from "@/components/jobs/job-form";
 import { StatusQuickChange } from "@/components/jobs/status-quick-change";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
-import { formatCurrency, formatDate, formatHours, formatTime, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatHours, formatTime, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getJobPhotoUrl } from "@/lib/supabase/storage";
 import { getJobById, jobProductionRate } from "@/lib/data/jobs";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
@@ -73,7 +73,7 @@ export default async function JobDetailPage({
           <CardBody className="space-y-2 text-sm">
             <Row label="Client" value={client ? <Link href={`/clients/${client.id}`} className="text-[var(--color-accent)] hover:underline">{clientDisplayName(client)}</Link> : "—"} />
             <Row label="Property" value={job.property ? <Link href={`/properties/${job.property.id}`} className="text-[var(--color-accent)] hover:underline">{propertyAddress(job.property)}</Link> : "—"} />
-            <Row label="Scheduled Date" value={formatDate(job.scheduled_date)} />
+            <Row label="Scheduled Date" value={formatDateOnly(job.scheduled_date)} />
             <Row label="Scheduled Start" value={formatTimeString(job.scheduled_start_time)} />
             <Row label="Started" value={formatTime(job.started_at)} />
             <Row label="Completed" value={formatTime(job.completed_at)} />

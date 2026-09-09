@@ -8,7 +8,7 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Modal } from "@/components/ui/modal";
 import { EmployeeForm } from "@/components/employees/employee-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDate, formatHours } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatHours } from "@/lib/format";
 import { getEmployeeById, getEmployeeRecentJobs } from "@/lib/data/employees";
 import { updateEmployee, archiveEmployee } from "@/lib/actions/employees";
 
@@ -86,7 +86,7 @@ export default async function EmployeeDetailPage({
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Hire Date</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(employee.hire_date)}</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDateOnly(employee.hire_date)}</div>
           </CardBody>
         </Card>
       </div>
@@ -110,7 +110,7 @@ export default async function EmployeeDetailPage({
               {recentJobs.map((j) => (
                 <li key={j.id} className="flex items-center justify-between py-2 text-sm">
                   <Link href={`/jobs/${j.id}`} className="text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]">
-                    {formatDate(j.scheduled_date)} — {j.service?.name ?? "Job"}
+                    {formatDateOnly(j.scheduled_date)} — {j.service?.name ?? "Job"}
                   </Link>
                   <div className="flex items-center gap-3">
                     {j.hours_worked !== null ? (

@@ -11,7 +11,7 @@ import { InvoiceItemForm } from "@/components/invoices/invoice-item-form";
 import { RecordPaymentForm } from "@/components/invoices/record-payment-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
-import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
+import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getInvoiceById } from "@/lib/data/invoices";
 import { getClientOptions, getPropertyOptions, getServiceOptions } from "@/lib/data/options";
 import {
@@ -122,13 +122,13 @@ export default async function InvoiceDetailPage({
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Invoice Date</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(invoice.invoice_date)}</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDateOnly(invoice.invoice_date)}</div>
           </CardBody>
         </Card>
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Due Date</div>
-            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDate(invoice.due_date)}</div>
+            <div className="mt-1 text-sm text-[var(--color-text-primary)]">{formatDateOnly(invoice.due_date)}</div>
           </CardBody>
         </Card>
       </div>
@@ -186,7 +186,7 @@ export default async function InvoiceDetailPage({
               {invoice.payments.map((p) => (
                 <li key={p.id} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-[var(--color-text-secondary)]">
-                    {formatDate(p.payment_date)} — <span className="capitalize">{(p.payment_method ?? "unknown").replace("_", " ")}</span>
+                    {formatDateOnly(p.payment_date)} — <span className="capitalize">{(p.payment_method ?? "unknown").replace("_", " ")}</span>
                     {p.external_reference ? ` (${p.external_reference})` : ""}
                   </span>
                   <span className="font-medium text-[var(--color-accent)]">{formatCurrency(p.amount)}</span>

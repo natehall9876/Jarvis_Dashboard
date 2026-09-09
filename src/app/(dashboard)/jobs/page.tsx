@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { JobForm } from "@/components/jobs/job-form";
-import { formatCurrency, formatDate, formatHours, clientDisplayName } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatHours, clientDisplayName } from "@/lib/format";
 import { getJobs, jobProductionRate, type JobFilters } from "@/lib/data/jobs";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
 import { createJob } from "@/lib/actions/jobs";
@@ -41,7 +41,7 @@ export default async function JobsPage({
   ]);
 
   const columns: Column<JobWithRelations>[] = [
-    { key: "date", header: "Date", render: (j) => formatDate(j.scheduled_date) },
+    { key: "date", header: "Date", render: (j) => formatDateOnly(j.scheduled_date) },
     { key: "client", header: "Client", render: (j) => clientDisplayName(j.property?.client) },
     { key: "property", header: "Property", render: (j) => j.property?.street ?? j.property?.property_name ?? "—" },
     { key: "service", header: "Service", render: (j) => j.service?.name ?? "—" },

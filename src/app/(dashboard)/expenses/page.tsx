@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Modal } from "@/components/ui/modal";
 import { ExpenseForm } from "@/components/expenses/expense-form";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDateOnly } from "@/lib/format";
 import { getExpenses, type ExpenseWithRelations } from "@/lib/data/expenses";
 import { getJobOptions, getEquipmentOptions } from "@/lib/data/options";
 import { createExpense, updateExpense, deleteExpense } from "@/lib/actions/expenses";
@@ -33,14 +33,14 @@ export default async function ExpensesPage({
   const updateExpenseWithId = editId ? updateExpense.bind(null, editId) : undefined;
 
   const columns: Column<ExpenseWithRelations>[] = [
-    { key: "date", header: "Date", render: (e) => formatDate(e.expense_date) },
+    { key: "date", header: "Date", render: (e) => formatDateOnly(e.expense_date) },
     { key: "vendor", header: "Vendor", render: (e) => e.vendor },
     { key: "category", header: "Category", render: (e) => <Badge>{e.category}</Badge> },
     { key: "description", header: "Description", render: (e) => e.description ?? "—" },
     {
       key: "job",
       header: "Related Job",
-      render: (e) => (e.job ? <Link href={`/jobs/${e.job.id}`} className="text-[var(--color-accent)] hover:underline">{formatDate(e.job.scheduled_date)}</Link> : "—"),
+      render: (e) => (e.job ? <Link href={`/jobs/${e.job.id}`} className="text-[var(--color-accent)] hover:underline">{formatDateOnly(e.job.scheduled_date)}</Link> : "—"),
     },
     {
       key: "equipment",

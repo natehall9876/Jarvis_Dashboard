@@ -13,7 +13,9 @@ const INVOICE_SELECT = `
 function enrichInvoice(
   invoice: Invoice & { client: InvoiceWithClient["client"]; property: InvoiceWithClient["property"] },
 ): InvoiceWithClient {
-  const balance = Math.max(0, invoice.total - invoice.amount_paid);
+  // A voided invoice's remaining balance is cancelled debt, not money still
+  // owed — it must not feed into receivables, overdue lists, or revenue math.
+  const balance = invoice.status === "void" ? 0 : Math.max(0, invoice.total - invoice.amount_paid);
   const overdueDays = balance > 0 ? Math.max(0, daysOverdue(invoice.due_date)) : 0;
   const enriched: InvoiceWithClient = {
     ...invoice,

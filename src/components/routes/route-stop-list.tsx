@@ -12,7 +12,16 @@ type Stop = RouteWithStops["stops"][number];
 
 export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop[] }) {
   const [ordered, setOrdered] = useState(stops);
+  const [prevStops, setPrevStops] = useState(stops);
   const [isPending, startTransition] = useTransition();
+
+  // Re-sync local reorder state when the server gives us a new stop list
+  // (e.g. after adding/removing a stop) — without this, a soft navigation
+  // that keeps this component mounted would keep showing the stale list.
+  if (stops !== prevStops) {
+    setPrevStops(stops);
+    setOrdered(stops);
+  }
 
   function move(index: number, direction: -1 | 1) {
     const target = index + direction;
