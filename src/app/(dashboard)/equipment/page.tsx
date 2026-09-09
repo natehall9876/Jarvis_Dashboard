@@ -33,15 +33,16 @@ export default async function EquipmentPage({
         </div>
       ),
     },
-    { key: "manufacturer", header: "Manufacturer", render: (e) => e.manufacturer ?? "—" },
-    { key: "model", header: "Model", render: (e) => e.model ?? "—" },
+    { key: "manufacturer", header: "Manufacturer", hideOnMobile: true, render: (e) => e.manufacturer ?? "—" },
+    { key: "model", header: "Model", hideOnMobile: true, render: (e) => e.model ?? "—" },
     { key: "status", header: "Status", render: (e) => <StatusBadge status={e.status ?? "active"} /> },
-    { key: "hours", header: "Current Hours", align: "right", render: (e) => formatNumber(e.current_hours) },
+    { key: "hours", header: "Current Hours", align: "right", hideOnMobile: true, render: (e) => formatNumber(e.current_hours) },
     { key: "due_date", header: "Maintenance Due", render: (e) => formatDateOnly(e.maintenance_due_date) },
     {
       key: "due_hours",
       header: "Due At (Hours)",
       align: "right",
+      hideOnMobile: true,
       render: (e) => (e.maintenance_due_hours !== null ? formatNumber(e.maintenance_due_hours) : "—"),
     },
     {

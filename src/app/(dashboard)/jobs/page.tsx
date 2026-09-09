@@ -45,14 +45,15 @@ export default async function JobsPage({
     { key: "client", header: "Client", render: (j) => clientDisplayName(j.property?.client) },
     { key: "property", header: "Property", render: (j) => j.property?.street ?? j.property?.property_name ?? "—" },
     { key: "service", header: "Service", render: (j) => j.service?.name ?? "—" },
-    { key: "crew_size", header: "Crew Size", align: "right", render: (j) => j.crew_size ?? "—" },
+    { key: "crew_size", header: "Crew Size", align: "right", hideOnMobile: true, render: (j) => j.crew_size ?? "—" },
     { key: "price", header: "Price", align: "right", render: (j) => formatCurrency(j.price) },
-    { key: "budgeted", header: "Budgeted", align: "right", render: (j) => formatHours(j.budgeted_hours) },
-    { key: "actual", header: "Actual", align: "right", render: (j) => formatHours(j.actual_hours) },
+    { key: "budgeted", header: "Budgeted", align: "right", hideOnMobile: true, render: (j) => formatHours(j.budgeted_hours) },
+    { key: "actual", header: "Actual", align: "right", hideOnMobile: true, render: (j) => formatHours(j.actual_hours) },
     {
       key: "rate",
       header: "$ / Hour",
       align: "right",
+      hideOnMobile: true,
       render: (j) => {
         const rate = jobProductionRate(j);
         return rate !== null ? formatCurrency(rate, true) : "—";

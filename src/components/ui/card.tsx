@@ -29,7 +29,7 @@ export function CardHeader({
       <div className="min-w-0">
         <h2 className="text-[13px] font-semibold tracking-wide text-[var(--color-text-primary)]">{title}</h2>
         {description ? (
-          <p className="mt-0.5 truncate text-xs text-[var(--color-text-secondary)]">{description}</p>
+          <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{description}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

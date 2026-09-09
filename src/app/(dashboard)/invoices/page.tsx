@@ -31,10 +31,10 @@ export default async function InvoicesPage({
   const columns: Column<InvoiceWithClient>[] = [
     { key: "number", header: "Invoice #", render: (i) => i.invoice_number ?? "—" },
     { key: "client", header: "Client", render: (i) => clientDisplayName(i.client) },
-    { key: "date", header: "Invoice Date", render: (i) => formatDateOnly(i.invoice_date) },
+    { key: "date", header: "Invoice Date", hideOnMobile: true, render: (i) => formatDateOnly(i.invoice_date) },
     { key: "due", header: "Due Date", render: (i) => formatDateOnly(i.due_date) },
-    { key: "amount", header: "Amount", align: "right", render: (i) => formatCurrency(i.total) },
-    { key: "paid", header: "Paid", align: "right", render: (i) => formatCurrency(i.amount_paid) },
+    { key: "amount", header: "Amount", align: "right", hideOnMobile: true, render: (i) => formatCurrency(i.total) },
+    { key: "paid", header: "Paid", align: "right", hideOnMobile: true, render: (i) => formatCurrency(i.amount_paid) },
     {
       key: "balance",
       header: "Balance",
@@ -49,6 +49,7 @@ export default async function InvoicesPage({
       key: "overdue",
       header: "Days Overdue",
       align: "right",
+      hideOnMobile: true,
       render: (i) => (i.days_overdue > 0 ? <span className="text-[var(--color-critical)]">{i.days_overdue}</span> : "—"),
     },
     { key: "status", header: "Status", render: (i) => <StatusBadge status={i.display_status} /> },

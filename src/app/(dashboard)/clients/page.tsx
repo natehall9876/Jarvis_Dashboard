@@ -41,14 +41,15 @@ export default async function ClientsPage({
       },
     },
     { key: "phone", header: "Phone", render: (c) => c.phone ?? "—" },
-    { key: "email", header: "Email", render: (c) => c.email ?? "—" },
+    { key: "email", header: "Email", hideOnMobile: true, render: (c) => c.email ?? "—" },
     {
       key: "contact_method",
       header: "Preferred Contact",
+      hideOnMobile: true,
       render: (c) => c.preferred_contact_method ?? "—",
     },
     { key: "status", header: "Status", render: (c) => <StatusBadge status={c.status ?? "active"} /> },
-    { key: "properties", header: "Properties", align: "right", render: (c) => c.properties_count },
+    { key: "properties", header: "Properties", align: "right", hideOnMobile: true, render: (c) => c.properties_count },
     {
       key: "balance",
       header: "Outstanding Balance",
