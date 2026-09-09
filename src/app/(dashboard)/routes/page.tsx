@@ -44,7 +44,11 @@ export default async function RoutesPage({
               const hours = routeEstimatedHours(route);
               const perHour = routeProductionPerHour(route);
               return (
-                <Link key={route.id} href={`/routes/${route.id}`} className="block">
+                <Link
+                  key={route.id}
+                  href={`/routes/${route.id}`}
+                  className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
+                >
                   <Card className="h-full transition-colors hover:border-[var(--color-accent)]">
                     <CardHeader
                       title={route.name}

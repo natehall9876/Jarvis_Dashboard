@@ -92,7 +92,7 @@ export default async function JobDetailPage({
                   <li key={c.id}>
                     <Link
                       href={`/employees/${c.id}`}
-                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:bg-[var(--color-surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
                     >
                       <span>{[c.first_name, c.last_name].filter(Boolean).join(" ")}</span>
                       <span>{formatHours(c.hours_worked)}</span>
@@ -116,7 +116,7 @@ export default async function JobDetailPage({
                     {e.equipment ? (
                       <Link
                         href={`/equipment/${e.equipment.id}`}
-                        className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                        className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:bg-[var(--color-surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
                       >
                         <span>{e.equipment.name}</span>
                         <span>{formatHours(e.hours_used)}</span>

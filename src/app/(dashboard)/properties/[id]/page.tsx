@@ -136,7 +136,7 @@ export default async function PropertyDetailPage({
                   <li key={j.id}>
                     <Link
                       href={`/jobs/${j.id}`}
-                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:bg-[var(--color-surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
                     >
                       <span>{formatDateOnly(j.scheduled_date)}</span>
                       <StatusBadge status={j.status} />
@@ -159,7 +159,7 @@ export default async function PropertyDetailPage({
                   <li key={q.id}>
                     <Link
                       href={`/quotes/${q.id}`}
-                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:bg-[var(--color-surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
                     >
                       <span>{q.quote_number}</span>
                       <StatusBadge status={q.status} />
@@ -182,7 +182,7 @@ export default async function PropertyDetailPage({
                   <li key={inv.id}>
                     <Link
                       href={`/invoices/${inv.id}`}
-                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+                      className="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:bg-[var(--color-surface-2)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
                     >
                       <span>#{inv.invoice_number}</span>
                       <StatusBadge status={inv.status} />

@@ -69,7 +69,7 @@ export function DataTable<T>({
                           aria-hidden
                           className="absolute inset-y-0 left-0 w-0.5 scale-y-0 bg-[var(--color-accent)] transition-transform duration-150 group-hover:scale-y-100"
                         />
-                        <a href={href} className="relative block">
+                        <a href={href} className="relative block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40">
                           {col.render(row)}
                         </a>
                       </td>
@@ -137,7 +137,11 @@ export function DataTable<T>({
             </div>
           );
           return href ? (
-            <Link key={getRowKey(row)} href={href} className="block">
+            <Link
+              key={getRowKey(row)}
+              href={href}
+              className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
+            >
               {body}
             </Link>
           ) : (
