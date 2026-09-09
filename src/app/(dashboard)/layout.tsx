@@ -11,7 +11,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />
         <Topbar />
-        <main className="flex-1 overflow-x-hidden px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        {/* Extra bottom clearance so page content (e.g. the AI Owner Advisor
+            panel's last suggested-question chip) doesn't sit under the
+            fixed Jarvis FAB, which floats at bottom-5 right-5 on every
+            breakpoint. */}
+        <main className="flex-1 overflow-x-hidden px-4 pt-6 pb-24 lg:px-8 lg:pt-8 lg:pb-24">{children}</main>
       </div>
       <JarvisDrawer />
     </div>

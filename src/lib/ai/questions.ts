@@ -5,18 +5,18 @@
  * browser bundle.
  */
 export const SUGGESTED_QUESTIONS = [
-  "What should I focus on today?",
+  "Give me my owner briefing",
+  "What needs my attention?",
+  "How does tomorrow look?",
+  "Who owes me money?",
+  "Which quotes need follow-up?",
+  "Is any day this week overloaded?",
+  "How is production this month?",
+  "What equipment needs attention?",
   "Which jobs are most profitable?",
-  "Which clients owe me money?",
-  "Which quotes should I follow up on?",
-  "Where am I losing production time?",
-  "Which route is underperforming?",
-  "Are my prices high enough?",
   "Which clients or services are least profitable?",
-  "What equipment maintenance is coming due?",
-  "Should I move jobs because of weather?",
+  "Are my prices high enough?",
   "How did we perform compared with last week?",
-  "How did we handle this time of year last year?",
 ];
 
 /**
@@ -80,6 +80,15 @@ const CONTEXTUAL_QUESTIONS: { match: RegExp; label: string; questions: string[] 
       "What's driving our revenue this quarter?",
       "Which clients should I focus on growing?",
       "Where are we most and least efficient?",
+    ],
+  },
+  {
+    match: /^\/schedule/,
+    label: "the schedule",
+    questions: [
+      "Is any day this week overloaded?",
+      "Should I move anything off the busiest day?",
+      "Which days have no crew assigned?",
     ],
   },
 ];

@@ -34,7 +34,7 @@ export const clientTools: ToolSpec[] = [
   {
     name: "get_client_details",
     description:
-      "Full detail for one client: contact info, notes, every property they own, their recent jobs, quotes, and invoices, and their current outstanding balance. Use after search_clients has found the client's id, or when a page-context id is already known.",
+      "Full detail for one client: contact info, notes, every property they own, their recent jobs, quotes, and invoices, their current outstanding balance, and total revenue from their completed jobs on file (their real customer value — not an estimate). Use after search_clients has found the client's id, or when a page-context id is already known.",
     input_schema: {
       type: "object",
       properties: {
@@ -44,7 +44,9 @@ export const clientTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getClientById(String(input.client_id));
-      return unwrap(result, (detail) => ({
+      return unwrap(result, (detail) => {
+        const completedJobs = detail.jobs.filter((j) => j.status === "completed");
+        return {
         data: {
           id: detail.client.id,
           name: clientDisplayName(detail.client),
@@ -54,6 +56,9 @@ export const clientTools: ToolSpec[] = [
           preferred_contact_method: detail.client.preferred_contact_method,
           notes: detail.client.notes,
           outstanding_balance: detail.outstanding_balance,
+          completed_job_count: completedJobs.length,
+          revenue_from_completed_jobs: completedJobs.reduce((sum, j) => sum + (j.price ?? 0), 0),
+          job_history_note: detail.jobs.length >= 50 ? "Based on the 50 most recent jobs on file, not necessarily full history." : "Based on full job history on file.",
           properties: detail.properties.map((p) => ({ id: p.id, address: propertyAddress(p), active: p.active })),
           recent_jobs: detail.jobs.slice(0, 10).map((j) => ({
             id: j.id,
@@ -89,7 +94,8 @@ export const clientTools: ToolSpec[] = [
           { type: "client" as const, id: detail.client.id, label: clientDisplayName(detail.client) },
           ...detail.properties.map((p) => ({ type: "property" as const, id: p.id, label: propertyAddress(p) })),
         ],
-      }));
+        };
+      });
     },
   },
 ];

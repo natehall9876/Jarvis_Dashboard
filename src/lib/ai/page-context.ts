@@ -82,5 +82,9 @@ export async function getPageContext(pathname: string): Promise<PageContext | nu
     return { summary: "The owner is currently viewing the Reports page (trailing 90-day performance).", entity: null };
   }
 
+  if (pathname.startsWith("/schedule")) {
+    return { summary: "The owner is currently viewing the Schedule page.", entity: null };
+  }
+
   return null;
 }
