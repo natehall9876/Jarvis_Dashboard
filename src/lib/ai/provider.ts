@@ -22,7 +22,14 @@ export type AIToolResultBlock = {
   is_error?: boolean;
 };
 
-export type AIContentBlock = AITextBlock | AIToolUseBlock | AIToolResultBlock;
+/**
+ * Anthropic can return block types beyond text/tool_use (e.g. extended-
+ * thinking blocks), which must still be echoed back verbatim on the next
+ * request even though the advisor loop never reads their contents.
+ */
+export type AIOpaqueBlock = { type: string; [key: string]: unknown };
+
+export type AIContentBlock = AITextBlock | AIToolUseBlock | AIToolResultBlock | AIOpaqueBlock;
 
 export type AIMessage = {
   role: AIRole;

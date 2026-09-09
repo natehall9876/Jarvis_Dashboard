@@ -14,7 +14,8 @@ const DEFAULT_MODEL = "claude-sonnet-5";
 
 type AnthropicResponseBlock =
   | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: unknown };
+  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | { type: string; [key: string]: unknown };
 
 type AnthropicResponse = {
   content?: AnthropicResponseBlock[];
@@ -84,9 +85,17 @@ export class AnthropicProvider implements AIProvider {
       const json = (await response.json()) as AnthropicResponse;
       const blocks = json.content ?? [];
 
-      const rawContent: AIContentBlock[] = blocks.map((b) =>
-        b.type === "text" ? { type: "text", text: b.text } : { type: "tool_use", id: b.id, name: b.name, input: b.input },
-      );
+      // Text and tool_use are reconstructed explicitly; any other block type
+      // (e.g. extended-thinking) is passed through verbatim so it can still
+      // be echoed back on the next request without being misread as tool_use.
+      const rawContent: AIContentBlock[] = blocks.map((b) => {
+        if (b.type === "text") return { type: "text", text: (b as { text: string }).text };
+        if (b.type === "tool_use") {
+          const tb = b as { id: string; name: string; input: unknown };
+          return { type: "tool_use", id: tb.id, name: tb.name, input: tb.input };
+        }
+        return b;
+      });
       const text = blocks
         .filter((b): b is { type: "text"; text: string } => b.type === "text")
         .map((b) => b.text)
