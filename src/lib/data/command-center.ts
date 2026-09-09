@@ -43,6 +43,7 @@ export type PriorityItem = {
   label: string;
   detail: string;
   severity: "critical" | "warning" | "info";
+  href: string;
 };
 
 export type TodaysMission = {
@@ -161,6 +162,7 @@ function buildPriorities(input: {
       label: `${input.overdueInvoices.length} overdue invoice${input.overdueInvoices.length === 1 ? "" : "s"}`,
       detail: `$${total.toLocaleString()} in receivables past due`,
       severity: "critical",
+      href: input.overdueInvoices.length === 1 ? `/invoices/${input.overdueInvoices[0].id}` : "/invoices",
     });
   }
 
@@ -169,6 +171,7 @@ function buildPriorities(input: {
       label: `${input.equipmentIssues.length} equipment issue${input.equipmentIssues.length === 1 ? "" : "s"}`,
       detail: "Out of service or maintenance due soon",
       severity: "warning",
+      href: input.equipmentIssues.length === 1 ? `/equipment/${input.equipmentIssues[0].id}` : "/equipment",
     });
   }
 
@@ -177,6 +180,7 @@ function buildPriorities(input: {
       label: `${input.scheduleChanges.length} job${input.scheduleChanges.length === 1 ? "" : "s"} cancelled or skipped today`,
       detail: "Review crew and route impact",
       severity: "warning",
+      href: input.scheduleChanges.length === 1 ? `/jobs/${input.scheduleChanges[0].id}` : "/schedule",
     });
   }
 
@@ -185,6 +189,7 @@ function buildPriorities(input: {
       label: `${input.quotesNeedingFollowUp.length} quote${input.quotesNeedingFollowUp.length === 1 ? "" : "s"} awaiting follow-up`,
       detail: `Sent more than ${FOLLOW_UP_AFTER_DAYS} days ago with no response`,
       severity: "info",
+      href: input.quotesNeedingFollowUp.length === 1 ? `/quotes/${input.quotesNeedingFollowUp[0].id}` : "/quotes",
     });
   }
 

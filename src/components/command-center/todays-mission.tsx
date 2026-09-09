@@ -70,6 +70,31 @@ export function TodaysMission({
                 />
               </div>
 
+              {data.jobs.length > 0 ? (
+                <div className="space-y-1.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                    Today&apos;s Jobs
+                  </h3>
+                  <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)]">
+                    {data.jobs.map((job) => (
+                      <li key={job.id}>
+                        <Link
+                          href={`/jobs/${job.id}`}
+                          className="flex items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-[var(--color-surface-2)]"
+                        >
+                          <span className="w-16 shrink-0 text-xs text-[var(--color-text-muted)]">{formatTime(job.scheduled_start_time)}</span>
+                          <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">
+                            {clientDisplayName(job.property?.client)} <span className="text-[var(--color-text-muted)]">· {job.service?.name ?? "—"}</span>
+                          </span>
+                          <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">{formatCurrency(job.price)}</span>
+                          <StatusBadge status={job.status} />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               {data.priorities.length > 0 ? (
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
@@ -77,13 +102,15 @@ export function TodaysMission({
                   </h3>
                   <ul className="space-y-1.5">
                     {data.priorities.map((p) => (
-                      <li
-                        key={p.label}
-                        className="flex items-center gap-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
-                      >
-                        <AlertTriangle className={`h-4 w-4 shrink-0 ${severityIconClass[p.severity]}`} />
-                        <span className="font-medium text-[var(--color-text-primary)]">{p.label}</span>
-                        <span className="text-[var(--color-text-muted)]">— {p.detail}</span>
+                      <li key={p.label}>
+                        <Link
+                          href={p.href}
+                          className="flex items-center gap-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-3)]"
+                        >
+                          <AlertTriangle className={`h-4 w-4 shrink-0 ${severityIconClass[p.severity]}`} />
+                          <span className="font-medium text-[var(--color-text-primary)]">{p.label}</span>
+                          <span className="text-[var(--color-text-muted)]">— {p.detail}</span>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -97,11 +124,13 @@ export function TodaysMission({
                   emptyText="No cancellations or skips today"
                 >
                   {data.scheduleChanges.map((job) => (
-                    <li key={job.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                      <span className="truncate text-[var(--color-text-secondary)]">
-                        {clientDisplayName(job.property?.client)} — {propertyAddress(job.property)}
-                      </span>
-                      <StatusBadge status={job.status} />
+                    <li key={job.id}>
+                      <Link href={`/jobs/${job.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm hover:text-[var(--color-accent)]">
+                        <span className="truncate text-[var(--color-text-secondary)]">
+                          {clientDisplayName(job.property?.client)} — {propertyAddress(job.property)}
+                        </span>
+                        <StatusBadge status={job.status} />
+                      </Link>
                     </li>
                   ))}
                 </MissionList>
@@ -113,11 +142,13 @@ export function TodaysMission({
                   href="/quotes"
                 >
                   {data.quotesNeedingFollowUp.map((quote) => (
-                    <li key={quote.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                      <span className="truncate text-[var(--color-text-secondary)]">
-                        {clientDisplayName(quote.client)} — {quote.quote_number}
-                      </span>
-                      <span className="text-[var(--color-text-muted)]">{formatTime(quote.sent_at)}</span>
+                    <li key={quote.id}>
+                      <Link href={`/quotes/${quote.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm hover:text-[var(--color-accent)]">
+                        <span className="truncate text-[var(--color-text-secondary)]">
+                          {clientDisplayName(quote.client)} — {quote.quote_number}
+                        </span>
+                        <span className="text-[var(--color-text-muted)]">{formatTime(quote.sent_at)}</span>
+                      </Link>
                     </li>
                   ))}
                 </MissionList>
@@ -129,11 +160,13 @@ export function TodaysMission({
                   href="/invoices"
                 >
                   {data.overdueInvoices.map((inv) => (
-                    <li key={inv.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                      <span className="truncate text-[var(--color-text-secondary)]">
-                        {clientDisplayName(inv.client)} — #{inv.invoice_number}
-                      </span>
-                      <Badge tone="critical">{formatCurrency(inv.balance)}</Badge>
+                    <li key={inv.id}>
+                      <Link href={`/invoices/${inv.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm hover:text-[var(--color-accent)]">
+                        <span className="truncate text-[var(--color-text-secondary)]">
+                          {clientDisplayName(inv.client)} — #{inv.invoice_number}
+                        </span>
+                        <Badge tone="critical">{formatCurrency(inv.balance)}</Badge>
+                      </Link>
                     </li>
                   ))}
                 </MissionList>
@@ -145,9 +178,11 @@ export function TodaysMission({
                   href="/equipment"
                 >
                   {data.equipmentIssues.map((eq) => (
-                    <li key={eq.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                      <span className="truncate text-[var(--color-text-secondary)]">{eq.name}</span>
-                      <StatusBadge status={eq.status ?? "active"} />
+                    <li key={eq.id}>
+                      <Link href={`/equipment/${eq.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm hover:text-[var(--color-accent)]">
+                        <span className="truncate text-[var(--color-text-secondary)]">{eq.name}</span>
+                        <StatusBadge status={eq.status ?? "active"} />
+                      </Link>
                     </li>
                   ))}
                 </MissionList>
