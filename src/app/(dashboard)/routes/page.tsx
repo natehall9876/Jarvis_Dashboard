@@ -1,19 +1,40 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { RouteForm } from "@/components/routes/route-form";
 import { formatCurrency, formatHours } from "@/lib/format";
 import { getRoutes, routeEstimatedRevenue, routeEstimatedHours, routeProductionPerHour } from "@/lib/data/routes";
+import { createRoute } from "@/lib/actions/routes";
 
 export const dynamic = "force-dynamic";
 
-export default async function RoutesPage() {
+export default async function RoutesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string; error?: string }>;
+}) {
+  const { new: isNew, error: formError } = await searchParams;
   const { data: routes, error } = await getRoutes();
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Routes" description="Recurring service routes — stop order, revenue, and production hours." />
+      <PageHeader
+        title="Routes"
+        description="Recurring service routes — stop order, revenue, and production hours."
+        action={
+          <Link href="/routes?new=1">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Create Route
+            </Button>
+          </Link>
+        }
+      />
 
       <DataStateGate error={error} isEmpty={!!routes && routes.length === 0} emptyTitle="No routes yet">
         {routes ? (
@@ -59,6 +80,12 @@ export default async function RoutesPage() {
           </div>
         ) : null}
       </DataStateGate>
+
+      {isNew ? (
+        <Modal title="Create Route" closeHref="/routes">
+          <RouteForm action={createRoute} error={formError} />
+        </Modal>
+      ) : null}
     </div>
   );
 }

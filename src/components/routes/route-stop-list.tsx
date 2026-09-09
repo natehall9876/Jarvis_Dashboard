@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, X } from "lucide-react";
 import { formatCurrency, formatHours, clientDisplayName, propertyAddress } from "@/lib/format";
 import { moveRouteStop } from "@/app/(dashboard)/routes/actions";
+import { removeRouteStop } from "@/lib/actions/routes";
 import type { RouteWithStops } from "@/types/domain";
 
 type Stop = RouteWithStops["stops"][number];
@@ -24,6 +25,13 @@ export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop
     const updates = next.map((stop, i) => ({ id: stop.id, stop_order: i }));
     startTransition(() => {
       moveRouteStop(routeId, updates).catch(() => setOrdered(stops));
+    });
+  }
+
+  function remove(stopId: string) {
+    if (!window.confirm("Remove this stop from the route?")) return;
+    startTransition(() => {
+      removeRouteStop(routeId, stopId);
     });
   }
 
@@ -73,6 +81,15 @@ export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop
               className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] disabled:opacity-30"
             >
               <ArrowDown className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(stop.id)}
+              disabled={isPending}
+              aria-label="Remove stop"
+              className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-critical-soft)] hover:text-[var(--color-critical)] disabled:opacity-30"
+            >
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </li>
