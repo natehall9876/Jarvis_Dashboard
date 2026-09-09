@@ -67,6 +67,24 @@ export async function getRouteOptions() {
   });
 }
 
+export async function getJobOptions() {
+  return withDataResult(async () => {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id, scheduled_date, service:services(name), property:properties(street, property_name)")
+      .order("scheduled_date", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return (data ?? []).map((j) => {
+      const property = j.property as unknown as { street: string | null; property_name: string | null } | null;
+      const service = j.service as unknown as { name: string } | null;
+      const label = [j.scheduled_date, service?.name, property?.property_name ?? property?.street].filter(Boolean).join(" — ");
+      return { id: j.id, label: label || j.id };
+    });
+  });
+}
+
 export async function getEquipmentOptions() {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
