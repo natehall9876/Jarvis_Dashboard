@@ -1,17 +1,32 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { InvoiceForm } from "@/components/invoices/invoice-form";
 import { formatCurrency, formatDate, clientDisplayName } from "@/lib/format";
 import { getInvoices } from "@/lib/data/invoices";
+import { getClientOptions, getPropertyOptions } from "@/lib/data/options";
+import { createInvoice } from "@/lib/actions/invoices";
 import type { InvoiceWithClient } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-export default async function InvoicesPage() {
-  const { data: invoices, error } = await getInvoices();
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string; error?: string }>;
+}) {
+  const { new: isNew, error: formError } = await searchParams;
+  const [{ data: invoices, error }, clients, properties] = await Promise.all([
+    getInvoices(),
+    isNew ? getClientOptions() : Promise.resolve({ data: [] }),
+    isNew ? getPropertyOptions() : Promise.resolve({ data: [] }),
+  ]);
 
   const columns: Column<InvoiceWithClient>[] = [
     { key: "number", header: "Invoice #", render: (i) => i.invoice_number ?? "—" },
@@ -45,9 +60,17 @@ export default async function InvoicesPage() {
         title="Invoices"
         description="Every invoice with payment status and days overdue."
         action={
-          <Link href="/invoices/payments" className="text-sm text-[var(--color-accent)] hover:underline">
-            View all payments →
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/invoices/payments" className="text-sm text-[var(--color-accent)] hover:underline">
+              View all payments →
+            </Link>
+            <Link href="/invoices?new=1">
+              <Button>
+                <Plus className="h-4 w-4" />
+                Create Invoice
+              </Button>
+            </Link>
+          </div>
         }
       />
       <Card>
@@ -55,6 +78,12 @@ export default async function InvoicesPage() {
           {invoices ? <DataTable columns={columns} rows={invoices} getRowKey={(i) => i.id} onRowHref={(i) => `/invoices/${i.id}`} /> : null}
         </DataStateGate>
       </Card>
+
+      {isNew ? (
+        <Modal title="Create Invoice" closeHref="/invoices">
+          <InvoiceForm action={createInvoice} clients={clients.data ?? []} properties={properties.data ?? []} error={formError} />
+        </Modal>
+      ) : null}
     </div>
   );
 }
