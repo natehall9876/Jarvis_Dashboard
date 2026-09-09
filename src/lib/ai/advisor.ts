@@ -66,7 +66,7 @@ export type AdvisorResponse =
   | { ok: true; answer: string }
   | { ok: false; reason: "not_configured" | "upstream_error"; message: string };
 
-export async function askAdvisor(question: string): Promise<AdvisorResponse> {
+export async function askAdvisor(question: string, pageContext?: string | null): Promise<AdvisorResponse> {
   if (!isIntegrationConfigured("aiProvider")) {
     return {
       ok: false,
@@ -76,7 +76,8 @@ export async function askAdvisor(question: string): Promise<AdvisorResponse> {
     };
   }
 
-  const context = await buildBusinessContext();
+  const businessContext = await buildBusinessContext();
+  const context = pageContext ? `${pageContext}\n\n${businessContext}` : businessContext;
 
   try {
     const response = await fetch(ANTHROPIC_API_URL, {

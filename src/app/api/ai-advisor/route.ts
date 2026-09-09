@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { askAdvisor } from "@/lib/ai/advisor";
+import { getPageContext } from "@/lib/ai/page-context";
 
 export async function POST(request: Request) {
   let question: unknown;
+  let path: unknown;
   try {
     const body = await request.json();
     question = body?.question;
+    path = body?.path;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
@@ -17,7 +20,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Question is too long (max 2000 characters)." }, { status: 400 });
   }
 
-  const result = await askAdvisor(question.trim());
+  const pageContext = typeof path === "string" ? await getPageContext(path) : null;
+  const result = await askAdvisor(question.trim(), pageContext);
 
   if (!result.ok) {
     const status = result.reason === "not_configured" ? 503 : 502;

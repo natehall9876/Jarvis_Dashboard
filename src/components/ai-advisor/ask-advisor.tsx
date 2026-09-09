@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SUGGESTED_QUESTIONS } from "@/lib/ai/questions";
@@ -8,6 +9,7 @@ import { SUGGESTED_QUESTIONS } from "@/lib/ai/questions";
 type Exchange = { question: string; answer: string | null; error: string | null };
 
 export function AskAdvisor({ compact = false }: { compact?: boolean }) {
+  const pathname = usePathname();
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Exchange[]>([]);
@@ -22,7 +24,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
       const res = await fetch("/api/ai-advisor", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({ question: trimmed, path: pathname }),
       });
       const json = (await res.json()) as { answer?: string; error?: string };
       setHistory((prev) => [
