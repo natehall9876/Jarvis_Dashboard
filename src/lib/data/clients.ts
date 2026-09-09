@@ -14,17 +14,25 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    let query = supabase.from("clients").select("*").order("first_name", { ascending: true });
-    if (search && search.trim().length > 0) {
-      const term = `%${search.trim()}%`;
-      query = query.or(
-        `first_name.ilike.${term},last_name.ilike.${term},company_name.ilike.${term},email.ilike.${term}`,
-      );
-    }
-
-    const { data: clients, error } = await query;
+    const { data: allClients, error } = await supabase
+      .from("clients")
+      .select("*")
+      .order("first_name", { ascending: true });
     if (error) throw error;
-    if (!clients || clients.length === 0) return [];
+
+    // Matched in JS against first+last+company+email combined, not per-column
+    // SQL ILIKE — a per-column OR filter can never match a full-name query
+    // like "Sarah Delgado" since first_name and last_name are separate
+    // columns, neither of which contains the full two-word string.
+    const term = search?.trim().toLowerCase();
+    const clients = term
+      ? (allClients ?? []).filter((c) => {
+          const haystack = [c.first_name, c.last_name, c.company_name, c.email].filter(Boolean).join(" ").toLowerCase();
+          return haystack.includes(term);
+        })
+      : allClients ?? [];
+
+    if (clients.length === 0) return [];
 
     const clientIds = clients.map((c) => c.id);
 
