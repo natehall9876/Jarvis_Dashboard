@@ -60,14 +60,31 @@ export function formatDate(value: string | Date | null | undefined): string {
  * the previous calendar day. Parsing the Y/M/D components directly and
  * building a local-time Date avoids that shift.
  */
-export function formatDateOnly(value: string | null | undefined): string {
-  if (!value) return "—";
+function parseDateOnly(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!match) return formatDate(value);
+  if (!match) return null;
   const [, year, month, day] = match;
   const date = new Date(Number(year), Number(month) - 1, Number(day));
-  if (Number.isNaN(date.getTime())) return "—";
-  return dateFormatter.format(date);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatDateOnly(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = parseDateOnly(value);
+  return date ? dateFormatter.format(date) : formatDate(value);
+}
+
+const weekdayDateFormatter = new Intl.DateTimeFormat("en-US", {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
+
+/** Same UTC-midnight-safe parsing as `formatDateOnly`, with the weekday spelled out (e.g. "Tuesday, September 8"). */
+export function formatWeekdayDateOnly(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = parseDateOnly(value);
+  return date ? weekdayDateFormatter.format(date) : "—";
 }
 
 export function formatShortDate(value: string | Date | null | undefined): string {

@@ -17,8 +17,29 @@ export const dynamic = "force-dynamic";
 
 type ViewMode = "day" | "week";
 
+// All date-only arithmetic here stays in local time deliberately. Parsing a
+// "YYYY-MM-DD" param with `new Date(string)` reads it as UTC midnight, and
+// `.toISOString()` reads a Date back out the same way — either one alone is
+// fine, but round-tripping through `.toLocaleDateString()` (local time) in
+// between shifts the displayed day backward for any timezone behind UTC.
+// Parsing and formatting entirely in local time sidesteps that.
+function parseDateParam(value: string | undefined): Date {
+  const match = value ? /^(\d{4})-(\d{2})-(\d{2})/.exec(value) : null;
+  if (match) {
+    const [, year, month, day] = match;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now;
+}
+
 function toISODate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function startOfWeek(date: Date): Date {
@@ -43,7 +64,7 @@ export default async function SchedulePage({
 }) {
   const params = await searchParams;
   const view: ViewMode = params.view === "week" ? "week" : "day";
-  const anchor = params.date && !Number.isNaN(new Date(params.date).getTime()) ? new Date(params.date) : new Date();
+  const anchor = parseDateParam(params.date);
   const isNew = params.new;
 
   const rangeStart = view === "day" ? anchor : startOfWeek(anchor);
@@ -102,8 +123,12 @@ export default async function SchedulePage({
         }
       />
 
-      <DataStateGate error={error} isEmpty={!!jobs && jobs.length === 0} emptyTitle="No jobs scheduled in this range">
-        <div className={view === "week" ? "grid gap-4 lg:grid-cols-7" : "space-y-3"}>
+      <DataStateGate error={error} isEmpty={false}>
+        {/* No page-level empty state: each day already renders its own
+            "Nothing scheduled" card, which keeps the date header in view
+            instead of losing it behind a generic blanket message. */}
+        <div className={view === "week" ? "-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0" : ""}>
+          <div className={view === "week" ? "grid grid-flow-col auto-cols-[220px] gap-4" : "space-y-3"}>
           {days.map((day) => {
             const dateStr = toISODate(day);
             const dayJobs = jobsByDate.get(dateStr) ?? [];
@@ -157,6 +182,7 @@ export default async function SchedulePage({
               </div>
             );
           })}
+          </div>
         </div>
       </DataStateGate>
 

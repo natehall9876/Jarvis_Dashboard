@@ -3,7 +3,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Badge, StatusBadge } from "@/components/ui/badge";
-import { formatCurrency, formatHours, formatTime, clientDisplayName, propertyAddress } from "@/lib/format";
+import { formatCurrency, formatHours, formatTime, formatWeekdayDateOnly, clientDisplayName, propertyAddress } from "@/lib/format";
 import type { TodaysMission as TodaysMissionData } from "@/lib/data/command-center";
 import {
   AlertTriangle,
@@ -34,7 +34,7 @@ export function TodaysMission({
     <Card>
       <CardHeader
         title="Today's Mission"
-        description={data ? new Date(data.date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : undefined}
+        description={data ? formatWeekdayDateOnly(data.date) : undefined}
       />
       <CardBody>
         <DataStateGate
