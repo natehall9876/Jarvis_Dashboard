@@ -38,6 +38,11 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Exchange[]>([]);
 
+  // Deliberately takes plain text and doesn't care where it came from — a
+  // typed question, a suggested-question chip, or (later) a speech-to-text
+  // transcript all call this the same way, into the same conversation and
+  // the same /api/ai-advisor endpoint. Voice input should plug in here
+  // rather than growing a separate intelligence path.
   async function submit(q: string) {
     const trimmed = q.trim();
     if (!trimmed || loading) return;
