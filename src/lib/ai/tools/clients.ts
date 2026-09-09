@@ -1,5 +1,6 @@
 import { getClients, getClientById } from "@/lib/data/clients";
-import { clientDisplayName, propertyAddress } from "@/lib/format";
+import { clientDisplayName, propertyAddress, daysOverdue } from "@/lib/format";
+import { invoiceBalance, invoiceDisplayStatus } from "@/lib/calculations";
 import { unwrap, type ToolSpec } from "@/lib/ai/tool-types";
 
 export const clientTools: ToolSpec[] = [
@@ -59,15 +60,30 @@ export const clientTools: ToolSpec[] = [
             scheduled_date: j.scheduled_date,
             status: j.status,
             price: j.price,
+            budgeted_hours: j.budgeted_hours,
+            actual_hours: j.actual_hours,
           })),
-          quotes: detail.quotes.map((q) => ({ id: q.id, quote_number: q.quote_number, status: q.status, total: q.total })),
-          invoices: detail.invoices.map((i) => ({
-            id: i.id,
-            invoice_number: i.invoice_number,
-            status: i.status,
-            total: i.total,
-            amount_paid: i.amount_paid,
+          quotes: detail.quotes.map((q) => ({
+            id: q.id,
+            quote_number: q.quote_number,
+            status: q.status,
+            total: q.total,
+            sent_at: q.sent_at,
           })),
+          invoices: detail.invoices.map((i) => {
+            const balance = invoiceBalance(i.total, i.amount_paid);
+            const days_overdue = balance > 0 ? Math.max(0, daysOverdue(i.due_date)) : 0;
+            return {
+              id: i.id,
+              invoice_number: i.invoice_number,
+              status: invoiceDisplayStatus({ status: i.status, balance, days_overdue }),
+              total: i.total,
+              amount_paid: i.amount_paid,
+              balance,
+              due_date: i.due_date,
+              days_overdue,
+            };
+          }),
         },
         references: [
           { type: "client" as const, id: detail.client.id, label: clientDisplayName(detail.client) },

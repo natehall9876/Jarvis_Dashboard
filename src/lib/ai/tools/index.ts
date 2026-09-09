@@ -8,6 +8,7 @@ import { employeeTools } from "@/lib/ai/tools/employees";
 import { equipmentTools } from "@/lib/ai/tools/equipment";
 import { expenseTools } from "@/lib/ai/tools/expenses";
 import { businessTools } from "@/lib/ai/tools/business";
+import { attentionTools } from "@/lib/ai/tools/attention";
 import type { ToolSpec } from "@/lib/ai/tool-types";
 
 /**
@@ -28,6 +29,7 @@ import type { ToolSpec } from "@/lib/ai/tool-types";
  */
 export const ALL_TOOLS: ToolSpec[] = [
   ...businessTools,
+  ...attentionTools,
   ...jobTools,
   ...clientTools,
   ...propertyTools,

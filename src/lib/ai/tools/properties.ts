@@ -1,5 +1,6 @@
 import { getProperties, getPropertyById } from "@/lib/data/properties";
-import { clientDisplayName, propertyAddress } from "@/lib/format";
+import { clientDisplayName, propertyAddress, daysOverdue } from "@/lib/format";
+import { invoiceBalance, invoiceDisplayStatus } from "@/lib/calculations";
 import { unwrap, type ToolSpec } from "@/lib/ai/tool-types";
 
 export const propertyTools: ToolSpec[] = [
@@ -51,9 +52,28 @@ export const propertyTools: ToolSpec[] = [
           active_service_agreements: detail.agreements
             .filter((a) => a.active)
             .map((a) => ({ frequency: a.frequency, recurring_price: a.recurring_price, budgeted_hours: a.budgeted_hours })),
-          recent_jobs: detail.jobs.slice(0, 10).map((j) => ({ id: j.id, scheduled_date: j.scheduled_date, status: j.status, price: j.price })),
-          quotes: detail.quotes.map((q) => ({ id: q.id, quote_number: q.quote_number, status: q.status })),
-          invoices: detail.invoices.map((i) => ({ id: i.id, invoice_number: i.invoice_number, status: i.status, total: i.total })),
+          recent_jobs: detail.jobs.slice(0, 10).map((j) => ({
+            id: j.id,
+            scheduled_date: j.scheduled_date,
+            status: j.status,
+            price: j.price,
+            budgeted_hours: j.budgeted_hours,
+            actual_hours: j.actual_hours,
+          })),
+          quotes: detail.quotes.map((q) => ({ id: q.id, quote_number: q.quote_number, status: q.status, sent_at: q.sent_at })),
+          invoices: detail.invoices.map((i) => {
+            const balance = invoiceBalance(i.total, i.amount_paid);
+            const days_overdue = balance > 0 ? Math.max(0, daysOverdue(i.due_date)) : 0;
+            return {
+              id: i.id,
+              invoice_number: i.invoice_number,
+              status: invoiceDisplayStatus({ status: i.status, balance, days_overdue }),
+              total: i.total,
+              balance,
+              due_date: i.due_date,
+              days_overdue,
+            };
+          }),
         },
         references: [
           { type: "property" as const, id: detail.property.id, label: propertyAddress(detail.property) },
