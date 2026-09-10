@@ -1,14 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Send, Sparkles, Wrench } from "lucide-react";
+import { AlertTriangle, Loader2, Mic, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getContextualQuestions, getPageContextLabel } from "@/lib/ai/questions";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { ProposedAction } from "@/lib/ai/action-types";
+
+/**
+ * Minimal typing for the (non-standard, Chrome/Edge/Safari-only) Web Speech
+ * API — there's no official DOM lib type for it. Deliberately narrow: only
+ * the handful of members this component actually touches.
+ */
+type SpeechRecognitionResultLike = { isFinal: boolean; 0: { transcript: string } };
+type SpeechRecognitionEventLike = { resultIndex: number; results: { length: number; [i: number]: SpeechRecognitionResultLike } };
+type SpeechRecognitionErrorEventLike = { error: string };
+interface SpeechRecognitionLike extends EventTarget {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+}
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  }
+}
 
 type Exchange = {
   /** Stable identity for React's list key — exchanges are prepended (newest first), so an array index would silently shift onto a different exchange every time a new one arrives, carrying over that DOM node's local state (e.g. a ProposedActionCard's confirm/cancel status) onto unrelated content. */
@@ -43,6 +68,9 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Exchange[]>([]);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   // Deliberately takes plain text and doesn't care where it came from — a
   // typed question, a suggested-question chip, or (later) a speech-to-text
@@ -106,6 +134,63 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
     }
   }
 
+  // Voice is just an alternate way to fill the same input and call the same
+  // submit() — there is no separate "voice brain." Speech-to-text happens
+  // entirely client-side via the browser; nothing about the transcript is
+  // treated as an implicit confirmation of anything — a proposed action
+  // still requires an explicit tap on its own Confirm button, whether the
+  // question that produced it was typed or spoken.
+  function startListening() {
+    if (loading || listening) return;
+    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      setVoiceError("Voice input isn't supported in this browser — try Chrome, Edge, or Safari, or type your question instead.");
+      return;
+    }
+    setVoiceError(null);
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      let final = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) final += result[0].transcript;
+        else interim += result[0].transcript;
+      }
+      if (final.trim()) {
+        setQuestion("");
+        setListening(false);
+        submit(final.trim());
+      } else {
+        setQuestion(interim);
+      }
+    };
+    recognition.onerror = (event) => {
+      setListening(false);
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setVoiceError("Microphone access was blocked — allow microphone permission in your browser to use voice input.");
+      } else if (event.error === "no-speech") {
+        setVoiceError("Didn't catch that — try again.");
+      } else if (event.error !== "aborted") {
+        setVoiceError("Voice input hit an error — try again or type your question.");
+      }
+    };
+    recognition.onend = () => setListening(false);
+
+    recognitionRef.current = recognition;
+    setListening(true);
+    recognition.start();
+  }
+
+  function stopListening() {
+    recognitionRef.current?.stop();
+    setListening(false);
+  }
+
   const contextualQuestions = getContextualQuestions(pathname);
   const questionsToShow = compact ? contextualQuestions.slice(0, 4) : contextualQuestions;
   const contextLabel = getPageContextLabel(pathname);
@@ -128,16 +213,43 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask Jarvis about today's business..."
+          placeholder={listening ? "Listening..." : "Ask Jarvis about today's business..."}
           aria-label="Ask Jarvis a question"
-          disabled={loading}
+          disabled={loading || listening}
           className="flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
         />
-        <Button type="submit" disabled={loading || !question.trim()}>
+        <Button
+          type="button"
+          variant={listening ? "danger" : "secondary"}
+          aria-label={listening ? "Stop listening" : "Ask Jarvis by voice"}
+          disabled={loading}
+          onClick={listening ? stopListening : startListening}
+          className="px-2.5"
+        >
+          {listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </Button>
+        <Button type="submit" disabled={loading || listening || !question.trim()}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           Ask
         </Button>
       </form>
+
+      {listening ? (
+        <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-accent)] opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+          </span>
+          Listening — tap the square to stop
+        </div>
+      ) : null}
+
+      {voiceError ? (
+        <p className="flex items-start gap-1.5 text-xs text-[var(--color-warning)]">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          {voiceError}
+        </p>
+      ) : null}
 
       {loading ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
