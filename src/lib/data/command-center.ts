@@ -8,6 +8,8 @@ import {
   laborCost as calcLaborCost,
   productionRate,
   quoteAcceptanceRate,
+  hoursForTimeEntry,
+  truePaidRate,
 } from "@/lib/calculations";
 import type { DataResult, InvoiceWithClient, JobWithRelations, QuoteWithItems } from "@/types/domain";
 import type { EquipmentWithMaintenanceFlag } from "@/lib/data/equipment";
@@ -208,6 +210,15 @@ export type BusinessPulse = {
   cashCollectedMonth: number;
   outstandingInvoiceCount: number;
   productionDollarsPerHour: number | null;
+  /**
+   * Same month's revenue against every clocked crew hour (time_entries),
+   * not just the hours recorded against a specific job — this is usually
+   * lower than productionDollarsPerHour, and the gap is real: it's drive
+   * time, waiting, and anything else that's paid for but not attributed to
+   * a job. See lib/calculations.ts's truePaidRate for the full reasoning.
+   */
+  truePaidDollarsPerHour: number | null;
+  totalPaidHoursMonth: number;
   laborCostMonth: number;
   grossProfitMonth: number;
   averageTicketMonth: number | null;
@@ -256,14 +267,11 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
       .select("employee_id, regular_hours, clock_in, clock_out, work_date")
       .gte("work_date", monthStartStr);
 
-    const laborCostMonth = (timeEntries ?? []).reduce((sum, entry) => {
-      const hours =
-        entry.regular_hours ??
-        (entry.clock_in && entry.clock_out
-          ? (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / 3_600_000
-          : 0);
-      return sum + calcLaborCost(hours, rateByEmployee.get(entry.employee_id) ?? 0);
-    }, 0);
+    const totalPaidHoursMonth = (timeEntries ?? []).reduce((sum, entry) => sum + hoursForTimeEntry(entry), 0);
+    const laborCostMonth = (timeEntries ?? []).reduce(
+      (sum, entry) => sum + calcLaborCost(hoursForTimeEntry(entry), rateByEmployee.get(entry.employee_id) ?? 0),
+      0,
+    );
 
     const [invoicesResult, quotesResponse] = await Promise.all([
       supabase.from("invoices").select("total, amount_paid, status"),
@@ -289,6 +297,8 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
       cashCollectedMonth,
       outstandingInvoiceCount,
       productionDollarsPerHour: productionRate(revenueMonth, totalActualHoursMonth),
+      truePaidDollarsPerHour: truePaidRate(revenueMonth, totalPaidHoursMonth),
+      totalPaidHoursMonth,
       laborCostMonth,
       grossProfitMonth: grossProfit(revenueMonth, laborCostMonth),
       averageTicketMonth: averageTicket(revenueMonth, completedJobs.length),

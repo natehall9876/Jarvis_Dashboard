@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withDataResult } from "@/lib/data/shared";
+import { hoursForTimeEntry } from "@/lib/calculations";
 import type { DataResult, Employee, EmployeeWithStats } from "@/types/domain";
 
 function startOfWeek(date = new Date()): string {
@@ -9,15 +10,6 @@ function startOfWeek(date = new Date()): string {
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
-}
-
-/** Prefers the stored regular_hours figure; falls back to clock_in/clock_out difference. */
-function hoursForEntry(entry: { regular_hours: number | null; clock_in: string | null; clock_out: string | null }): number {
-  if (entry.regular_hours !== null) return entry.regular_hours;
-  if (entry.clock_in && entry.clock_out) {
-    return (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / 3_600_000;
-  }
-  return 0;
 }
 
 export async function getEmployees(): Promise<DataResult<EmployeeWithStats[]>> {
@@ -47,7 +39,7 @@ export async function getEmployees(): Promise<DataResult<EmployeeWithStats[]>> {
 
     const hoursByEmployee = new Map<string, number>();
     for (const entry of timeEntries ?? []) {
-      hoursByEmployee.set(entry.employee_id, (hoursByEmployee.get(entry.employee_id) ?? 0) + hoursForEntry(entry));
+      hoursByEmployee.set(entry.employee_id, (hoursByEmployee.get(entry.employee_id) ?? 0) + hoursForTimeEntry(entry));
     }
 
     const jobsThisWeekByEmployee = new Map<string, number>();

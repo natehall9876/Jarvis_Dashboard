@@ -29,8 +29,21 @@ export function BusinessPulse({
               />
               <StatTile label="Cash Collected (Mo.)" value={formatCurrency(data.cashCollectedMonth)} />
               <StatTile
-                label="Production $ / Hour"
+                label="Field Production $/Hr"
                 value={data.productionDollarsPerHour !== null ? formatCurrency(data.productionDollarsPerHour, true) : "—"}
+                sublabel="Revenue ÷ on-site job hours"
+              />
+              <StatTile
+                label="True Paid $/Hr"
+                value={data.truePaidDollarsPerHour !== null ? formatCurrency(data.truePaidDollarsPerHour, true) : "—"}
+                sublabel={`Revenue ÷ all ${data.totalPaidHoursMonth.toFixed(0)} paid crew hours`}
+                tone={
+                  data.productionDollarsPerHour !== null &&
+                  data.truePaidDollarsPerHour !== null &&
+                  data.truePaidDollarsPerHour < data.productionDollarsPerHour * 0.8
+                    ? "warning"
+                    : "neutral"
+                }
               />
               <StatTile label="Labor Cost (Mo.)" value={formatCurrency(data.laborCostMonth)} />
               <StatTile

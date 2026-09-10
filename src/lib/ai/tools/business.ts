@@ -57,7 +57,7 @@ export const businessTools: ToolSpec[] = [
   {
     name: "get_business_pulse",
     description:
-      "Deterministic revenue and profitability metrics: revenue today/this-week/this-month, accounts receivable, cash collected this month, production $/hour, labor cost this month, gross profit this month, average ticket, jobs completed this month, and quote acceptance rate. Any field that can't be reliably calculated from recorded data comes back as null — report that honestly rather than guessing.",
+      "Deterministic revenue and profitability metrics: revenue today/this-week/this-month, accounts receivable, cash collected this month, labor cost this month, gross profit this month, average ticket, jobs completed this month, quote acceptance rate, and TWO different production numbers that are not interchangeable — productionDollarsPerHour (revenue ÷ hours logged against specific jobs, i.e. on-site production time only) and truePaidDollarsPerHour (revenue ÷ every clocked crew hour for the period, via time entries, which are not all tied to a job — this captures drive time, gaps, and anything else paid for but not attributed to a job). When truePaidDollarsPerHour is meaningfully lower than productionDollarsPerHour, that gap is real paid time not showing up as billable work — worth naming explicitly, not just picking one number. Any field that can't be reliably calculated from recorded data comes back as null — report that honestly rather than guessing.",
     input_schema: { type: "object", properties: {} },
     execute: async () => {
       const result = await getBusinessPulse();
