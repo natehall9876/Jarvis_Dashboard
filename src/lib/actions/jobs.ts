@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, optionalNumber, requiredNumber, withError, runMutation } from "./shared";
 import { VALID_JOB_STATUSES } from "./job-constants";
+import { logActivity } from "@/lib/data/activity-log";
 import type { JobInsert, JobUpdate } from "@/types/domain";
 
 function jobFieldsFromForm(formData: FormData): JobInsert {
@@ -78,7 +79,18 @@ export async function updateJobStatus(jobId: string, status: string): Promise<vo
 export async function createJob(formData: FormData) {
   const fields = jobFieldsFromForm(formData);
   const employeeIds = selectedEmployeeIds(formData);
-  const result = await runMutation(() => insertJob(fields, employeeIds));
+  const result = await runMutation(async () => {
+    const jobId = await insertJob(fields, employeeIds);
+    await logActivity({
+      entityType: "job",
+      entityId: jobId,
+      eventType: "job_created",
+      summary: "Job created by owner",
+      detail: { property_id: fields.property_id, scheduled_date: fields.scheduled_date, price: fields.price },
+      source: "owner",
+    });
+    return jobId;
+  });
   if (!result.ok) redirect(withError("/jobs?new=1", result.message));
   redirect(`/jobs/${result.data}`);
 }
@@ -86,14 +98,34 @@ export async function createJob(formData: FormData) {
 export async function updateJob(jobId: string, formData: FormData) {
   const fields = jobFieldsFromForm(formData);
   const employeeIds = selectedEmployeeIds(formData);
-  const result = await runMutation(() => updateJobFields(jobId, fields, employeeIds));
+  const result = await runMutation(async () => {
+    await updateJobFields(jobId, fields, employeeIds);
+    await logActivity({
+      entityType: "job",
+      entityId: jobId,
+      eventType: "job_updated",
+      summary: "Job details updated by owner",
+      detail: { scheduled_date: fields.scheduled_date, status: fields.status, price: fields.price },
+      source: "owner",
+    });
+  });
   if (!result.ok) redirect(withError(`/jobs/${jobId}?edit=1`, result.message));
   redirect(`/jobs/${jobId}`);
 }
 
 export async function changeJobStatus(jobId: string, redirectTo: string, formData: FormData) {
   const status = requiredString(formData, "status");
-  const result = await runMutation(() => updateJobStatus(jobId, status));
+  const result = await runMutation(async () => {
+    await updateJobStatus(jobId, status);
+    await logActivity({
+      entityType: "job",
+      entityId: jobId,
+      eventType: "job_status_changed",
+      summary: `Job status changed to "${status}" by owner`,
+      detail: { to: status },
+      source: "owner",
+    });
+  });
   if (!result.ok) redirect(withError(redirectTo, result.message));
   redirect(redirectTo);
 }

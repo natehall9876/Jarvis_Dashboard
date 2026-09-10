@@ -4,6 +4,7 @@ import { getPropertyById } from "@/lib/data/properties";
 import { getEmployeeById } from "@/lib/data/employees";
 import { insertJob, updateJobFields, updateJobStatus } from "@/lib/actions/jobs";
 import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
+import { logActivity } from "@/lib/data/activity-log";
 import { clientDisplayName, propertyAddress } from "@/lib/format";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { EntityReference } from "@/lib/ai/tool-types";
@@ -115,6 +116,14 @@ async function executeRescheduleJob(action: ProposedAction): Promise<ExecuteActi
   const oldDate = job.scheduled_date;
   await updateJobFields(jobId, { scheduled_date: newDate, scheduled_start_time: newTime });
   await appendJobAuditNote(jobId, `Rescheduled from ${oldDate ?? "unscheduled"} to ${newDate} after owner confirmation.`);
+  await logActivity({
+    entityType: "job",
+    entityId: jobId,
+    eventType: "job_rescheduled",
+    summary: `${jobLabel(job)} rescheduled from ${oldDate ?? "unscheduled"} to ${newDate}`,
+    detail: { from: oldDate, to: newDate, reason: action.explanation },
+    source: "jarvis",
+  });
 
   const updated = await getJobById(jobId);
   if (updated.error !== null || !updated.data) return fail("server_error", "Reschedule saved, but the job couldn't be re-read to verify.");
@@ -148,6 +157,14 @@ async function executeUpdateJobStatus(action: ProposedAction): Promise<ExecuteAc
   const oldStatus = job.status;
   await updateJobStatus(jobId, newStatus);
   await appendJobAuditNote(jobId, `Status changed from "${oldStatus}" to "${newStatus}" after owner confirmation.`);
+  await logActivity({
+    entityType: "job",
+    entityId: jobId,
+    eventType: "job_status_changed",
+    summary: `${jobLabel(job)} status changed from "${oldStatus}" to "${newStatus}"`,
+    detail: { from: oldStatus, to: newStatus, reason: action.explanation },
+    source: "jarvis",
+  });
 
   const updated = await getJobById(jobId);
   if (updated.error !== null || !updated.data) return fail("server_error", "Status change saved, but the job couldn't be re-read to verify.");
@@ -192,6 +209,14 @@ async function executeAssignEmployee(action: ProposedAction): Promise<ExecuteAct
     if (employee.data) newCrewNames.push([employee.data.first_name, employee.data.last_name].filter(Boolean).join(" "));
   }
   await appendJobAuditNote(jobId, `Crew changed from [${oldCrew}] to [${newCrewNames.join(", ") || "nobody"}] after owner confirmation.`);
+  await logActivity({
+    entityType: "job",
+    entityId: jobId,
+    eventType: "job_crew_changed",
+    summary: `${jobLabel(job)} crew changed from [${oldCrew}] to [${newCrewNames.join(", ") || "nobody"}]`,
+    detail: { from: oldCrew, to: newCrewNames, reason: action.explanation },
+    source: "jarvis",
+  });
 
   return {
     ok: true,
@@ -233,6 +258,14 @@ async function executeCreateJob(action: ProposedAction): Promise<ExecuteActionRe
 
   const jobId = await insertJob(fields, employeeIds);
   await appendJobAuditNote(jobId, "Created by owner confirmation via Jarvis.");
+  await logActivity({
+    entityType: "job",
+    entityId: jobId,
+    eventType: "job_created",
+    summary: `Job created for ${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`,
+    detail: { property_id: propertyId, scheduled_date: scheduledDate, price, reason: action.explanation },
+    source: "jarvis",
+  });
 
   const created = await getJobById(jobId);
   if (created.error !== null || !created.data) return fail("server_error", "Job created, but couldn't be re-read to verify.");

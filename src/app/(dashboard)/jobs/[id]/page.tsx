@@ -13,6 +13,8 @@ import { getJobPhotoUrl } from "@/lib/supabase/storage";
 import { getJobById, jobProductionRate } from "@/lib/data/jobs";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
 import { updateJob, changeJobStatus } from "@/lib/actions/jobs";
+import { getActivityForEntity } from "@/lib/data/activity-log";
+import { ActivityTimeline } from "@/components/ui/activity-timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +27,13 @@ export default async function JobDetailPage({
 }) {
   const { id } = await params;
   const { edit: isEditing, error: formError } = await searchParams;
-  const [{ data: job, error }, properties, services, routes, employees] = await Promise.all([
+  const [{ data: job, error }, properties, services, routes, employees, { data: activity }] = await Promise.all([
     getJobById(id),
     isEditing ? getPropertyOptions() : Promise.resolve({ data: [] }),
     isEditing ? getServiceOptions() : Promise.resolve({ data: [] }),
     isEditing ? getRouteOptions() : Promise.resolve({ data: [] }),
     isEditing ? getEmployeeOptions() : Promise.resolve({ data: [] }),
+    getActivityForEntity("job", id),
   ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
@@ -191,6 +194,13 @@ export default async function JobDetailPage({
               ))}
             </div>
           )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="History" description="What happened to this job, and when" />
+        <CardBody>
+          <ActivityTimeline events={activity ?? []} />
         </CardBody>
       </Card>
 

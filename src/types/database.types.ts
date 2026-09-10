@@ -46,6 +46,7 @@ export type QuoteStatus = "draft" | "sent" | "accepted" | "declined";
 export type InvoiceStatus = "draft" | "sent" | "paid" | "void";
 export type PaymentMethod = "cash" | "check" | "credit_card" | "ach" | "other";
 export type PhotoType = "before" | "after" | "issue" | "other";
+export type ActivitySource = "jarvis" | "owner" | "system";
 
 // ---------------------------------------------------------------------------
 // Database
@@ -955,6 +956,39 @@ export type Database = {
           metadata?: Json | null;
         };
         Update: Partial<Database["public"]["Tables"]["integration_mappings"]["Insert"]>;
+        Relationships: [];
+      };
+      /**
+       * NOT YET LIVE — added here ahead of the database so the app is fully
+       * typed the moment `supabase/activity-log-migration.sql` is run in
+       * Supabase Studio. Matches that migration exactly; a real
+       * `supabase gen types` regeneration after running it should produce
+       * an identical shape and can safely replace this block.
+       */
+      activity_log: {
+        Row: {
+          id: string;
+          created_at: string;
+          entity_type: string;
+          entity_id: string;
+          event_type: string;
+          summary: string;
+          detail: Json | null;
+          source: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          entity_type: string;
+          entity_id: string;
+          event_type: string;
+          summary: string;
+          detail?: Json | null;
+          source?: string;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["activity_log"]["Insert"]>;
         Relationships: [];
       };
     };
