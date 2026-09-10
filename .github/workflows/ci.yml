@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege by default — nothing here needs write access to the repo,
+# and forked-PR workflows never see repository secrets regardless.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Typecheck, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        # No Supabase/AI secrets are passed here on purpose: every page and
+        # data-access function degrades to an honest "not configured" state
+        # rather than requiring live credentials at build time (see
+        # src/lib/data/shared.ts's withDataResult). If a future change makes
+        # the build require real values, add them as repository secrets and
+        # reference them here — never hardcode a value in this file.
+        run: npm run build

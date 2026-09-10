@@ -66,7 +66,14 @@ export async function proxy(request: NextRequest) {
   // error, not "signed out", so only redirect on a clean no-session result
   // (no user AND no error) rather than treating every getUser() failure as
   // a logout.
-  const definitelySignedOut = !user && !authError;
+  // A request with no session cookie at all (a fresh, never-logged-in
+  // visitor) doesn't come back as "no user, no error" — the Supabase SSR
+  // client surfaces it as a distinctly-named AuthSessionMissingError. That's
+  // a clean, unambiguous "there was never a session here," unlike a
+  // refresh-token race (a different, differently-named transient error),
+  // so it's safe to treat as a real sign-out even though other auth errors
+  // are deliberately not.
+  const definitelySignedOut = !user && (!authError || authError.name === "AuthSessionMissingError");
 
   if (definitelySignedOut && !isPublicPath && !isApiPath) {
     const url = request.nextUrl.clone();
