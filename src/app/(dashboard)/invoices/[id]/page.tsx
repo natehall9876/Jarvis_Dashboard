@@ -14,6 +14,8 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getInvoiceById } from "@/lib/data/invoices";
 import { getClientOptions, getPropertyOptions, getServiceOptions } from "@/lib/data/options";
+import { getActivityForEntity } from "@/lib/data/activity-log";
+import { ActivityTimeline } from "@/components/ui/activity-timeline";
 import {
   updateInvoice,
   deleteDraftInvoice,
@@ -35,11 +37,12 @@ export default async function InvoiceDetailPage({
 }) {
   const { id } = await params;
   const { edit: isEditing, addItem: isAddingItem, pay: isPaying, error: formError } = await searchParams;
-  const [{ data: invoice, error }, clients, properties, services] = await Promise.all([
+  const [{ data: invoice, error }, clients, properties, services, { data: activity }] = await Promise.all([
     getInvoiceById(id),
     isEditing ? getClientOptions() : Promise.resolve({ data: [] }),
     isEditing ? getPropertyOptions() : Promise.resolve({ data: [] }),
     isAddingItem ? getServiceOptions() : Promise.resolve({ data: [] }),
+    getActivityForEntity("invoice", id),
   ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
@@ -173,6 +176,13 @@ export default async function InvoiceDetailPage({
               </tbody>
             </table>
           )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="History" description="What happened to this invoice, and when" />
+        <CardBody>
+          <ActivityTimeline events={activity ?? []} />
         </CardBody>
       </Card>
 

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, requiredNumber, withError, runMutation } from "./shared";
+import { logActivity } from "@/lib/data/activity-log";
 
 async function recomputeInvoiceTotal(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -41,6 +42,14 @@ export async function createInvoice(formData: FormData) {
       .select("id")
       .single();
     if (error) throw error;
+    await logActivity({
+      entityType: "invoice",
+      entityId: data.id,
+      eventType: "invoice_created",
+      summary: "Invoice created by owner",
+      detail: { client_id: clientId },
+      source: "owner",
+    });
     return data.id as string;
   });
 
@@ -85,6 +94,13 @@ export async function voidInvoice(invoiceId: string) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("invoices").update({ status: "void" }).eq("id", invoiceId);
     if (error) throw error;
+    await logActivity({
+      entityType: "invoice",
+      entityId: invoiceId,
+      eventType: "invoice_voided",
+      summary: "Invoice voided by owner",
+      source: "owner",
+    });
   });
   if (!result.ok) redirect(withError(`/invoices/${invoiceId}`, result.message));
   redirect(`/invoices/${invoiceId}`);
@@ -95,6 +111,13 @@ export async function sendInvoice(invoiceId: string) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("invoices").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", invoiceId);
     if (error) throw error;
+    await logActivity({
+      entityType: "invoice",
+      entityId: invoiceId,
+      eventType: "invoice_sent",
+      summary: "Invoice sent to client",
+      source: "owner",
+    });
   });
   if (!result.ok) redirect(withError(`/invoices/${invoiceId}`, result.message));
   redirect(`/invoices/${invoiceId}`);
@@ -165,6 +188,15 @@ export async function recordPayment(invoiceId: string, clientId: string, formDat
 
     const { error: updateError } = await supabase.from("invoices").update(patch).eq("id", invoiceId);
     if (updateError) throw updateError;
+
+    await logActivity({
+      entityType: "invoice",
+      entityId: invoiceId,
+      eventType: "payment_recorded",
+      summary: `Payment of $${amount.toLocaleString()} recorded${patch.status === "paid" ? " — invoice now paid in full" : ""}`,
+      detail: { amount, new_amount_paid: newAmountPaid, invoice_total: invoice.total },
+      source: "owner",
+    });
   });
 
   if (!result.ok) redirect(withError(`/invoices/${invoiceId}?pay=1`, result.message));
