@@ -42,5 +42,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.message, reason: result.reason }, { status });
   }
 
-  return NextResponse.json({ answer: result.answer, references: result.references, toolsUsed: result.toolsUsed });
+  return NextResponse.json({
+    answer: result.answer,
+    references: result.references,
+    toolsUsed: result.toolsUsed,
+    proposedAction: result.proposedAction,
+  });
 }

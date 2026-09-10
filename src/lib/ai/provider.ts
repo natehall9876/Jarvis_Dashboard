@@ -63,6 +63,9 @@ export type AICompletionResult = {
   errorMessage?: string;
 };
 
+/** "auto" (default) lets the model choose; "none" forces a text-only reply even though tools are still listed — used to make the model wrap up in plain language right after proposing a write action, instead of chaining more tool calls the same turn. */
+export type AIToolChoice = "auto" | "none";
+
 export interface AIProvider {
   readonly name: string;
   isConfigured(): boolean;
@@ -71,5 +74,6 @@ export interface AIProvider {
     messages: AIMessage[];
     tools: ToolDefinition[];
     maxTokens?: number;
+    toolChoice?: AIToolChoice;
   }): Promise<AICompletionResult>;
 }

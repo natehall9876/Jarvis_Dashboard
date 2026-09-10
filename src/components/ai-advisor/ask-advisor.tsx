@@ -1,19 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Send, Sparkles, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getContextualQuestions, getPageContextLabel } from "@/lib/ai/questions";
+import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
 import type { EntityReference } from "@/lib/ai/tool-types";
+import type { ProposedAction } from "@/lib/ai/action-types";
 
 type Exchange = {
+  /** Stable identity for React's list key — exchanges are prepended (newest first), so an array index would silently shift onto a different exchange every time a new one arrives, carrying over that DOM node's local state (e.g. a ProposedActionCard's confirm/cancel status) onto unrelated content. */
+  id: string;
   question: string;
   answer: string | null;
   error: string | null;
   references: EntityReference[];
   toolsUsed: string[];
+  proposedAction: ProposedAction | null;
 };
 
 const ENTITY_PATHS: Record<EntityReference["type"], string> = {
@@ -34,6 +39,7 @@ function humanizeToolName(name: string): string {
 
 export function AskAdvisor({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Exchange[]>([]);
@@ -63,20 +69,36 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question: trimmed, path: pathname, history: conversationHistory }),
       });
-      const json = (await res.json()) as { answer?: string; error?: string; references?: EntityReference[]; toolsUsed?: string[] };
+      const json = (await res.json()) as {
+        answer?: string;
+        error?: string;
+        references?: EntityReference[];
+        toolsUsed?: string[];
+        proposedAction?: ProposedAction | null;
+      };
       setHistory((prev) => [
         {
+          id: crypto.randomUUID(),
           question: trimmed,
           answer: json.answer ?? null,
           error: res.ok ? null : json.error ?? "Something went wrong.",
           references: json.references ?? [],
           toolsUsed: json.toolsUsed ?? [],
+          proposedAction: json.proposedAction ?? null,
         },
         ...prev,
       ]);
     } catch {
       setHistory((prev) => [
-        { question: trimmed, answer: null, error: "Couldn't reach the advisor. Check your connection and try again.", references: [], toolsUsed: [] },
+        {
+          id: crypto.randomUUID(),
+          question: trimmed,
+          answer: null,
+          error: "Couldn't reach the advisor. Check your connection and try again.",
+          references: [],
+          toolsUsed: [],
+          proposedAction: null,
+        },
         ...prev,
       ]);
     } finally {
@@ -140,8 +162,8 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
 
       {history.length > 0 ? (
         <div className="space-y-3">
-          {history.map((exchange, i) => (
-            <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+          {history.map((exchange) => (
+            <div key={exchange.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
               <p className="text-sm font-medium text-[var(--color-text-primary)]">{exchange.question}</p>
               {exchange.answer ? (
                 <>
@@ -164,6 +186,21 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
                       <Wrench className="h-3 w-3 shrink-0" />
                       Checked: {Array.from(new Set(exchange.toolsUsed.map(humanizeToolName))).join(", ")}
                     </p>
+                  ) : null}
+                  {exchange.proposedAction ? (
+                    <ProposedActionCard
+                      key={exchange.proposedAction.id}
+                      action={exchange.proposedAction}
+                      onSettled={(outcome) => {
+                        // A confirmed write can change exactly the record the
+                        // current page is showing (e.g. this job's own
+                        // date/status/crew) — refresh the server-rendered
+                        // data so it's not left displaying the pre-change
+                        // state until the owner manually reloads. A cancel
+                        // touched nothing, so there's nothing to refresh.
+                        if (outcome === "confirmed") router.refresh();
+                      }}
+                    />
                   ) : null}
                 </>
               ) : (

@@ -43,6 +43,7 @@ export class AnthropicProvider implements AIProvider {
     messages: AIMessage[];
     tools: ToolDefinition[];
     maxTokens?: number;
+    toolChoice?: "auto" | "none";
   }): Promise<AICompletionResult> {
     if (!this.isConfigured()) {
       return {
@@ -67,6 +68,7 @@ export class AnthropicProvider implements AIProvider {
           max_tokens: params.maxTokens ?? 1536,
           system: params.system,
           tools: params.tools.length > 0 ? params.tools : undefined,
+          tool_choice: params.toolChoice === "none" ? { type: "none" } : undefined,
           messages: params.messages.map((m) => ({ role: m.role, content: m.content })),
         }),
       });

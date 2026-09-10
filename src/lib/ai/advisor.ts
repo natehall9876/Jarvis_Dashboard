@@ -1,5 +1,6 @@
 import { AnthropicProvider } from "@/lib/ai/providers/anthropic";
 import { ALL_TOOLS, findTool, toolDefinitions } from "@/lib/ai/tools";
+import { isProposedAction, type ProposedAction } from "@/lib/ai/action-types";
 import type { AIMessage, AIContentBlock } from "@/lib/ai/provider";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { PageContext } from "@/lib/ai/page-context";
@@ -42,21 +43,24 @@ For broad questions ("give me my owner briefing", "what needs my attention", "wh
 Don't call a tool you've already called with the same effective arguments earlier in this turn — reuse the result instead of re-fetching it.
 Stop calling tools once you have what you need to answer well; don't chain extra calls "just in case" for a narrow question.
 
-READ-ONLY: you cannot create, edit, delete, or send anything yet — no scheduling, no invoicing, no messages, no purchases. If asked to do one of these, say plainly that you can't take actions yet, this phase is read-only, and answer with the relevant information instead if you can.
+TAKING ACTIONS
+You can PROPOSE a small set of job changes — reschedule a job, change its status, assign/change its crew, or create a new job — using propose_reschedule_job / propose_update_job_status / propose_assign_employee / propose_create_job. These tools never make the change themselves: they prepare a proposal the owner must explicitly confirm in the UI. After calling one, briefly tell the owner what you're proposing and that they need to confirm the card — then stop; don't call any other tool in the same turn, and don't describe the change as already done ("I've moved it" is wrong; "I'm proposing to move it — confirm below" is right).
+Confidence required before proposing: you must have a single, exact target id (job_id / employee_id / property_id) from a read tool or page context — never a guess. If a request could match more than one record (e.g. the owner has multiple jobs today, or multiple employees share a first name), STOP and ask which one, or list the candidates, instead of calling a propose_* tool. Read questions can tolerate inference; write proposals cannot.
+Nothing else is possible yet — no invoicing, no payments, no messages to customers, no deletions. If asked for one of those, say so plainly and offer the closest thing you can actually do (usually just the relevant information).
 
 HOW TO ANSWER
 For a simple lookup ("what's on the schedule today", "who owes money"), just answer directly and briefly — no need for headers or structure.
 For an analysis or recommendation, keep the underlying facts and your judgment visibly separate so the owner can trust which is which: state the real numbers from your tools first, then say plainly what you'd do and why, in one or two sentences. Don't pad this into an essay, and don't present your own judgment as if it were a database fact.
 Always ground a recommendation in the specific numbers behind it (e.g. "Friday has 11.2 budgeted hours against a 3-person crew while Saturday only has 3.4" — not just "Friday looks busy").
 For an owner briefing specifically, organize around what's actually populated: today's schedule, what needs attention (ranked, worst first), the financial snapshot, then your take — skip a section entirely if the tool returned nothing for it rather than forcing an empty header.
-If the user's question uses a pronoun or vague reference ("those customers", "which one", "that job") and the conversation history makes the referent clear, resolve it yourself — don't ask the user to repeat context you already have.
+If the user's question uses a pronoun or vague reference ("those customers", "which one", "that job", "this") and either the conversation history or the page context makes the referent clear, resolve it yourself using that exact id — don't re-search for it and don't ask the user to repeat context you already have. This applies to action proposals too: "move this to Saturday" on a job page means that job's id from the page context.
 Keep responses short — a few sentences to a short paragraph for most questions. Owners read this on a phone between jobs.`;
 }
 
 export type AdvisorTurn = { question: string; answer: string };
 
 export type AdvisorResponse =
-  | { ok: true; answer: string; references: EntityReference[]; toolsUsed: string[] }
+  | { ok: true; answer: string; references: EntityReference[]; toolsUsed: string[]; proposedAction: ProposedAction | null }
   | { ok: false; reason: "not_configured" | "upstream_error"; message: string };
 
 function dedupeReferences(refs: EntityReference[]): EntityReference[] {
@@ -91,8 +95,21 @@ export async function askAdvisor(
   const toolsUsed: string[] = [];
   const tools = toolDefinitions();
 
+  // Once a propose_* tool produces a ProposedAction, the model is forced
+  // (via tool_choice: "none") to wrap up in plain text on its very next
+  // turn instead of chaining further tool calls — a write proposal is a
+  // stopping point, not a step toward something else the same turn. This is
+  // the structural guarantee that voice or an eager model can't parlay one
+  // proposal into a cascade of unconfirmed changes.
+  let pendingProposal: ProposedAction | null = null;
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    const result = await provider.complete({ system: buildSystemPrompt(), messages, tools });
+    const result = await provider.complete({
+      system: buildSystemPrompt(),
+      messages,
+      tools,
+      toolChoice: pendingProposal ? "none" : "auto",
+    });
 
     if (result.stopReason === "error") {
       return {
@@ -107,7 +124,7 @@ export async function askAdvisor(
       if (!result.text) {
         return { ok: false, reason: "upstream_error", message: "The AI provider returned an empty response." };
       }
-      return { ok: true, answer: result.text, references: dedupeReferences(references), toolsUsed };
+      return { ok: true, answer: result.text, references: dedupeReferences(references), toolsUsed, proposedAction: pendingProposal };
     }
 
     // Echo the assistant's tool_use turn back verbatim, then run every
@@ -132,7 +149,7 @@ export async function askAdvisor(
           const { data, references: toolRefs } = await spec.execute(input);
           toolsUsed.push(call.name);
           if (toolRefs) references.push(...toolRefs);
-          return { type: "tool_result" as const, tool_use_id: call.id, content: JSON.stringify(data) };
+          return { type: "tool_result" as const, tool_use_id: call.id, content: JSON.stringify(data), data };
         } catch (err) {
           return {
             type: "tool_result" as const,
@@ -144,7 +161,28 @@ export async function askAdvisor(
       }),
     );
 
-    messages.push({ role: "user", content: toolResultBlocks });
+    // At most one proposal per turn — a second propose_* call in the same
+    // batch gets its result overwritten with a rejection rather than being
+    // silently accepted, so the UI never has to render (or the owner
+    // confirm) more than one pending write at once.
+    for (const block of toolResultBlocks) {
+      const raw = (block as { data?: unknown }).data;
+      if (isProposedAction(raw)) {
+        if (!pendingProposal) {
+          pendingProposal = raw;
+        } else {
+          (block as { content: string; is_error?: boolean }).content = JSON.stringify({
+            error: "Only one action can be proposed per turn — the owner needs to confirm or cancel the first one before another can be prepared.",
+          });
+          (block as { content: string; is_error?: boolean }).is_error = true;
+        }
+      }
+    }
+    const cleanedToolResultBlocks = toolResultBlocks.map(({ type, tool_use_id, content, is_error }) =>
+      is_error ? { type, tool_use_id, content, is_error } : { type, tool_use_id, content },
+    );
+
+    messages.push({ role: "user", content: cleanedToolResultBlocks });
   }
 
   return {
