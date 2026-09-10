@@ -30,6 +30,26 @@ click-through trial in-browser.
   job detail, and the Jarvis drawer including a full propose/confirm cycle.
 - Settings/Integrations page: live-verified status for Supabase and Weather,
   honest credential-only status for everything else.
+- Security re-audit (deep hardening pass, same day): unauthenticated direct
+  access to a real record URL redirects to `/login` (regression-tested);
+  `/api/ai-advisor` now requires auth (previously RLS blocked real data for
+  an anon caller, but nothing stopped an anon caller from spending a real
+  paid Anthropic API call — fixed); `/api/ai-advisor/execute-action` confirmed
+  401s with no session; malformed job ids don't crash the server. All 4
+  codified in `e2e/security-probe.spec.ts`.
+- Action-safety re-stress-test (same day, more aggressive than the original
+  pass): 5 fully concurrent confirmation requests for the same proposed
+  action → exactly 1 succeeded, 4 correctly rejected as
+  `already_processed`, independently verified the job moved exactly once.
+  Contradictory multi-turn correction ("move it to Monday" → "actually,
+  Tuesday instead") produces a fresh proposal without ever double-writing,
+  since neither intermediate proposal is confirmed until the owner acts.
+- Confirmed: no Supabase Realtime subscriptions exist anywhere in the
+  codebase (grepped, not assumed). "Live updates" today means
+  `router.refresh()` after your own confirmed action, not push updates from
+  other clients/processes — an appropriate scope for a single-owner tool,
+  not a bug, but don't mistake it for multi-client realtime sync if that's
+  ever needed later.
 
 ## Built in code, NOT yet live in the database
 
@@ -62,6 +82,41 @@ each file → Run. Both are additive-only (no existing table, column, or row
 is touched) and safe to re-run. After running them, regenerating
 `src/types/database.types.ts` via `supabase gen types typescript` should
 produce shapes identical to what's already hand-written there.
+
+## Deployment readiness
+
+**Not deployed anywhere yet** — there is no `.vercel/` directory, no
+`vercel.json`, and no Vercel account/project credentials available in this
+environment, so a deployment could not be created or even attempted from
+here. Everything else needed for a clean deploy has been verified ready:
+
+- `npm run build` succeeds with **zero environment variables present**
+  (tested by removing `.env.local` entirely and rebuilding) — the app never
+  requires secrets at build time, only at request time.
+- No hardcoded `localhost` anywhere in `src/` (grepped, not assumed) — every
+  redirect (`src/proxy.ts`, `src/app/(auth)/login/actions.ts`,
+  `src/app/auth/confirm/route.ts`) uses relative paths, so the app doesn't
+  care what domain it's actually served from.
+- `next.config.ts` has no custom settings that would need adjusting per
+  environment.
+
+**When you're ready to deploy, the remaining steps are:**
+
+1. Create a Vercel project from this GitHub repo (`natehall9876/Jarvis_Dashboard`).
+2. Add these environment variables in the Vercel project settings (same
+   names as `.env.local`, real values — never commit them):
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+   `AI_PROVIDER_API_KEY`, `AI_PROVIDER_MODEL`, `WEATHER_LOCATION_LAT`,
+   `WEATHER_LOCATION_LON` (the rest are optional/unused today).
+3. In the Supabase dashboard → Authentication → URL Configuration, add the
+   real Vercel URL to **Site URL** and **Redirect URLs** — without this,
+   the `/auth/confirm` email-link flow will redirect to the wrong domain
+   (sign-in with password is unaffected either way).
+4. Deploy. Open the Vercel URL on your iPhone.
+
+Nothing about the two pending Supabase migrations
+(`activity_log`/`action_requests`) blocks deployment — the app runs
+correctly with or without them, as documented above.
 
 ## Known gaps
 
