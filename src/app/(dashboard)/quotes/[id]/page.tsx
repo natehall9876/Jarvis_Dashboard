@@ -12,6 +12,8 @@ import { QuoteItemForm } from "@/components/quotes/quote-item-form";
 import { formatCurrency, formatDate, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getQuoteById } from "@/lib/data/quotes";
 import { getClientOptions, getPropertyOptions, getServiceOptions } from "@/lib/data/options";
+import { getActivityForEntity } from "@/lib/data/activity-log";
+import { ActivityTimeline } from "@/components/ui/activity-timeline";
 import {
   updateQuote,
   deleteDraftQuote,
@@ -35,11 +37,12 @@ export default async function QuoteDetailPage({
 }) {
   const { id } = await params;
   const { edit: isEditing, addItem: isAddingItem, error: formError } = await searchParams;
-  const [{ data: quote, error }, clients, properties, services] = await Promise.all([
+  const [{ data: quote, error }, clients, properties, services, { data: activity }] = await Promise.all([
     getQuoteById(id),
     isEditing ? getClientOptions() : Promise.resolve({ data: [] }),
     isEditing || isAddingItem ? getPropertyOptions() : Promise.resolve({ data: [] }),
     isAddingItem ? getServiceOptions() : Promise.resolve({ data: [] }),
+    getActivityForEntity("quote", id),
   ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
@@ -184,6 +187,13 @@ export default async function QuoteDetailPage({
           </CardBody>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader title="History" description="What happened to this quote, and when" />
+        <CardBody>
+          <ActivityTimeline events={activity ?? []} />
+        </CardBody>
+      </Card>
 
       {isEditing ? (
         <Modal title="Edit Quote" closeHref={`/quotes/${id}`}>

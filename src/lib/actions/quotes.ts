@@ -11,6 +11,7 @@ import {
   withError,
   runMutation,
 } from "./shared";
+import { logActivity } from "@/lib/data/activity-log";
 
 async function recomputeQuoteTotal(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -50,6 +51,14 @@ export async function createQuote(formData: FormData) {
       .select("id")
       .single();
     if (error) throw error;
+    await logActivity({
+      entityType: "quote",
+      entityId: data.id,
+      eventType: "quote_created",
+      summary: "Quote created by owner",
+      detail: { client_id: clientId },
+      source: "owner",
+    });
     return data.id as string;
   });
 
@@ -129,6 +138,7 @@ export async function sendQuote(quoteId: string) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("quotes").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", quoteId);
     if (error) throw error;
+    await logActivity({ entityType: "quote", entityId: quoteId, eventType: "quote_sent", summary: "Quote sent to client", source: "owner" });
   });
   if (!result.ok) redirect(withError(`/quotes/${quoteId}`, result.message));
   redirect(`/quotes/${quoteId}`);
@@ -139,6 +149,7 @@ export async function acceptQuote(quoteId: string) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("quotes").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", quoteId);
     if (error) throw error;
+    await logActivity({ entityType: "quote", entityId: quoteId, eventType: "quote_accepted", summary: "Quote accepted by client", source: "owner" });
   });
   if (!result.ok) redirect(withError(`/quotes/${quoteId}`, result.message));
   redirect(`/quotes/${quoteId}`);
@@ -149,6 +160,7 @@ export async function declineQuote(quoteId: string) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("quotes").update({ status: "declined", declined_at: new Date().toISOString() }).eq("id", quoteId);
     if (error) throw error;
+    await logActivity({ entityType: "quote", entityId: quoteId, eventType: "quote_declined", summary: "Quote declined by client", source: "owner" });
   });
   if (!result.ok) redirect(withError(`/quotes/${quoteId}`, result.message));
   redirect(`/quotes/${quoteId}`);
@@ -204,6 +216,23 @@ export async function convertQuoteToInvoice(quoteId: string) {
       if (itemsError) throw itemsError;
     }
 
+    await logActivity({
+      entityType: "quote",
+      entityId: quoteId,
+      eventType: "quote_converted_to_invoice",
+      summary: `Quote converted to invoice ${invoice.id}`,
+      detail: { invoice_id: invoice.id },
+      source: "owner",
+    });
+    await logActivity({
+      entityType: "invoice",
+      entityId: invoice.id,
+      eventType: "invoice_created",
+      summary: `Invoice created from quote ${quote.quote_number ?? quoteId}`,
+      detail: { quote_id: quoteId },
+      source: "owner",
+    });
+
     return invoice.id as string;
   });
 
@@ -243,6 +272,24 @@ export async function convertQuoteToJob(quoteId: string) {
       .select("id")
       .single();
     if (jobError) throw jobError;
+
+    await logActivity({
+      entityType: "quote",
+      entityId: quoteId,
+      eventType: "quote_converted_to_job",
+      summary: `Quote converted to job ${job.id}`,
+      detail: { job_id: job.id },
+      source: "owner",
+    });
+    await logActivity({
+      entityType: "job",
+      entityId: job.id,
+      eventType: "job_created",
+      summary: `Job created from quote ${quote.quote_number ?? quoteId}`,
+      detail: { quote_id: quoteId },
+      source: "owner",
+    });
+
     return job.id as string;
   });
 
