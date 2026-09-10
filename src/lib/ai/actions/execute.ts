@@ -9,6 +9,9 @@ import { clientDisplayName, propertyAddress } from "@/lib/format";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { JobInsert } from "@/types/domain";
+import type { Json } from "@/types/database.types";
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 export type ExecuteActionResult =
   | { ok: true; message: string; result: Record<string, unknown>; references: EntityReference[] }
@@ -19,15 +22,12 @@ export type ExecuteActionResult =
     };
 
 /**
- * In-memory "executed once" guard. This is a single dev/prod-instance
- * process, not a distributed job queue — a persisted table would be the
- * real answer at scale, but for one server process this closes the actual
- * risk (a double-click or a retried fetch re-running the same confirmed
- * action) with no schema change. Reserved synchronously (before any
- * `await`) so two concurrent requests for the same action id can't both
- * pass the check before either commits. Freed again on any non-success
- * path so a legitimately failed/rejected action can be retried under the
- * same id.
+ * In-memory "executed once" guard — the fallback when action_requests
+ * (supabase/action-requests-migration.sql) hasn't been applied yet. Real
+ * protection against a double-click within one running server process, but
+ * it resets on restart and doesn't exist across multiple instances. Kept as
+ * a fallback, not removed, so the app degrades to "single-process safe"
+ * rather than "unsafe" before the migration is run.
  */
 const processedActionIds = new Set<string>();
 
@@ -37,19 +37,103 @@ function fail(reason: FailureReason, message: string): ExecuteActionResult {
   return { ok: false, reason, message };
 }
 
+type ClaimOutcome = "claimed" | "already_processed" | "db_unavailable";
+
+/**
+ * Durable, cross-process idempotency: the proposed action's own id becomes
+ * the primary key of a row in action_requests, so a second INSERT attempt
+ * for the same id — from this process, a restarted process, or a different
+ * instance entirely — fails with a real Postgres unique-violation (23505).
+ * The database is the single source of truth for "has this been claimed,"
+ * not process memory. Falls back to "db_unavailable" (letting the caller use
+ * the in-memory guard instead) when the table doesn't exist yet — this must
+ * never be the reason a legitimate action fails.
+ */
+async function claimActionRequest(action: ProposedAction, supabase: SupabaseServerClient): Promise<ClaimOutcome> {
+  const { error } = await supabase.from("action_requests").insert({
+    id: action.id,
+    action_type: action.type,
+    target_type: action.target?.type ?? null,
+    target_id: action.target?.id ?? null,
+    payload: action.payload as Json,
+    snapshot: action.snapshot as Json,
+    status: "executing",
+  });
+
+  if (!error) return "claimed";
+
+  if (error.code === "23505") {
+    const { data: existing } = await supabase.from("action_requests").select("status").eq("id", action.id).maybeSingle();
+    if (!existing || existing.status === "executed" || existing.status === "executing") {
+      return "already_processed";
+    }
+    // A prior attempt ended in failed/stale/cancelled/invalid — legitimate
+    // to retry under the same id. `neq("status","executed")` keeps this
+    // reclaim from ever overwriting a genuine success even under a race.
+    const { error: reclaimError } = await supabase
+      .from("action_requests")
+      .update({ status: "executing", status_detail: null })
+      .eq("id", action.id)
+      .neq("status", "executed");
+    return reclaimError ? "already_processed" : "claimed";
+  }
+
+  // Most likely "relation \"action_requests\" does not exist" — migration
+  // not applied yet. Any other unexpected error also falls back rather than
+  // blocking a real action on an optional durability upgrade.
+  return "db_unavailable";
+}
+
+async function finalizeActionRequest(
+  supabase: SupabaseServerClient,
+  actionId: string,
+  status: "executed" | "failed" | "stale" | "invalid" | "cancelled",
+  detail?: string,
+  result?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await supabase
+      .from("action_requests")
+      .update({
+        status,
+        status_detail: detail ?? null,
+        result: result ? (result as Json) : null,
+        executed_at: status === "executed" ? new Date().toISOString() : null,
+      })
+      .eq("id", actionId);
+  } catch {
+    // Best-effort — the mutation itself already succeeded or failed for real
+    // reasons; a failure to record that in action_requests must not change
+    // the result reported to the owner.
+  }
+}
+
 export async function executeProposedAction(action: ProposedAction): Promise<ExecuteActionResult> {
-  if (processedActionIds.has(action.id)) {
+  const supabase = await createSupabaseServerClient();
+
+  const claim = await claimActionRequest(action, supabase);
+  if (claim === "already_processed") {
     return fail("already_processed", "This action was already executed — refresh to see the current state.");
   }
-  processedActionIds.add(action.id);
+  const usingMemoryGuard = claim === "db_unavailable";
+  if (usingMemoryGuard) {
+    if (processedActionIds.has(action.id)) {
+      return fail("already_processed", "This action was already executed — refresh to see the current state.");
+    }
+    processedActionIds.add(action.id);
+  }
+
+  const release = async (status: "failed" | "stale" | "invalid", detail: string) => {
+    if (usingMemoryGuard) processedActionIds.delete(action.id);
+    else await finalizeActionRequest(supabase, action.id, status, detail);
+  };
 
   try {
-    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      processedActionIds.delete(action.id);
+      await release("failed", "Not authenticated.");
       return fail("auth", "You must be signed in to confirm this action.");
     }
 
@@ -71,11 +155,16 @@ export async function executeProposedAction(action: ProposedAction): Promise<Exe
         result = fail("invalid", `Unsupported action type "${action.type as string}".`);
     }
 
-    if (!result.ok) processedActionIds.delete(action.id);
+    if (!result.ok) {
+      const statusForFailure = result.reason === "stale" ? "stale" : result.reason === "invalid" || result.reason === "not_found" ? "invalid" : "failed";
+      await release(statusForFailure, result.message);
+    } else if (!usingMemoryGuard) {
+      await finalizeActionRequest(supabase, action.id, "executed", undefined, result.result);
+    }
     return result;
   } catch (err) {
-    processedActionIds.delete(action.id);
     const message = err instanceof Error ? err.message : "Something went wrong executing this action.";
+    await release("failed", message);
     return fail("server_error", message);
   }
 }

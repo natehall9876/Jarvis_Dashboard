@@ -991,6 +991,43 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["activity_log"]["Insert"]>;
         Relationships: [];
       };
+      /**
+       * NOT YET LIVE — added here ahead of the database so the app is fully
+       * typed the moment `supabase/action-requests-migration.sql` is run in
+       * Supabase Studio. Matches that migration exactly.
+       */
+      action_requests: {
+        Row: {
+          id: string;
+          created_at: string;
+          action_type: string;
+          target_type: string | null;
+          target_id: string | null;
+          payload: Json;
+          snapshot: Json | null;
+          status: string;
+          status_detail: string | null;
+          result: Json | null;
+          executed_at: string | null;
+          created_by: string | null;
+        };
+        Insert: {
+          id: string;
+          created_at?: string;
+          action_type: string;
+          target_type?: string | null;
+          target_id?: string | null;
+          payload: Json;
+          snapshot?: Json | null;
+          status?: string;
+          status_detail?: string | null;
+          result?: Json | null;
+          executed_at?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["action_requests"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
