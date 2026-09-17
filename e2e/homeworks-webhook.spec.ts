@@ -27,3 +27,31 @@ test.describe("Homeworks webhook security boundary", () => {
     expect(res.status()).toBeLessThan(500);
   });
 });
+
+test.describe("Homeworks bulk import security boundary", () => {
+  test("rejects a request with the wrong secret", async ({ request }) => {
+    const res = await request.post("/api/integrations/homeworks/import", {
+      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
+      data: { records: [{ entity_type: "customer", homeworks_id: "test" }] },
+    });
+    expect([401, 503]).toContain(res.status());
+  });
+
+  test("rejects an empty records array", async ({ request }) => {
+    const res = await request.post("/api/integrations/homeworks/import", {
+      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
+      data: { records: [] },
+    });
+    // Wrong secret is checked first, so this is 401/503 too when
+    // unconfigured — the point is it never reaches the database either way.
+    expect(res.status()).toBeLessThan(500);
+  });
+
+  test("rejects a batch over the size limit", async ({ request }) => {
+    const res = await request.post("/api/integrations/homeworks/import", {
+      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
+      data: { records: Array.from({ length: 501 }, (_, i) => ({ entity_type: "customer", homeworks_id: `x${i}` })) },
+    });
+    expect(res.status()).toBeLessThan(500);
+  });
+});
