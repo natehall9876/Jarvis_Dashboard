@@ -16,6 +16,23 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
+ * The ONE deliberate exception to "no service-role key" in this project.
+ * Read ONLY by src/lib/supabase/admin.ts, which is imported ONLY by
+ * server-to-server webhook routes (no logged-in user session exists for
+ * those to authenticate as, so RLS's `to authenticated` policy has nothing
+ * to scope against). Never imported by anything reachable from a page,
+ * Server Action, or anywhere a browser session drives the request —
+ * everything else in the app keeps using the RLS-scoped anon-key client.
+ * Kept in its own field, never merged into `supabaseEnv`, so it's never
+ * one careless refactor away from ending up in client-reachable code.
+ */
+export const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+export const homeworksWebhookEnv = {
+  secret: process.env.HOMEWORKS_WEBHOOK_SECRET ?? "",
+};
+
+/**
  * Integration environment flags. These only report whether credentials are
  * present, never whether the third-party service actually accepted them —
  * that distinction matters on the Settings / Integrations page, where

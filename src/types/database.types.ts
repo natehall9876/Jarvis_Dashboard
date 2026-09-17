@@ -68,6 +68,8 @@ export type Database = {
           preferred_contact_method: string | null;
           status: string | null;
           notes: string | null;
+          /** Requires supabase/homeworks-integration-migration.sql — see docs/CURRENT_STATE.md before assuming this column is live. */
+          homeworks_id: string | null;
         };
         Insert: {
           id?: string;
@@ -81,6 +83,7 @@ export type Database = {
           preferred_contact_method?: string | null;
           status?: string | null;
           notes?: string | null;
+          homeworks_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["clients"]["Insert"]>;
         Relationships: [];
@@ -102,6 +105,8 @@ export type Database = {
           access_notes: string | null;
           service_notes: string | null;
           active: boolean;
+          /** Requires supabase/homeworks-integration-migration.sql — see docs/CURRENT_STATE.md before assuming this column is live. */
+          homeworks_id: string | null;
         };
         Insert: {
           id?: string;
@@ -118,6 +123,7 @@ export type Database = {
           access_notes?: string | null;
           service_notes?: string | null;
           active?: boolean;
+          homeworks_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["properties"]["Insert"]>;
         Relationships: [
@@ -695,6 +701,8 @@ export type Database = {
           sent_at: string | null;
           paid_at: string | null;
           notes: string | null;
+          /** Requires supabase/homeworks-integration-migration.sql — see docs/CURRENT_STATE.md before assuming this column is live. */
+          homeworks_id: string | null;
         };
         Insert: {
           id?: string;
@@ -713,6 +721,7 @@ export type Database = {
           sent_at?: string | null;
           paid_at?: string | null;
           notes?: string | null;
+          homeworks_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [
