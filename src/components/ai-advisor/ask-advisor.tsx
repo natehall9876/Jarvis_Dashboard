@@ -235,9 +235,14 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         >
           {listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
-        <Button type="submit" disabled={loading || listening || !question.trim()} className="rounded-xl">
+        <Button
+          type="submit"
+          disabled={loading || listening || !question.trim()}
+          aria-label="Ask"
+          className="rounded-xl px-2.5 sm:px-3"
+        >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          Ask
+          <span className="hidden sm:inline">Ask</span>
         </Button>
       </form>
 
