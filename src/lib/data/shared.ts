@@ -31,7 +31,7 @@ export async function withDataResult<T>(
  * and silently swallows the real reason (missing relationship, RLS denial,
  * bad column name, etc.) behind a generic message.
  */
-function extractErrorMessage(err: unknown): string {
+export function extractErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "object" && err !== null && "message" in err && typeof err.message === "string") {
     return err.message;

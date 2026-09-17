@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { homeworksWebhookEnv } from "@/lib/env";
+import { extractErrorMessage } from "@/lib/data/shared";
 
 /**
  * Receives events from a Zapier "Webhooks by Zapier" action, triggered by
@@ -196,7 +197,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Unsupported entity_type "${(payload as { entity_type: string }).entity_type}".` }, { status: 400 });
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Sync failed.";
+    // Supabase/PostgREST errors are plain objects, not Error instances — a
+    // naive `instanceof Error` check here previously swallowed the real
+    // reason (e.g. a Postgres constraint error) behind a generic "Sync
+    // failed." message. console.error keeps the real error in Vercel's
+    // function logs even for cases where returning it in the response
+    // would be too revealing; here it's safe to return directly since the
+    // caller already proved it holds the shared secret.
+    const message = extractErrorMessage(err);
+    console.error("[homeworks-webhook]", message, err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
