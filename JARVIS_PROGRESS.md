@@ -1,8 +1,29 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-17, end of an unattended overnight session.
+**Last updated:** 2026-09-17 (second session, same day — owner active in a
+separate browser tab on an unrelated Squarespace project throughout).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest verified commit:** `926300f` — pushed, deployed, confirmed live (see "How this was verified" below).
+**Latest verified commit:** `c64ec00` — pushed, deployed, confirmed live
+(re-verified fresh this session, not just trusted from the prior write-up).
+
+## This session's changes (on top of everything below, which was reconciled and confirmed still accurate before touching anything)
+
+- Re-ran typecheck/lint/build/e2e (24/24) and re-probed production fresh —
+  everything the previous session claimed was independently reconfirmed,
+  not assumed true because it was written down.
+- Mobile fix: the AI Advisor's input row (sparkle icon + input + mic +
+  "Ask" button) was cramped on narrow viewports because the Ask button
+  carried an icon *and* a text label at every width. Now icon-only below
+  the `sm:` breakpoint, `aria-label="Ask"` keeps it accessible, full
+  icon+text at `sm:` and up. Verified via clean build; **not** visually
+  screenshotted — still no authenticated browser session available in
+  this environment to actually see the drawer rendered.
+- Added `docs/HOMEWORKS_VERIFICATION.md` — the exact, secret-free
+  procedure for confirming the Homeworks sync end-to-end (probe the auth
+  gate, run the real Zapier test, independently confirm the row in both
+  Supabase's Table Editor and Jarvis's Clients page, check idempotency).
+- Webhook secret rotation: **still not done** — still requires your
+  Vercel/Zapier dashboard access, which I don't have.
 
 > Read this file first in any new session before assuming what is or isn't
 > built — it reflects real, verified state, not intentions. If this file
@@ -113,7 +134,8 @@ tree (checked directly). What still needs to happen, by you:
 ## Tests
 
 - `npm run typecheck`, `npm run lint`, `npm run build`: clean as of
-  commit `926300f`.
+  commit `c64ec00` (re-verified fresh, not carried over from an earlier
+  write-up).
 - `npx playwright test`: **24/24 passing** (chromium + mobile-safari),
   covering unauthenticated routing, the write-action security boundary,
   and both new Homeworks endpoints' auth/validation gates.
