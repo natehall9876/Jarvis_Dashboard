@@ -112,7 +112,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
       // Next.js's Link component prefetches every visible sidebar link in the
       // background. Those prefetch requests used to hit this same proxy and
       // call getUser(), which can trigger a real Supabase refresh-token
