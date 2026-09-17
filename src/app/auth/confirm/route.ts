@@ -26,7 +26,12 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
-      redirect(next.startsWith("/") ? next : "/");
+      // A recovery link's whole purpose is to let the owner set a new
+      // password — land there directly rather than trusting `next` (which
+      // Supabase's default "Reset Password" email template doesn't set,
+      // so it would otherwise fall through to the dashboard with no way to
+      // actually change the password).
+      redirect(type === "recovery" ? "/reset-password" : next.startsWith("/") ? next : "/");
     }
   }
 
