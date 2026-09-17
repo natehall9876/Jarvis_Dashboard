@@ -208,15 +208,22 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
           e.preventDefault();
           submit(question);
         }}
-        className="flex items-center gap-2"
+        className={`group flex items-center gap-2 rounded-2xl border bg-[var(--color-surface-2)] p-1.5 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] transition-all duration-300 ${
+          loading || listening
+            ? "border-[var(--color-accent)] shadow-[0_0_24px_-6px_var(--color-accent-glow)]"
+            : "border-[var(--color-border-strong)] focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_20px_-8px_var(--color-accent-glow)]"
+        }`}
       >
+        <Sparkles
+          className={`ml-2 h-4 w-4 shrink-0 text-[var(--color-accent)] transition-opacity ${loading ? "animate-pulse" : "opacity-60 group-focus-within:opacity-100"}`}
+        />
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={listening ? "Listening..." : "Ask Jarvis about today's business..."}
           aria-label="Ask Jarvis a question"
           disabled={loading || listening}
-          className="flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+          className="flex-1 bg-transparent py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60"
         />
         <Button
           type="button"
@@ -224,11 +231,11 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
           aria-label={listening ? "Stop listening" : "Ask Jarvis by voice"}
           disabled={loading}
           onClick={listening ? stopListening : startListening}
-          className="px-2.5"
+          className="rounded-xl px-2.5"
         >
           {listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
-        <Button type="submit" disabled={loading || listening || !question.trim()}>
+        <Button type="submit" disabled={loading || listening || !question.trim()} className="rounded-xl">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           Ask
         </Button>
@@ -252,8 +259,12 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
       ) : null}
 
       {loading ? (
-        <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
-          <Loader2 className="h-3 w-3 animate-spin" />
+        <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
+          <span className="flex gap-0.5">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)] [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)] [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)]" />
+          </span>
           Jarvis is checking the numbers...
         </div>
       ) : null}
@@ -275,11 +286,22 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
       {history.length > 0 ? (
         <div className="space-y-3">
           {history.map((exchange) => (
-            <div key={exchange.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-              <p className="text-sm font-medium text-[var(--color-text-primary)]">{exchange.question}</p>
+            <div
+              key={exchange.id}
+              className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] shadow-sm"
+            >
+              <p className="border-b border-[var(--color-border)]/60 bg-[var(--color-surface-1)]/40 px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
+                {exchange.question}
+              </p>
+              <div className="p-3">
               {exchange.answer ? (
                 <>
-                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{exchange.answer}</p>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)]">
+                      <Sparkles className="h-3 w-3 text-[var(--color-accent)]" />
+                    </span>
+                    <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{exchange.answer}</p>
+                  </div>
                   {exchange.references.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {exchange.references.map((ref) => (
@@ -316,11 +338,12 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
                   ) : null}
                 </>
               ) : (
-                <p className="mt-1.5 flex items-start gap-1.5 text-sm text-[var(--color-warning)]">
+                <p className="flex items-start gap-1.5 text-sm text-[var(--color-warning)]">
                   <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   {exchange.error}
                 </p>
               )}
+              </div>
             </div>
           ))}
         </div>
