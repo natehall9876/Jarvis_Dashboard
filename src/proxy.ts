@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseEnv } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+const PUBLIC_PATHS = ["/login", "/auth", "/reset-password"];
 
 /**
  * Refreshes the Supabase auth session cookie on every request and gates
@@ -58,6 +58,23 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const isApiPath = pathname.startsWith("/api/");
+
+  // Supabase's default recovery email (no custom SMTP configured, so its
+  // template can't be edited to link into the app directly) redirects the
+  // browser to the bare Site URL after verifying the token. When the
+  // project uses the PKCE flow, that arrives as `?code=...` on whatever
+  // page the Site URL points at — a real query param, unlike the
+  // hash-fragment variant (handled client-side, see
+  // components/auth/recovery-redirect.tsx), so it's visible here. Hand it
+  // straight to /reset-password, which exchanges it for a session itself;
+  // must run before the signed-out check below since this request has no
+  // session yet and would otherwise be redirected to /login, losing the code.
+  const recoveryCode = request.nextUrl.searchParams.get("code");
+  if (recoveryCode && pathname !== "/reset-password") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/reset-password";
+    return NextResponse.redirect(url);
+  }
 
   // Supabase's refresh-token rotation means concurrent requests (e.g. two
   // prefetched links firing at once) can race: whichever loses gets
