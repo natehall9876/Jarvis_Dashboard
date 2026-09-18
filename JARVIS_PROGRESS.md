@@ -4,11 +4,10 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** see bottom of this section after this commit
-lands. Until the migrations below are run, Command Center's Today's
-Mission and Business Pulse cards will show a graceful error state on
-production (not a crash, not wrong data) — expected, goes away the moment
-you run them.
+**Latest pushed commit:** `e459f21` — pushed to `origin/main`. Until the
+migrations below are run, Command Center's Today's Mission and Business
+Pulse cards will show a graceful error state on production (not a crash,
+not wrong data) — expected, goes away the moment you run them.
 
 ## 🎉 HOMEWORKS: a real, live, verified API connection now exists
 
@@ -57,7 +56,16 @@ connection has nowhere to store its tokens.
 2. Paste and run `supabase/demo-data-classification-migration.sql`.
 3. Paste and run `supabase/photo-upload-migration.sql`.
 4. Paste and run `supabase/homeworks-oauth-migration.sql` (new this session).
-5. Refresh Jarvis — Today's Mission and Business Pulse should load normally,
+5. **Also add one Vercel env var** (Vercel dashboard → this project →
+   Settings → Environment Variables → add for Production):
+   `HOMEWORKS_OAUTH_CLIENT_ID` = `80490095-ab1b-4acb-8c41-92450448511a`.
+   This is a public OAuth client identifier, not a secret (PKCE secures the
+   flow, no client secret exists) — safe to see in this file. Without it,
+   Settings' "Connect Homeworks" button will show "not configured" on
+   production even though it works locally (where it's already in
+   `.env.local`). Redeploy after adding it (Vercel usually does this
+   automatically on env var changes, but check).
+6. Refresh Jarvis — Today's Mission and Business Pulse should load normally,
    the Photos section on any Job/Property page should accept an upload, and
    Settings' new "Homeworks (real API)" card is ready for you to click
    Connect.
