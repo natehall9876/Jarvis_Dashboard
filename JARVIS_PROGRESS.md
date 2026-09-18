@@ -1,29 +1,49 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-17 (second session, same day — owner active in a
-separate browser tab on an unrelated Squarespace project throughout).
+**Last updated:** 2026-09-17, third session (evening sprint, owner active
+throughout in a separate tab on the unrelated Squarespace site).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest verified commit:** `c64ec00` — pushed, deployed, confirmed live
-(re-verified fresh this session, not just trusted from the prior write-up).
+**Latest verified commit:** `7df2049` — pushed and confirmed live:
+probed the new dry-run endpoint on production directly and it reached the
+new code path (401 on a wrong secret, not 404), proving the deployment
+succeeded without relying on Vercel dashboard access.
 
-## This session's changes (on top of everything below, which was reconciled and confirmed still accurate before touching anything)
+## Facts reported by the owner this session (not independently observed by me)
 
-- Re-ran typecheck/lint/build/e2e (24/24) and re-probed production fresh —
-  everything the previous session claimed was independently reconfirmed,
-  not assumed true because it was written down.
-- Mobile fix: the AI Advisor's input row (sparkle icon + input + mic +
-  "Ask" button) was cramped on narrow viewports because the Ask button
-  carried an icon *and* a text label at every width. Now icon-only below
-  the `sm:` breakpoint, `aria-label="Ask"` keeps it accessible, full
-  icon+text at `sm:` and up. Verified via clean build; **not** visually
-  screenshotted — still no authenticated browser session available in
-  this environment to actually see the drawer rendered.
-- Added `docs/HOMEWORKS_VERIFICATION.md` — the exact, secret-free
-  procedure for confirming the Homeworks sync end-to-end (probe the auth
-  gate, run the real Zapier test, independently confirm the row in both
-  Supabase's Table Editor and Jarvis's Clients page, check idempotency).
-- Webhook secret rotation: **still not done** — still requires your
-  Vercel/Zapier dashboard access, which I don't have.
+- Homeworks webhook secret was rotated in both Vercel and Zapier, and the
+  app was redeployed.
+- A Zapier test-step run returned `ok:true` with a customer database id.
+- A client named "Jarvis Integration Test" is visible on the live Clients
+  page.
+- **This confirms one manual test succeeded — it does not yet confirm the
+  live "New Customer" Zap has fired automatically on its own**, and I have
+  not queried Supabase directly to confirm the row (no database access).
+
+## Third-session changes (on top of everything below, reconciled and reconfirmed accurate before touching anything)
+
+- Re-ran typecheck/lint/build/e2e fresh at session start — all clean,
+  matched what the prior write-up claimed.
+- **Dry-run mode** added to the bulk import endpoint
+  (`POST /api/integrations/homeworks/import` with `dry_run: true`): checks
+  every record against the database and against customers appearing
+  earlier in the same batch, reports would_create/would_update/would_fail
+  counts, writes nothing. Built specifically so a real Homeworks export
+  can be validated before a single row changes (per explicit instruction:
+  "Never import a partially mapped file blindly").
+- **Real bug fixed**: the Settings page's Homeworks card checked
+  `HOMEWORKS_API_KEY` — a variable nothing in the app actually reads. The
+  real integration uses `HOMEWORKS_WEBHOOK_SECRET` +
+  `SUPABASE_SERVICE_ROLE_KEY`. Even with the webhook fully live, this page
+  would have kept showing "Not Connected." Replaced with a live-verified
+  check that counts actually-synced clients (`homeworks_id is not null`)
+  — the Settings page will now show the true synced-customer count.
+- Audited the codebase for fabricated/placeholder data patterns outside
+  the explicitly-marked mock folder — found none; the app's existing
+  "return null, not fake data" discipline held up under a fresh check.
+- Webhook secret rotation: reported done by the owner (see above) — I
+  have not independently re-verified the *new* secret is what's active
+  (verifying that would require probing with the actual value, which
+  correctly never appears here).
 
 > Read this file first in any new session before assuming what is or isn't
 > built — it reflects real, verified state, not intentions. If this file
@@ -115,6 +135,29 @@ tree (checked directly). What still needs to happen, by you:
    confirm the *old* secret is rejected by probing with it (I'd need you
    to tell me what it *was*, or just trust that changing the env var
    value alone invalidates it — Vercel doesn't keep old values active).
+
+## Task status (as of this checkpoint)
+
+**Completed & verified:**
+- Homeworks dry-run import mode (auth gate + validation confirmed locally
+  and on production).
+- Settings page Homeworks status now checks the real credentials and
+  verifies with a live query.
+- typecheck/lint/build/e2e (26/26) clean; production deployment confirmed
+  live by direct probe.
+
+**Completed, unverified (needs your eyes or a real export):**
+- Whether the rotated webhook secret is truly the *new* one (structurally
+  confirmed *a* secret is enforced; can't confirm which).
+- Whether an automatic (non-manual) Zap run has ever fired.
+
+**Blocked on you:**
+- Identifying which `clients` rows are test/placeholder vs. real (I have
+  no database access — see the request at the top of this session).
+- A real Homeworks customer export, to run through the new dry-run mode.
+- QuickBooks / Google Calendar OAuth app registration (your accounts).
+
+**Not started (see below for full honesty on scope):**
 
 ## Not started (honest, not deferred-and-implied-done)
 
