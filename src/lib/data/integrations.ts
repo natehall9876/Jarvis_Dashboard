@@ -111,8 +111,9 @@ async function getWeatherStatus(): Promise<IntegrationCard> {
  * rather than just reporting that secrets exist.
  */
 async function getHomeworksStatus(): Promise<IntegrationCard> {
-  const name = "Homeworks";
-  const description = "CRM — customers, properties, invoices, synced via its Zapier app.";
+  const name = "Homeworks (Zapier sync)";
+  const description =
+    "CRM push sync via Homeworks' own Zapier app — new customers/properties/invoices arrive here as they're created in Homeworks. Separate from the direct API card above, and separate from the generic \"Zapier\" card below (that one is for unrelated future automations, not this).";
 
   if (!homeworksWebhookEnv.secret || !supabaseServiceRoleKey) {
     const missing = [!homeworksWebhookEnv.secret && "HOMEWORKS_WEBHOOK_SECRET", !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY"]
@@ -134,6 +135,31 @@ async function getHomeworksStatus(): Promise<IntegrationCard> {
   } catch (err) {
     return { key: "homeworks", name, description, status: "needs_setup", statusDetail: err instanceof Error ? err.message : "Verification query failed." };
   }
+}
+
+/**
+ * Unlike QuickBooks/Google Calendar (credential-only cards below — zero
+ * integration code exists for those yet, so "needs_setup" is accurate),
+ * the AI Advisor is a fully built, extensively real-world-verified feature
+ * — the "Needs Setup" tier previously applied here directly contradicted
+ * its own description text ("API key found — the AI Advisor is live"),
+ * a real misleading-label bug (flagged directly by the owner). Deliberately
+ * NOT making a live paid Anthropic call on every Settings page load the
+ * way Weather/Supabase do (those are free); "connected" here means
+ * "configured, and this integration has a real, tested implementation" —
+ * the AI Advisor itself is the actual live-verification surface.
+ */
+function getAIProviderStatus(): IntegrationCard {
+  const configured = isIntegrationConfigured("aiProvider");
+  return {
+    key: "aiProvider",
+    name: "AI Provider",
+    description: "Powers the AI Advisor's answers.",
+    status: configured ? "connected" : "not_connected",
+    statusDetail: configured
+      ? "API key configured — the AI Advisor is live. Ask it a real question to confirm right now; this badge reflects configuration, not a fresh test call."
+      : "No credentials found in the environment.",
+  };
 }
 
 function credentialOnlyCard(
@@ -168,8 +194,8 @@ export async function getIntegrationCards(): Promise<IntegrationCard[]> {
     ),
     credentialOnlyCard(
       "zapier",
-      "Zapier",
-      "Webhook automation for connecting Jarvis to other tools.",
+      "Zapier (general automation)",
+      "Outbound automation FROM Jarvis to other tools — unrelated to the Homeworks sync above, which already works and doesn't need this.",
       "Webhook URL found — no automations have been wired up yet.",
     ),
     credentialOnlyCard(
@@ -185,11 +211,6 @@ export async function getIntegrationCards(): Promise<IntegrationCard[]> {
       "Version control for this codebase.",
       "Token found in the environment.",
     ),
-    credentialOnlyCard(
-      "aiProvider",
-      "AI Provider",
-      "Powers the AI Advisor's answers.",
-      "API key found — the AI Advisor is live.",
-    ),
+    getAIProviderStatus(),
   ];
 }
