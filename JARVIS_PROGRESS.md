@@ -4,10 +4,68 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `e459f21` — pushed to `origin/main`. Until the
-migrations below are run, Command Center's Today's Mission and Business
-Pulse cards will show a graceful error state on production (not a crash,
-not wrong data) — expected, goes away the moment you run them.
+**Latest pushed commit:** see bottom of this section after this commit
+lands. Until the migrations below are run, Command Center's Today's
+Mission and Business Pulse cards will show a graceful error state on
+production (not a crash, not wrong data) — expected, goes away the moment
+you run them.
+
+## OAuth authorization completed by the owner — paginated sync preview built
+
+The owner completed the Homeworks OAuth login (previous sessions only got
+as far as a verified-but-unauthorized connection). Two Vercel env-var
+data-entry issues along the way (the value field ending up containing
+`HOMEWORKS_OAUTH_CLIENT_ID=<uuid>` once, then `UUID.<uuid>` once) were
+diagnosed by re-verifying the bare client_id directly against the live
+Homeworks authorize endpoint each time — confirming both were config
+issues, not code bugs, before saying so.
+
+**Structural limitation, stated plainly**: this environment cannot execute
+an authenticated Homeworks query using the owner's now-stored production
+token. `homeworks_oauth_connection` is RLS-protected to `authenticated`
+only, this environment has never had a Supabase service-role key locally
+(confirmed directly, not assumed — same as every prior session), and this
+agent does not log into the app itself. So "how many real customers did
+you retrieve" could not be answered directly by me this session — only the
+owner, from their own authenticated browser, can trigger that call. This
+was said clearly instead of attempting to fake or infer a number.
+
+**What was built instead**, so the owner gets a real answer the moment
+they click a button:
+- `getAllCustomers()` (`lib/integrations/homeworks-api.ts`) — real
+  pagination using the live schema's actual `customers(take, skip)`
+  signature (verified against the schema file directly, not assumed from
+  memory of an earlier fetch), looping until a page returns short, capped
+  at 20 pages (4,000 customers) as a runaway guard.
+- `previewHomeworksSync()` (`lib/actions/homeworks-sync-preview.ts`) —
+  fetches every accessible Homeworks customer and compares against
+  existing Supabase `clients` three ways: exact `homeworks_id` match
+  (would update), phone/email match to a client with no `homeworks_id`
+  (possible duplicate — flagged, not silently merged), no match (would
+  create). Entirely read-only — no import/write path exists yet, matching
+  the explicit instruction to preview before any bulk write, and matching
+  "start with read-only."
+- Settings' Homeworks card gained a **Preview full sync (all customers,
+  read-only)** button showing real counts (would-create / would-update /
+  possible-duplicates) and every record with its proposed action.
+- Verified the exact GraphQL query shape (`Customer.properties(...)`
+  called with no arguments, since all its params are optional) against
+  the raw schema file line by line — not just individually-confirmed
+  field names, the actual nested call shape used in the real query.
+
+**Not built yet**: the actual bulk-write import (explicitly deferred —
+requires the owner to review real preview numbers first, per their own
+instruction). Jobs/events, estimates, and invoices sync — schema
+signatures for all three are already verified and match the same
+`skip`/`take` pagination pattern, so extending pagination to them is
+mechanical once customer sync is confirmed accurate by a real preview run.
+
+**Exact next action for the owner**: open Settings → Homeworks (real API)
+card → click **Preview full sync** → report back the real numbers shown
+(total customers, would-create/would-update/duplicate counts). That's the
+number I could not get myself this session, and it's what determines
+whether the matching logic above needs adjustment before an import button
+gets built.
 
 ## 🎉 HOMEWORKS: a real, live, verified API connection now exists
 

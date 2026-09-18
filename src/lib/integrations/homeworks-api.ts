@@ -54,9 +54,9 @@ export type HomeworksCustomerSample = {
   properties: { id: string; name: string; address: { street1: string; city: string | null; state: string | null; zip: string } | null }[];
 };
 
-const SAMPLE_CUSTOMERS_QUERY = `
-  query SampleCustomers($take: SafeInt) {
-    customers(take: $take, where: { isDeleted: false }) {
+const CUSTOMERS_QUERY = `
+  query FetchCustomers($take: SafeInt, $skip: SafeInt) {
+    customers(take: $take, skip: $skip, where: { isDeleted: false }) {
       id
       fullName
       firstName
@@ -77,5 +77,40 @@ const SAMPLE_CUSTOMERS_QUERY = `
 
 /** Read-only. Never writes anything. Used to verify the connection actually works and to preview real data before any sync is built. */
 export async function getSampleCustomers(take = 5): Promise<GraphQLResult<{ customers: HomeworksCustomerSample[] }>> {
-  return queryHomeworks<{ customers: HomeworksCustomerSample[] }>(SAMPLE_CUSTOMERS_QUERY, { take });
+  return queryHomeworks<{ customers: HomeworksCustomerSample[] }>(CUSTOMERS_QUERY, { take });
+}
+
+/**
+ * Paginated fetch of every accessible customer — the `customers(skip, take)`
+ * signature is exactly what the live schema declares (verified 2026-09-18,
+ * not assumed), so pagination here means looping skip/take until a page
+ * comes back shorter than the page size, the standard offset-pagination
+ * pattern for a schema with no cursor/connection type. Read-only; this
+ * never writes to Homeworks or Supabase — it's the data-gathering step a
+ * preview or import is built on top of.
+ *
+ * A page size of 200 keeps each request well under any reasonable payload/
+ * timeout limit while still finishing a several-hundred-customer account in
+ * a handful of round trips. Hard-capped at 20 pages (4,000 customers) as a
+ * runaway-loop guard, not an expected ceiling for a lawn care business.
+ */
+export async function getAllCustomers(): Promise<GraphQLResult<{ customers: HomeworksCustomerSample[]; pageCount: number; hitCap: boolean }>> {
+  const pageSize = 200;
+  const maxPages = 20;
+  const all: HomeworksCustomerSample[] = [];
+  let page = 0;
+
+  while (page < maxPages) {
+    const result = await queryHomeworks<{ customers: HomeworksCustomerSample[] }>(CUSTOMERS_QUERY, {
+      take: pageSize,
+      skip: page * pageSize,
+    });
+    if (!result.ok) return result;
+    all.push(...result.data.customers);
+    page++;
+    if (result.data.customers.length < pageSize) {
+      return { ok: true, data: { customers: all, pageCount: page, hitCap: false } };
+    }
+  }
+  return { ok: true, data: { customers: all, pageCount: page, hitCap: true } };
 }
