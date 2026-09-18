@@ -1,3 +1,4 @@
+import { TrendingUp } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -13,7 +14,15 @@ export function BusinessPulse({
 }) {
   return (
     <Card>
-      <CardHeader title="Business Pulse" description="Trailing performance, updated in real time from Supabase" />
+      <CardHeader
+        title={
+          <span className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-[var(--color-accent)]" />
+            Business Pulse
+          </span>
+        }
+        description="Trailing performance, updated in real time from Supabase"
+      />
       <CardBody>
         <DataStateGate error={error} isEmpty={false}>
           {data ? (

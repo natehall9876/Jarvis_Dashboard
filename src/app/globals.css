@@ -13,10 +13,14 @@
   --color-text-secondary: #99a2b5;
   --color-text-muted: #5f6779;
 
-  --color-accent: #2dd66f;
-  --color-accent-strong: #1fae59;
-  --color-accent-soft: #123321;
-  --color-accent-glow: rgba(45, 214, 111, 0.16);
+  /* WeedEater brand green — the app's one distinctive color, used
+     everywhere an accent is needed (active nav, primary actions, live
+     data, positive figures) so the whole app reads as one identity
+     rather than a generic dark-mode dashboard. */
+  --color-accent: #72f238;
+  --color-accent-strong: #5ed62a;
+  --color-accent-soft: #142b09;
+  --color-accent-glow: rgba(114, 242, 56, 0.22);
 
   --color-info: #4f8fff;
   --color-info-soft: #101e35;
@@ -126,5 +130,9 @@ body {
   }
 }
 .animate-fade-in {
-  animation: fade-in 0.15s ease-out;
+  /* backwards: holds the 0% keyframe (opacity: 0) during animation-delay,
+     so a staggered element stays invisible until its turn instead of
+     flashing at full opacity and then snapping back to 0 when its delayed
+     animation actually starts. */
+  animation: fade-in 0.2s ease-out backwards;
 }

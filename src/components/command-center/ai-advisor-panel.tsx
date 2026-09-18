@@ -5,11 +5,11 @@ import { AskAdvisor } from "@/components/ai-advisor/ask-advisor";
 
 export function AIAdvisorPanel() {
   return (
-    <Card className="border-[var(--color-violet)]/25">
+    <Card className="border-[var(--color-accent)]/25">
       <CardHeader
         title={
           <span className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[var(--color-violet)]" />
+            <Sparkles className="h-4 w-4 text-[var(--color-accent)]" />
             AI Owner Advisor
           </span>
         }

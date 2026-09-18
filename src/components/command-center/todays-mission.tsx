@@ -13,6 +13,7 @@ import {
   FileClock,
   ReceiptText,
   Route as RouteIcon,
+  Target,
   Users,
   Wrench,
 } from "lucide-react";
@@ -33,7 +34,12 @@ export function TodaysMission({
   return (
     <Card>
       <CardHeader
-        title="Today's Mission"
+        title={
+          <span className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-[var(--color-accent)]" />
+            Today&apos;s Mission
+          </span>
+        }
         description={data ? formatWeekdayDateOnly(data.date) : undefined}
       />
       <CardBody>

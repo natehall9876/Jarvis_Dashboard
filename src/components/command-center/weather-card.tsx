@@ -1,14 +1,21 @@
-import { CloudRain, CloudOff, TriangleAlert } from "lucide-react";
+import { CloudRain, CloudOff, CloudSun, TriangleAlert } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { integrationEnv, isIntegrationConfigured } from "@/lib/env";
 import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
+const weatherTitle = (
+  <span className="flex items-center gap-2">
+    <CloudSun className="h-4 w-4 text-[var(--color-accent)]" />
+    Weather
+  </span>
+);
+
 export async function WeatherCard() {
   if (!isIntegrationConfigured("weather")) {
     return (
       <Card>
-        <CardHeader title="Weather" description="Route-planning warnings for today" />
+        <CardHeader title={weatherTitle} description="Route-planning warnings for today" />
         <CardBody className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
           <CloudOff className="h-4 w-4 shrink-0" />
           Not connected — add WEATHER_LOCATION_LAT and WEATHER_LOCATION_LON to enable (free, no API key needed).
@@ -23,7 +30,7 @@ export async function WeatherCard() {
 
   return (
     <Card>
-      <CardHeader title="Weather" description={snapshot?.location ?? "Route-planning warnings for today"} />
+      <CardHeader title={weatherTitle} description={snapshot?.location ?? "Route-planning warnings for today"} />
       <CardBody>
         {!snapshot ? (
           <p className="flex items-center gap-2 text-sm text-[var(--color-warning)]">

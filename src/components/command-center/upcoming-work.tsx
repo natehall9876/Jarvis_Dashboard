@@ -20,7 +20,15 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-US", { weekday: "short", 
 export function UpcomingWork({ data, error }: { data: WorkloadSummary | null; error: string | null }) {
   return (
     <Card>
-      <CardHeader title="Upcoming Work" description="Next 7 days" />
+      <CardHeader
+        title={
+          <span className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-[var(--color-accent)]" />
+            Upcoming Work
+          </span>
+        }
+        description="Next 7 days"
+      />
       <CardBody>
         <DataStateGate
           error={error}

@@ -36,17 +36,23 @@ export default async function CommandCenterPage() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid animate-fade-in gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <TodaysMission data={mission.data} error={mission.error} />
         </div>
         <WeatherCard />
       </div>
 
-      <UpcomingWork data={upcoming.data} error={upcoming.error} />
+      <div className="animate-fade-in" style={{ animationDelay: "40ms" }}>
+        <UpcomingWork data={upcoming.data} error={upcoming.error} />
+      </div>
 
-      <BusinessPulse data={pulse.data} error={pulse.error} />
-      <AIAdvisorPanel />
+      <div className="animate-fade-in" style={{ animationDelay: "80ms" }}>
+        <BusinessPulse data={pulse.data} error={pulse.error} />
+      </div>
+      <div className="animate-fade-in" style={{ animationDelay: "120ms" }}>
+        <AIAdvisorPanel />
+      </div>
     </div>
   );
 }

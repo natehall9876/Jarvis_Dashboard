@@ -27,11 +27,14 @@ export function JarvisDrawer() {
 
   return (
     <>
+      {/* Sits above the mobile bottom tab bar (which already has its own
+          quick link to the full AI Advisor page) so the two never overlap;
+          desktop has no tab bar, so it returns to the corner there. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Ask Jarvis"
-        className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent)] text-[#062012] shadow-[0_4px_20px_-4px_var(--color-accent-glow),0_2px_8px_rgba(0,0,0,0.4)] transition-transform hover:scale-105 active:scale-95"
+        className="fixed right-5 bottom-24 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent)] text-[#062012] shadow-[0_4px_20px_-4px_var(--color-accent-glow),0_2px_8px_rgba(0,0,0,0.4)] transition-transform hover:scale-105 active:scale-95 lg:bottom-5"
       >
         <Sparkles className="h-5 w-5" />
       </button>
@@ -41,7 +44,7 @@ export function JarvisDrawer() {
           <div className="flex h-full w-full max-w-md flex-col border-l border-[var(--color-border-strong)] bg-[var(--color-surface-1)] shadow-[var(--shadow-raised)]">
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-[var(--color-violet)]" />
+                <Sparkles className="h-4 w-4 text-[var(--color-accent)]" />
                 <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Ask Jarvis</h2>
               </div>
               <button

@@ -17,11 +17,18 @@ const DEFAULT_MODEL = "claude-sonnet-5";
  * In-flight accumulation for one streamed content block — text is built up
  * from `text_delta` chunks directly; tool_use input arrives as fragments of
  * a JSON string (`input_json_delta`) that only parses once complete, so it's
- * buffered as a string and parsed at `content_block_stop`.
+ * buffered as a string and parsed at `content_block_stop`. Extended-thinking
+ * blocks (this model can return these even without `thinking` explicitly
+ * requested) need the same treatment as text — `thinking_delta` chunks build
+ * the thinking text, and a trailing `signature_delta` carries a verification
+ * signature that must round-trip byte-for-byte when the block is echoed back
+ * as part of the next request, or Anthropic rejects the whole turn with
+ * "each thinking block must contain thinking".
  */
 type StreamBlockState =
   | { type: "text"; text: string }
   | { type: "tool_use"; id: string; name: string; jsonBuffer: string }
+  | { type: "thinking"; thinking: string; signature: string }
   | { type: "opaque"; block: Record<string, unknown> };
 
 /**
@@ -138,6 +145,8 @@ export class AnthropicProvider implements AIProvider {
               blocks.set(index, { type: "text", text: "" });
             } else if (block.type === "tool_use") {
               blocks.set(index, { type: "tool_use", id: block.id as string, name: block.name as string, jsonBuffer: "" });
+            } else if (block.type === "thinking") {
+              blocks.set(index, { type: "thinking", thinking: "", signature: "" });
             } else {
               blocks.set(index, { type: "opaque", block });
             }
@@ -152,6 +161,10 @@ export class AnthropicProvider implements AIProvider {
               yield { type: "text_delta", text: chunk };
             } else if (delta.type === "input_json_delta" && state.type === "tool_use") {
               state.jsonBuffer += delta.partial_json as string;
+            } else if (delta.type === "thinking_delta" && state.type === "thinking") {
+              state.thinking += delta.thinking as string;
+            } else if (delta.type === "signature_delta" && state.type === "thinking") {
+              state.signature += delta.signature as string;
             }
           } else if (payload.type === "message_delta") {
             const delta = payload.delta as Record<string, unknown>;
@@ -197,6 +210,8 @@ export class AnthropicProvider implements AIProvider {
         }
         rawContent.push({ type: "tool_use", id: state.id, name: state.name, input });
         toolUses.push({ type: "tool_use", id: state.id, name: state.name, input });
+      } else if (state.type === "thinking") {
+        rawContent.push({ type: "thinking", thinking: state.thinking, signature: state.signature });
       } else {
         rawContent.push(state.block as AIContentBlock);
       }
