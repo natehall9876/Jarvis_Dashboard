@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured, isIntegrationConfigured, integrationEnv } from "@/lib/env";
+import { isSupabaseConfigured, isIntegrationConfigured, integrationEnv, homeworksWebhookEnv, supabaseServiceRoleKey } from "@/lib/env";
 import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
 type IntegrationKey = keyof typeof integrationEnv;
@@ -98,6 +98,44 @@ async function getWeatherStatus(): Promise<IntegrationCard> {
   };
 }
 
+/**
+ * The real Homeworks integration is the Zapier webhook
+ * (src/app/api/integrations/homeworks/webhook/route.ts), authenticated by
+ * HOMEWORKS_WEBHOOK_SECRET + SUPABASE_SERVICE_ROLE_KEY — NOT the unused
+ * HOMEWORKS_API_KEY env var (there is no direct Homeworks API; that
+ * variable predates the actual integration and nothing reads it anymore).
+ * Checking the old variable here would report "Not Connected" even with a
+ * fully live, working integration — this checks the real credentials the
+ * webhook actually needs, and verifies with a live query (same rigor as
+ * Supabase/Weather above) whether at least one record has actually synced,
+ * rather than just reporting that secrets exist.
+ */
+async function getHomeworksStatus(): Promise<IntegrationCard> {
+  const name = "Homeworks";
+  const description = "CRM — customers, properties, invoices, synced via its Zapier app.";
+
+  if (!homeworksWebhookEnv.secret || !supabaseServiceRoleKey) {
+    const missing = [!homeworksWebhookEnv.secret && "HOMEWORKS_WEBHOOK_SECRET", !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY"]
+      .filter(Boolean)
+      .join(" and ");
+    return { key: "homeworks", name, description, status: "not_connected", statusDetail: `Missing ${missing} — see docs/HOMEWORKS_VERIFICATION.md.` };
+  }
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { count, error } = await supabase.from("clients").select("id", { count: "exact", head: true }).not("homeworks_id", "is", null);
+    if (error) {
+      return { key: "homeworks", name, description, status: "needs_setup", statusDetail: `Credentials found but the verification query failed: ${error.message}` };
+    }
+    if (!count || count === 0) {
+      return { key: "homeworks", name, description, status: "needs_setup", statusDetail: "Credentials configured, but no customer has synced yet — see docs/HOMEWORKS_VERIFICATION.md." };
+    }
+    return { key: "homeworks", name, description, status: "connected", statusDetail: `Verified — ${count} customer${count === 1 ? "" : "s"} synced from Homeworks.` };
+  } catch (err) {
+    return { key: "homeworks", name, description, status: "needs_setup", statusDetail: err instanceof Error ? err.message : "Verification query failed." };
+  }
+}
+
 function credentialOnlyCard(
   key: IntegrationKey,
   name: string,
@@ -117,16 +155,11 @@ function credentialOnlyCard(
 }
 
 export async function getIntegrationCards(): Promise<IntegrationCard[]> {
-  const [supabase, weather] = await Promise.all([getSupabaseStatus(), getWeatherStatus()]);
+  const [supabase, weather, homeworks] = await Promise.all([getSupabaseStatus(), getWeatherStatus(), getHomeworksStatus()]);
 
   return [
     supabase,
-    credentialOnlyCard(
-      "homeworks",
-      "Homeworks",
-      "Field operations & customer communication system of record.",
-      "API key found — the sync layer to map Homeworks records isn't built yet.",
-    ),
+    homeworks,
     credentialOnlyCard(
       "quickbooks",
       "QuickBooks",
