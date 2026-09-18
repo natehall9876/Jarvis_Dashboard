@@ -3,10 +3,9 @@
 **Last updated:** 2026-09-17, third session (evening sprint, owner active
 throughout in a separate tab on the unrelated Squarespace site).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest verified commit:** `7df2049` — pushed and confirmed live:
-probed the new dry-run endpoint on production directly and it reached the
-new code path (401 on a wrong secret, not 404), proving the deployment
-succeeded without relying on Vercel dashboard access.
+**Latest verified commit:** `1024465` — pushed and confirmed live
+(re-probed production directly after each push this session, not assumed
+from `git push` succeeding).
 
 ## Facts reported by the owner this session (not independently observed by me)
 
@@ -15,9 +14,50 @@ succeeded without relying on Vercel dashboard access.
 - A Zapier test-step run returned `ok:true` with a customer database id.
 - A client named "Jarvis Integration Test" is visible on the live Clients
   page.
-- **This confirms one manual test succeeded — it does not yet confirm the
-  live "New Customer" Zap has fired automatically on its own**, and I have
-  not queried Supabase directly to confirm the row (no database access).
+- The owner personally tested the new Homeworks Import Review UI in their
+  browser: pasted a sample record, clicked Preview, saw "1 would create /
+  0 would update" with the record shown correctly in the preview table —
+  **this is a genuine independent confirmation the UI renders and works
+  correctly**, the first live-browser verification of anything built this
+  week that I couldn't do myself. Did not click Confirm (correctly didn't
+  want a test record written to production).
+- **Still not independently confirmed by me:** whether the live "New
+  Customer" Zap has ever fired automatically (only a manual test-step run
+  is confirmed), and whether the *rotated* secret specifically (vs. some
+  secret) is what's active — I can prove *a* secret is enforced, never
+  which one.
+
+## Fourth-session changes
+
+- **Investigated and explained** (not a bug): local dev vs. production
+  Homeworks connection-status discrepancy. Local `.env.local` has no real
+  `SUPABASE_SERVICE_ROLE_KEY` (never has, by design — I've never held that
+  credential), so the Settings page correctly shows "Not Connected"
+  locally regardless of the webhook secret, while production (both real
+  secrets present) correctly shows "Connected" once a customer has
+  synced. Confirmed this is the *only* place in the codebase that reports
+  Homeworks status — nothing else to reconcile.
+- **Owner-facing Homeworks Import Review UI** — Settings → "Open Import
+  Tool": paste a JSON export → Preview (exact create/update/fail counts +
+  per-record table, writes nothing) → Confirm only after review.
+  Authenticated by the owner's own login, not the Zapier secret.
+  **Owner-verified working in the browser** (see above).
+- **Command Center: added "Upcoming Work"** — the Command Center
+  previously only showed *today*; there was no forward visibility at all,
+  which matters heading into fall cleanup season. Reuses
+  `getWorkloadSummary` (already built/tested for the AI Advisor's
+  workload tool) to show the next 7 days with job counts, crew, hours,
+  and revenue, each linking to that day on Schedule.
+- **AI Advisor**: added explicit guidance to flag likely test/placeholder
+  records (like "Jarvis Integration Test," which now genuinely exists in
+  production) instead of silently folding them into real revenue/client
+  totals. Prompt-only change — can't be tested by automated tests (no
+  real AI key in this environment); worth spot-checking with a real
+  revenue/client-count question.
+
+All of the above: typecheck/lint/build clean, e2e suite passing (30/30
+by end of session), each commit's production deployment independently
+re-verified by direct HTTPS probe before moving to the next task.
 
 ## Third-session changes (on top of everything below, reconciled and reconfirmed accurate before touching anything)
 
