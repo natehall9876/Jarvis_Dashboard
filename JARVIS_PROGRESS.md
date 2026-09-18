@@ -4,11 +4,15 @@
 sleep after ~7 hours of same-night troubleshooting; worked independently
 from a written directive, no back-and-forth).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** see bottom of this section after this commit
-lands. Until the migrations below are run, Command Center's Today's
-Mission and Business Pulse cards will show a graceful error state on
-production (not a crash, not wrong data) — expected, goes away the moment
-you run them.
+**Latest pushed commit:** `de2ab8e` — pushed to `origin/main`. Production
+confirmed reachable (HTTP 307 on `/`, 200 on `/login`) after this push —
+I cannot cryptographically confirm this exact commit is what's serving
+traffic (the app exposes no build SHA), only that a healthy deployment
+exists; Vercel has auto-deployed every push in this project reliably so
+far. Until the migrations below are run, Command Center's Today's Mission
+and Business Pulse cards will show a graceful error state on production
+(not a crash, not wrong data) — expected, goes away the moment you run
+them.
 
 ## Overnight session — root-caused the missing Preview button, built the confirmation-gated import
 
