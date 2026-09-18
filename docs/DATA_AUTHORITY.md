@@ -5,12 +5,35 @@ direction as real integrations get built.
 
 ## Today
 
-**Supabase is the only system of record.** Every table in
-`src/types/database.types.ts` is written to exclusively by this app (human
-forms in `src/lib/actions/*`, or Jarvis-confirmed actions in
-`src/lib/ai/actions/execute.ts`). Nothing syncs in or out yet —
-`integration_mappings` exists in the schema for exactly this future need but
-is not used by any code path today.
+**Supabase is the system of record.** Every table in
+`src/types/database.types.ts` is written to by this app: human forms in
+`src/lib/actions/*`, Jarvis-confirmed actions in
+`src/lib/ai/actions/execute.ts`, or the Homeworks sync path below.
+`integration_mappings` still exists for a future need but isn't used —
+Homeworks sync instead uses a direct `homeworks_id` column on
+`clients`/`properties`/`invoices`, since it's the one integration actually
+built so far and a generic mapping table wasn't worth the indirection yet.
+
+**Homeworks** is a *partial* exception: `clients`/`properties`/`invoices`
+can be upserted from Homeworks via a Zapier-triggered webhook
+(`src/app/api/integrations/homeworks/webhook`) or an owner-run bulk import
+(`admin-import`), matched by `homeworks_id`. This is one-directional
+(Homeworks → Supabase) and additive-only — nothing in this app writes back
+to Homeworks. Real Homeworks API/OAuth connectivity (beyond the Zapier
+webhook path) is not yet built; see `JARVIS_PROGRESS.md` for the current
+blocker.
+
+**Every client record carries a `data_source`** (`demo` | `homeworks_sync`
+| `owner_verified` | `unverified`) so the app can tell confirmed
+demonstration data apart from real business records without ever deleting
+anything. `homeworks_sync` is stamped automatically by the sync path above;
+`owner_verified` is stamped when the owner manually creates a client
+through the app; `demo` is only ever set deliberately, with documented
+evidence (see the migration file). `unverified` — the default for
+pre-existing rows of unknown origin — is NOT the same thing as `demo` and
+must never be treated as fake. Command Center's revenue/AR totals and the
+AI Advisor's `get_overdue_invoices` exclude `demo`; nothing else currently
+filters on it.
 
 ## Intended direction (not yet built)
 

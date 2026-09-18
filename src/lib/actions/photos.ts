@@ -3,6 +3,11 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { extractWorkSheetInfo, type WorkSheetExtraction } from "@/lib/ai/work-sheet-extraction";
+import { insertJob } from "@/lib/actions/jobs";
+import { logActivity } from "@/lib/data/activity-log";
+import { getPropertyById } from "@/lib/data/properties";
+import { clientDisplayName, propertyAddress } from "@/lib/format";
 
 const JOB_PHOTOS_BUCKET = "job-photos";
 const MAX_SIZE_BYTES = 15 * 1024 * 1024;
@@ -86,4 +91,107 @@ export async function uploadJobPhoto(formData: FormData): Promise<UploadPhotoRes
 function optional(formData: FormData, key: string): string | null {
   const value = formData.get(key);
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+export type ExtractPhotoResult = { ok: true; data: WorkSheetExtraction } | { ok: false; message: string };
+
+/**
+ * Reads a previously-uploaded photo back out of private Storage and runs it
+ * through vision-based extraction. Never writes anything — the result is
+ * for the owner to review, correct, and explicitly save via
+ * createJobFromWorkSheet below. Nothing here is a confirmed business record
+ * yet, matching the same propose-then-confirm discipline as every other
+ * write path in this app.
+ */
+export async function extractPhotoInfo(photoId: string): Promise<ExtractPhotoResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "You must be signed in." };
+
+  const { data: photo, error: photoError } = await supabase
+    .from("job_photos")
+    .select("storage_path, content_type")
+    .eq("id", photoId)
+    .single();
+  if (photoError || !photo) return { ok: false, message: "That photo couldn't be found." };
+
+  const { data: fileBlob, error: downloadError } = await supabase.storage.from(JOB_PHOTOS_BUCKET).download(photo.storage_path);
+  if (downloadError || !fileBlob) return { ok: false, message: `Couldn't read the photo: ${downloadError?.message ?? "unknown error"}` };
+
+  const arrayBuffer = await fileBlob.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  const mediaType = photo.content_type || "image/jpeg";
+
+  const result = await extractWorkSheetInfo(base64, mediaType);
+  if (!result.ok) return { ok: false, message: result.message };
+  return { ok: true, data: result.data };
+}
+
+export type CreateJobFromWorkSheetResult = { ok: true; jobId: string } | { ok: false; message: string };
+
+/**
+ * Saves a work-sheet extraction as a real completed job — only ever called
+ * with values the owner has already reviewed and possibly corrected in the
+ * UI, never the raw extraction directly. Reuses insertJob (the same
+ * function the manual Create Job form and the AI's propose_create_job use)
+ * rather than a parallel write path.
+ */
+export async function createJobFromWorkSheet(formData: FormData): Promise<CreateJobFromWorkSheetResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "You must be signed in." };
+
+  const propertyId = optional(formData, "property_id");
+  if (!propertyId) return { ok: false, message: "A property is required to save this as a job." };
+
+  const property = await getPropertyById(propertyId);
+  if (property.error !== null || !property.data) return { ok: false, message: "That property couldn't be found." };
+
+  const scheduledDate = optional(formData, "scheduled_date");
+  const priceRaw = optional(formData, "price");
+  const hoursRaw = optional(formData, "actual_hours");
+  const price = priceRaw !== null ? Number(priceRaw) : null;
+  const actualHours = hoursRaw !== null ? Number(hoursRaw) : null;
+  const notes = optional(formData, "notes");
+  const photoId = optional(formData, "photo_id");
+
+  try {
+    const jobId = await insertJob(
+      {
+        property_id: propertyId,
+        scheduled_date: scheduledDate,
+        price: price !== null && Number.isFinite(price) ? price : null,
+        actual_hours: actualHours !== null && Number.isFinite(actualHours) ? actualHours : null,
+        notes,
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      },
+      [],
+    );
+
+    // Link the source photo to the job it was extracted into, so the
+    // original image stays reachable from the record it produced.
+    if (photoId) {
+      await supabase.from("job_photos").update({ job_id: jobId }).eq("id", photoId);
+    }
+
+    await logActivity({
+      entityType: "job",
+      entityId: jobId,
+      eventType: "job_created",
+      summary: `Job logged from a work-sheet photo for ${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`,
+      detail: { property_id: propertyId, scheduled_date: scheduledDate, price, source_photo_id: photoId, via: "work_sheet_extraction" },
+      source: "owner",
+    });
+
+    revalidatePath(`/properties/${propertyId}`);
+    revalidatePath(`/jobs/${jobId}`);
+    return { ok: true, jobId };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Couldn't save this as a job." };
+  }
 }

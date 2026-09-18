@@ -4,10 +4,11 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `66bac51` — pushed to `origin/main`. Until the
-migrations below are run, Command Center's Today's Mission and Business
-Pulse cards will show a graceful error state on production (not a crash,
-not wrong data) — this is expected and goes away the moment you run them.
+**Latest pushed commit:** see bottom of this section after this commit
+lands. Until the two migrations below are run, Command Center's Today's
+Mission and Business Pulse cards will show a graceful error state on
+production (not a crash, not wrong data) — expected, goes away the moment
+you run them.
 
 ## ⚠️ ACTION NEEDED FROM YOU — 2 minutes, before these features work
 
@@ -74,6 +75,96 @@ silently reordered.
   below (Homeworks substantially built; daily-ops workflows functional;
   PWA essentials built; QuickBooks/Google Calendar not started, blocked
   on the owner's own OAuth app registration).
+
+## Seventh-session changes — resumed after a usage-limit pause
+
+Phase A (recover and verify) first: `git log`/`git status` showed a clean
+tree at commit `9dc7550`, matching exactly what the sixth session's
+write-up claimed. `typecheck`/`lint`/`build`/`playwright test` all rerun
+clean as a real baseline, not assumed from the prior write-up.
+
+**Hard constraint discovered and confirmed, not assumed:** this session's
+browser pane had no authenticated cookie (the pause was long enough that
+the prior session's login expired), and this environment has never had a
+`SUPABASE_SERVICE_ROLE_KEY` locally (confirmed directly this session, not
+just recalled from a doc — the key is present in name but empty in
+`.env.local`, by design, same as every prior session). I do not enter
+passwords into login forms, including for a test account I could create
+myself — that's a hard rule, not a time-saving shortcut I skipped. Net
+effect: **no live-browser verification of any authenticated workflow was
+possible this session.** Where that matters below, it's stated plainly
+rather than glossed over.
+
+Given that constraint, this session's real, verifiable work was: (1) a
+correctness/security review of what the sixth session built (found no
+bugs — the manual Job form already exposed status/actual_hours/
+completion_notes, `getPropertyOptions()` already labels each option with
+its owning client so a job can't easily land under the wrong customer,
+and `job_photos` already had a blanket authenticated-RLS policy that makes
+the sixth session's new photo policies safely redundant rather than
+conflicting), (2) fixing two stale documentation files that were actively
+misleading (`docs/CURRENT_STATE.md` still said the app "isn't deployed
+anywhere yet," which stopped being true many sessions ago), and (3) real
+new functionality that doesn't require a browser session to verify —
+because it's testable the same way the AI streaming work was verified two
+sessions ago: a temporary, git-clean debug route hitting the real code
+directly, deleted before committing.
+
+### Work-sheet photo extraction — genuinely verified, not just typechecked
+
+Priority 5's second milestone. `src/lib/ai/work-sheet-extraction.ts` — a
+one-shot Claude vision call (deliberately separate from the AI Advisor's
+streaming tool-calling pipeline; coupling them would risk destabilizing
+the advisor loop for an unrelated feature), instructed to extract a work
+date, customer name, property address, service description, crew members,
+hours, price, and notes from a photo — every field explicitly null rather
+than guessed when not legible, with an `uncertain_fields` list and a
+`legible: false` flag for an unreadable image.
+
+**Actually tested against the live Anthropic API this session** (not just
+built and typechecked):
+- A trivial blank 1×1 test image correctly came back
+  `legible: false`, every field null, with a sensible explanation —
+  proving the model doesn't hallucinate content into an unreadable image.
+- A synthetic work-sheet image (rendered via an in-browser canvas with
+  "Date: 9/15/26, Customer: Travis Willams, Service: Mowing + edging,
+  Crew: Nate, Time: 45 min, Price: $70, Note: gate left open") came back
+  with `work_date_guess: "2026-09-15"` (correctly normalized from
+  "9/15/26"), `customer_name_guess: "Travis Willams"` (a name that matches
+  a real client already in the database), `hours_worked_guess: 0.75`
+  (correctly converted from "45 min"), `price_guess: 70`, the crew member
+  and note both captured correctly, and one field flagged uncertain even
+  though it was read correctly (appropriately cautious, not a failure).
+- This is real verification of the extraction logic itself. It is **not**
+  verification of the full upload → extract → review → save UI flow,
+  which needs the authenticated browser session this environment didn't
+  have this time.
+
+Built on top of extraction: `extractPhotoInfo` (lib/actions/photos.ts) —
+downloads a previously-uploaded photo from private Storage and runs it
+through extraction; `createJobFromWorkSheet` — saves the owner-reviewed
+(possibly corrected) fields as a real completed job via the same
+`insertJob` every other job-creation path uses, and links the source
+photo to the resulting job. `components/photos/work-sheet-extraction-
+panel.tsx` — appears next to a just-uploaded photo on a Property page
+with a "Read this as a work sheet" button (extraction is owner-initiated,
+never automatic — no API cost spent without being asked for), then shows
+the extracted fields as an editable form before any of it can be saved.
+Deliberately scoped to the Property page only (not a general upload
+page) — the property is already known from page context, so v1 doesn't
+need a customer/property search-and-match UI, matching the explicit
+instruction not to let a bulk-processing architecture delay a working
+single-file flow.
+
+### Documentation debt fixed
+
+`docs/CURRENT_STATE.md` and `docs/DATA_AUTHORITY.md` were both stale
+enough to actively mislead a future session (the former claimed no
+production deployment exists; the latter claimed "nothing syncs in or out
+yet" despite the Homeworks webhook/import path having existed for several
+sessions). Both rewritten to match reality, with explicit "trust
+JARVIS_PROGRESS.md's per-session log over this file" pointers so this
+doesn't quietly happen again.
 
 ## Sixth-session changes — "business activation" sprint
 

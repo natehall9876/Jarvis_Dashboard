@@ -1,10 +1,36 @@
 # Current State
 
-Last verified: 2026-09-10, against a real local run (`npm ci && npm run
-typecheck && npm run lint && npm run build`, all clean) plus a live manual
-click-through trial in-browser.
+Last rewritten: 2026-09-18. The version of this file before today claimed
+the app "isn't deployed anywhere yet" — that was true on 2026-09-10 and has
+been false for many sessions since; nobody updated this file as things
+changed. Trust `JARVIS_PROGRESS.md`'s per-session log over this file for
+anything time-sensitive — this file is a slower-moving summary, and it has
+already gone stale once. `npm run typecheck`/`lint`/`build`/`playwright
+test` all pass as of commit `9dc7550` (2026-09-18) — a real local run, not
+carried over from an earlier write-up.
 
-## Live and verified
+## Deployed and live
+
+**Production:** https://jarvis-dashboard-fawn.vercel.app, on Vercel,
+auto-deploying from `origin/main`. Confirmed reachable via direct HTTPS
+probe after every push this whole engagement (redirect-to-login on `/`,
+200 on `/login`) — that proves the deployment is healthy, not that every
+individual feature works; this environment has no way to complete a real
+login itself (see `JARVIS_PROGRESS.md` — no service-role key locally,
+credentials are never entered by the agent), so anything requiring an
+authenticated session can only be verified when the owner is present with
+the browser pane open, or asserted "implemented, not live-verified" when
+they aren't.
+
+## Live and verified (as of 2026-09-10 — a historical baseline, not the full current picture)
+
+Everything below was true and verified on 2026-09-10. It has not been
+disproven since, but sessions after this date added streaming AI
+responses, prompt caching, markdown rendering, a full visual redesign
+(brand green `#72F238`, fixed sidebar, mobile bottom tab bar), Homeworks
+webhook/import sync, demo-data classification, and a photo-upload
+foundation — none of which is described in this section. See
+`JARVIS_PROGRESS.md`'s per-session log for everything since.
 
 - Login, session persistence, sign-out.
 - Command Center: Today's Mission, Business Pulse (including field vs.
@@ -51,72 +77,27 @@ click-through trial in-browser.
   not a bug, but don't mistake it for multi-client realtime sync if that's
   ever needed later.
 
-## Built in code, NOT yet live in the database
+## Built in code, status in the live database UNKNOWN to this agent
 
-Two tables exist fully in `src/types/database.types.ts` and are used by the
-app (with graceful fallback), but have not been applied to the real Supabase
-project — **this environment only has an anon/publishable key, never a
-service-role key or a linked Supabase CLI project, so DDL cannot be executed
-from here.**
+This environment has never had a service-role key or a linked Supabase CLI
+project in any session — DDL has never once been executed from here. Every
+migration below was written as a `.sql` file for the owner to run in
+Supabase Studio's SQL Editor; whether any given one has actually been run
+is only known if a session had a live authenticated browser to check with,
+or the owner said so directly. Don't trust an earlier session's optimism
+about this without one of those two things.
 
-### `activity_log`
-- Migration: `supabase/activity-log-migration.sql`
-- What breaks without it: nothing. `getActivityForEntity()` catches the
-  missing-table error and returns an empty list; job/invoice/quote History
-  cards show "No activity recorded yet" instead of an error.
-- What starts working once it's applied: every job/invoice/quote mutation
-  (both Jarvis-driven and the human edit forms) starts writing real rows,
-  and History cards populate.
+| Migration | What breaks if NOT applied | Fails how |
+|---|---|---|
+| `supabase/activity-log-migration.sql` | Job/invoice/quote History cards show "No activity recorded yet" instead of real entries | Silent, graceful (`getActivityForEntity()` catches the missing-table error) |
+| `supabase/action-requests-migration.sql` | Write-action idempotency falls back to in-memory (safe within one process, not across a restart) | Silent, graceful fallback |
+| `supabase/demo-data-classification-migration.sql` | Command Center's Today's Mission + Business Pulse cards show a "couldn't load" error instead of demo-filtered totals | Visible error card, not a crash, not wrong data |
+| `supabase/photo-upload-migration.sql` | Photo upload fails with an inline error; the `job-photos` bucket may not exist or may still be public | Visible inline error on upload attempt |
 
-### `action_requests`
-- Migration: `supabase/action-requests-migration.sql`
-- What breaks without it: nothing. The executor falls back to an in-memory
-  "already processed" guard (real protection within one running server
-  process, but not across a restart or multiple instances).
-- What starts working once it's applied: true cross-process, restart-proof
-  exactly-once execution, enforced by a Postgres primary-key uniqueness
-  constraint rather than process memory.
-
-**To apply both:** open Supabase Studio → SQL Editor → paste the contents of
-each file → Run. Both are additive-only (no existing table, column, or row
-is touched) and safe to re-run. After running them, regenerating
-`src/types/database.types.ts` via `supabase gen types typescript` should
-produce shapes identical to what's already hand-written there.
-
-## Deployment readiness
-
-**Not deployed anywhere yet** — there is no `.vercel/` directory, no
-`vercel.json`, and no Vercel account/project credentials available in this
-environment, so a deployment could not be created or even attempted from
-here. Everything else needed for a clean deploy has been verified ready:
-
-- `npm run build` succeeds with **zero environment variables present**
-  (tested by removing `.env.local` entirely and rebuilding) — the app never
-  requires secrets at build time, only at request time.
-- No hardcoded `localhost` anywhere in `src/` (grepped, not assumed) — every
-  redirect (`src/proxy.ts`, `src/app/(auth)/login/actions.ts`,
-  `src/app/auth/confirm/route.ts`) uses relative paths, so the app doesn't
-  care what domain it's actually served from.
-- `next.config.ts` has no custom settings that would need adjusting per
-  environment.
-
-**When you're ready to deploy, the remaining steps are:**
-
-1. Create a Vercel project from this GitHub repo (`natehall9876/Jarvis_Dashboard`).
-2. Add these environment variables in the Vercel project settings (same
-   names as `.env.local`, real values — never commit them):
-   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
-   `AI_PROVIDER_API_KEY`, `AI_PROVIDER_MODEL`, `WEATHER_LOCATION_LAT`,
-   `WEATHER_LOCATION_LON` (the rest are optional/unused today).
-3. In the Supabase dashboard → Authentication → URL Configuration, add the
-   real Vercel URL to **Site URL** and **Redirect URLs** — without this,
-   the `/auth/confirm` email-link flow will redirect to the wrong domain
-   (sign-in with password is unaffected either way).
-4. Deploy. Open the Vercel URL on your iPhone.
-
-Nothing about the two pending Supabase migrations
-(`activity_log`/`action_requests`) blocks deployment — the app runs
-correctly with or without them, as documented above.
+All four are additive-only (no existing table/column/row touched) and safe
+to re-run. Apply via Supabase Studio → SQL Editor → paste → Run. After
+running all four, regenerating `src/types/database.types.ts` via
+`supabase gen types typescript` should match what's already hand-written.
 
 ## Known gaps
 
@@ -127,7 +108,11 @@ correctly with or without them, as documented above.
 - No dedicated recommendations table with accept/reject/outcome history.
 - No route-level (only company-wide) true-paid production rate.
 - No employee-facing view — owner-only right now.
-- No real QuickBooks, Homeworks, or Google Calendar integration — Settings
-  honestly reports each as not connected.
+- No real QuickBooks or Google Calendar integration — Settings honestly
+  reports each as not connected. Homeworks is partial: one-directional
+  sync (Homeworks → Supabase) via a Zapier webhook + owner-run bulk import
+  exists and is deployed; real Homeworks API/OAuth connectivity for Jarvis
+  to query Homeworks directly does not exist yet (see `JARVIS_PROGRESS.md`
+  for the exact blocker and next action).
 - No automated test suite (Playwright/CI) as of this writing — see
   `docs/TESTING.md` for status.
