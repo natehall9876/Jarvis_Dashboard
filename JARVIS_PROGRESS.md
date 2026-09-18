@@ -1,13 +1,95 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-17, third session (evening sprint, owner active
-throughout in a separate tab on the unrelated Squarespace site).
+**Last updated:** 2026-09-17, fifth session ("maximum-effort development
+sprint" — see full directive at top of session transcript; this entry
+covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest verified commit:** `1024465` — pushed and confirmed live
-(re-probed production directly after each push this session, not assumed
-from `git push` succeeding).
+**Latest pushed commit:** `aca498f` — pushed to `origin/main`.
+Production liveness re-probed directly after the push (root `307`
+redirect-to-login, `/login` `200` — both as expected). **Important
+honesty note:** this app exposes no build-time commit SHA anywhere in
+its responses, so — unlike earlier sessions' webhook-secret probes,
+which could distinguish *configured* from *misconfigured* by response
+content — a plain HTTP probe cannot prove *this exact commit* is what's
+serving traffic, only that *some* healthy deployment is. Vercel is
+assumed to auto-deploy on push to `main` (true every prior session), but
+that assumption is not independently re-verified here.
 
-## Facts reported by the owner this session (not independently observed by me)
+## Fifth-session sprint: status against the owner's stated priority order
+
+The owner's sprint directive listed 8 priorities. This session so far
+completed **priority 2 only** (professional AI answer rendering),
+chosen ahead of priority 1 (AI response speed) because it was concrete,
+buildable, and — critically — actually verifiable given this
+environment's constraints (see below), where AI latency is not.
+Priority 1 is the immediate next task, flagged honestly rather than
+silently reordered.
+
+- **Priority 1 (AI response speed — diagnose/optimize):** NOT STARTED
+  this session. Real constraint, stated plainly: this environment has
+  no authenticated session and no live Anthropic API key, so I cannot
+  measure actual production request latency (auth time, DB query time,
+  model time-to-first-token, total generation time) with real numbers.
+  Any work here will be a structural code-review pass over
+  `src/lib/ai/advisor.ts` and the `/api/ai-advisor` route (tool-call
+  count, context size, streaming support, caching), reported as
+  "structural changes made" rather than "N ms faster," unless the owner
+  can supply real before/after numbers from their own browser.
+- **Priority 2 (professional AI answer rendering):** DONE this session,
+  commit `aca498f`. See below.
+- **Priority 3 (Command Center / shared UI visual elevation, brand
+  color `#72F238`):** NOT STARTED this session.
+- **Priority 4 (demo-data provenance audit):** NOT STARTED this session
+  (AI-prompt-level flagging of likely-test records was already done in
+  the fourth session, commit `1024465` — that is a mitigation, not the
+  audit itself).
+- **Priorities 5–8:** unchanged from the fourth-session state described
+  below (Homeworks substantially built; daily-ops workflows functional;
+  PWA essentials built; QuickBooks/Google Calendar not started, blocked
+  on the owner's own OAuth app registration).
+
+## Fifth-session changes
+
+- **AI Advisor answers now render as real formatted markdown**, not raw
+  text with literal `**`/`|`/`#` characters. Added `react-markdown` +
+  `remark-gfm`; built `src/components/ai-advisor/markdown-message.tsx`
+  (a full component map — bold, italics, headings, ordered/unordered
+  lists, links, inline code, blockquotes, horizontal rules, and real
+  bordered GFM tables — styled to the app's existing CSS custom
+  properties, no new Tailwind config surface); wired it into
+  `src/components/ai-advisor/ask-advisor.tsx` in place of the old
+  `whitespace-pre-wrap` paragraph.
+  - **How this was genuinely visually verified**, given no authenticated
+    session exists in this environment: confirmed `git status` was
+    clean on `src/app/(auth)/reset-password/page.tsx` (a public,
+    unauthenticated page), temporarily added a realistic sample
+    `MarkdownMessage` render to it (bold text, a note about excluding a
+    test record, a 3-row GFM table, a bullet list, an "h3 → My take"
+    heading) reachable at `/reset-password?code=fake-visual-check` on
+    the local dev server, screenshotted it, confirmed correct rendering
+    — real bordered table with header row, bold text bold, bulleted
+    list, small uppercase muted-gray "MY TAKE" label, all matching the
+    dark theme — then reverted the file with
+    `git checkout -- "src/app/(auth)/reset-password/page.tsx"` and
+    confirmed via a second read that the file exactly matched its
+    original committed content before this commit was made. This
+    pattern (safe temporary render on an already-public page,
+    screenshot, git-revert, confirm clean) is new this session and
+    reusable for future UI work that needs real visual proof but has no
+    login access.
+  - typecheck, lint, build, and `npx playwright test` (**30/30
+    passing**, chromium + mobile-safari) all re-run clean on this exact
+    change set immediately before committing.
+  - **Not yet verified**: how this renders inside the actual live AI
+    Advisor drawer against a real model response — that requires an
+    authenticated session, which this environment does not have. The
+    component itself is proven correct in isolation; its integration
+    point (`ask-advisor.tsx`) is a two-line, low-risk swap, but the
+    owner should open the AI Advisor and ask a real question (e.g. one
+    that returns a table, like a revenue breakdown) to confirm end to
+    end.
+
+## Facts reported by the owner in the fourth session (not independently observed by me)
 
 - Homeworks webhook secret was rotated in both Vercel and Zapier, and the
   app was redeployed.
