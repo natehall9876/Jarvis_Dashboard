@@ -1,13 +1,85 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-17, fifth session ("maximum-effort development
-sprint" — see full directive at top of session transcript; this entry
-covers only the first completed deliverable from that sprint).
+**Last updated:** 2026-09-18, overnight autonomous session (owner went to
+sleep after ~7 hours of same-night troubleshooting; worked independently
+from a written directive, no back-and-forth).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `bb8cb9a` — pushed to `origin/main`. Until the
-migrations below are run, Command Center's Today's Mission and Business
-Pulse cards will show a graceful error state on production (not a crash,
-not wrong data) — expected, goes away the moment you run them.
+**Latest pushed commit:** see bottom of this section after this commit
+lands. Until the migrations below are run, Command Center's Today's
+Mission and Business Pulse cards will show a graceful error state on
+production (not a crash, not wrong data) — expected, goes away the moment
+you run them.
+
+## Overnight session — root-caused the missing Preview button, built the confirmation-gated import
+
+**The actual bug, found and fixed**: `saveConnection()` (in
+`lib/integrations/homeworks-connection.ts`) awaited a Supabase `.insert()`
+but never checked its `error`. If that insert failed for any reason — most
+likely the `homeworks-oauth-migration.sql` migration never having actually
+been run, so the table doesn't exist — the OAuth callback still redirected
+to Settings claiming success (`?homeworks=connected`), which is exactly
+the one-time "Connected — click Verify..." message you saw. The very next
+page load correctly found no stored row and reverted to showing "Connect
+Homeworks" instead of the Preview/Verify buttons — this is why the button
+"disappeared": it was never truly there to begin with, because the
+connection was never actually persisted. Not a deployment issue, not
+caching, not a hidden conditional — traced to one specific unchecked error.
+
+Fixed: `saveConnection` now returns `{ok, message}` and the callback route
+checks it, so a failed save now shows a real, visible error instead of a
+false success. `getConnectionStatus()` also now distinguishes "genuinely
+never connected" from "a real read error" instead of collapsing both into
+the same UI state — the Settings card will now show the exact error (e.g.
+"relation does not exist") if the migration still hasn't been run, rather
+than silently looking like nothing happened.
+
+**Built while you slept, all read-only or explicitly confirmation-gated:**
+- `getAllCustomers()` — real pagination against the live, schema-verified
+  `customers(take, skip)` signature, loops until a short page, capped at
+  20 pages as a runaway guard.
+- `previewHomeworksSync()` — fetches every accessible customer, compares
+  against existing Supabase clients three ways (homeworks_id match =
+  update, phone/email match on a client with no homeworks_id = possible
+  duplicate — flagged, never auto-merged, no match = create). Entirely
+  read-only.
+- `confirmHomeworksImport()` — the actual write path, but it can only ever
+  run from your own authenticated click behind a native confirm() dialog
+  naming the exact counts. This agent has no way to invoke a Server Action
+  itself (no authenticated session, no service-role key locally, confirmed
+  again this session) — so "don't import while I'm asleep" was true
+  structurally, not just because I chose not to. Reuses
+  `syncHomeworksEntity`, the same already-tested upsert-by-homeworks_id
+  logic the Zapier webhook has used since it was built, rather than a
+  second parallel write path. Always skips `possible_duplicate` rows.
+- Fixed a real mislabeling bug you flagged: "Zapier: Not Connected" next
+  to "Homeworks: 2 customers synced" looked contradictory but wasn't — two
+  genuinely different things (the Homeworks card verifies real Zapier-
+  webhook-synced data; the separate "Zapier" card checks an unrelated,
+  never-built outbound-automation path). Renamed both cards so this can't
+  be misread again.
+- Fixed the AI Provider card's self-contradiction (badge said "Needs
+  Setup," description said "the AI Advisor is live") — it now correctly
+  shows "Connected" when configured, since unlike QuickBooks/Google
+  Calendar (genuinely zero integration code), the AI Advisor is fully
+  built and has been extensively verified across this whole engagement.
+
+**Still genuinely unverified, stated plainly**: whether `getAllCustomers()`
+and the import actually work against your real, authorized Homeworks
+account. I re-verified the OAuth client registration and the exact
+production redirect URI are correct by building a real authorization URL
+and navigating to it (got the real Homeworks consent screen both times),
+and I re-verified the GraphQL query shape against the raw schema file
+line by line — but I cannot execute an authenticated query myself. That
+requires your own browser session, which this environment structurally
+does not have.
+
+**Exact next action**: open Settings → "Homeworks (real API)" card. If it
+still shows "Connect Homeworks" (not Verify/Preview buttons), the
+migration genuinely hasn't been run yet, or the fix above will now show
+you the real error — read it and it'll say exactly what's wrong. If it
+already shows Verify/Preview, click **Preview full sync** first (read-only,
+safe, shows real counts) and review the numbers before clicking **Confirm
+Import**.
 
 ## OAuth authorization completed by the owner — paginated sync preview built
 
