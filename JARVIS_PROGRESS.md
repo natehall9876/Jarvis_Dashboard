@@ -4,11 +4,10 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** see bottom of this section after this commit
-lands. Until the migrations below are run, Command Center's Today's
-Mission and Business Pulse cards will show a graceful error state on
-production (not a crash, not wrong data) — expected, goes away the moment
-you run them.
+**Latest pushed commit:** `bb8cb9a` — pushed to `origin/main`. Until the
+migrations below are run, Command Center's Today's Mission and Business
+Pulse cards will show a graceful error state on production (not a crash,
+not wrong data) — expected, goes away the moment you run them.
 
 ## OAuth authorization completed by the owner — paginated sync preview built
 
