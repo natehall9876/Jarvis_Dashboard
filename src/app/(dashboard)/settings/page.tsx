@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { getIntegrationCards, type IntegrationStatus } from "@/lib/data/integrations";
-import { CheckCircle2, CircleDashed, TriangleAlert } from "lucide-react";
+import { CheckCircle2, CircleDashed, TriangleAlert, Upload } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,22 @@ export default async function SettingsPage() {
           );
         })}
       </div>
+
+      <Card>
+        <CardBody className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">Homeworks customer import</p>
+            <p className="text-xs text-[var(--color-text-secondary)]">Review and safely import Homeworks records — preview before anything is written.</p>
+          </div>
+          <Link
+            href="/settings/homeworks-import"
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-surface-3)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)]"
+          >
+            <Upload className="h-4 w-4" />
+            Open Import Tool
+          </Link>
+        </CardBody>
+      </Card>
 
       <Card>
         <CardBody className="space-y-2 text-sm text-[var(--color-text-secondary)]">

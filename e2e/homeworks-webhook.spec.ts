@@ -65,3 +65,18 @@ test.describe("Homeworks bulk import security boundary", () => {
     expect([401, 503]).toContain(res.status());
   });
 });
+
+test.describe("Homeworks owner-facing admin import", () => {
+  test("requires a logged-in session, not the webhook secret", async ({ request }) => {
+    const res = await request.post("/api/integrations/homeworks/admin-import", {
+      data: { records: [{ entity_type: "customer", homeworks_id: "test" }], dry_run: true },
+    });
+    expect(res.status()).toBe(401);
+  });
+
+  test("the import page redirects an unauthenticated visitor to login", async ({ page }) => {
+    const res = await page.goto("/settings/homeworks-import");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
+});
