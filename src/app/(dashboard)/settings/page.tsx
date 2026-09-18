@@ -3,6 +3,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { getIntegrationCards, type IntegrationStatus } from "@/lib/data/integrations";
+import { getConnectionStatus } from "@/lib/integrations/homeworks-connection";
+import { isHomeworksOAuthConfigured } from "@/lib/env";
+import { HomeworksConnectionCard } from "@/components/settings/homeworks-connection-card";
 import { CheckCircle2, CircleDashed, TriangleAlert, Upload } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -13,14 +16,29 @@ const statusMeta: Record<IntegrationStatus, { label: string; tone: BadgeTone; ic
   not_connected: { label: "Not Connected", tone: "neutral", icon: <CircleDashed className="h-3 w-3" /> },
 };
 
-export default async function SettingsPage() {
-  const cards = await getIntegrationCards();
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ homeworks?: string; homeworks_message?: string }>;
+}) {
+  const [cards, homeworksConnection, { homeworks: homeworksStatus, homeworks_message: homeworksMessage }] = await Promise.all([
+    getIntegrationCards(),
+    getConnectionStatus(),
+    searchParams,
+  ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Settings / Integrations"
         description="Connection status for every system Jarvis can talk to. Nothing here is marked Connected unless it's been verified."
+      />
+
+      <HomeworksConnectionCard
+        connected={homeworksConnection.connected}
+        connectedAt={homeworksConnection.connected ? homeworksConnection.connectedAt : null}
+        configured={isHomeworksOAuthConfigured()}
+        urlMessage={homeworksStatus === "connected" || homeworksStatus === "error" ? { status: homeworksStatus, message: homeworksMessage } : null}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

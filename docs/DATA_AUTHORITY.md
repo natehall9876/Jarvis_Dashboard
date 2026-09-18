@@ -14,14 +14,21 @@ Homeworks sync instead uses a direct `homeworks_id` column on
 `clients`/`properties`/`invoices`, since it's the one integration actually
 built so far and a generic mapping table wasn't worth the indirection yet.
 
-**Homeworks** is a *partial* exception: `clients`/`properties`/`invoices`
-can be upserted from Homeworks via a Zapier-triggered webhook
-(`src/app/api/integrations/homeworks/webhook`) or an owner-run bulk import
-(`admin-import`), matched by `homeworks_id`. This is one-directional
-(Homeworks → Supabase) and additive-only — nothing in this app writes back
-to Homeworks. Real Homeworks API/OAuth connectivity (beyond the Zapier
-webhook path) is not yet built; see `JARVIS_PROGRESS.md` for the current
-blocker.
+**Homeworks** is a *partial* exception, via two separate paths:
+1. Push: `clients`/`properties`/`invoices` can be upserted from Homeworks
+   via a Zapier-triggered webhook (`src/app/api/integrations/homeworks/
+   webhook`) or an owner-run bulk import (`admin-import`), matched by
+   `homeworks_id`.
+2. Pull: a real OAuth 2.1 + PKCE connection to Homeworks' own GraphQL API
+   (`api.home.works`, verified live 2026-09-18 — see `JARVIS_PROGRESS.md`
+   for the full verification trail), via `lib/integrations/homeworks-
+   oauth.ts` / `homeworks-connection.ts` / `homeworks-api.ts`. As of this
+   writing this is read-only (a sample-customers query only, wired to a
+   Verify button on Settings) — no sync into Supabase tables via this path
+   yet, and the owner hasn't completed the authorization step.
+
+Both are one-directional (Homeworks → Jarvis) and neither writes back to
+Homeworks.
 
 **Every client record carries a `data_source`** (`demo` | `homeworks_sync`
 | `owner_verified` | `unverified`) so the app can tell confirmed

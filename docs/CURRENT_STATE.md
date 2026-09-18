@@ -93,6 +93,7 @@ about this without one of those two things.
 | `supabase/action-requests-migration.sql` | Write-action idempotency falls back to in-memory (safe within one process, not across a restart) | Silent, graceful fallback |
 | `supabase/demo-data-classification-migration.sql` | Command Center's Today's Mission + Business Pulse cards show a "couldn't load" error instead of demo-filtered totals | Visible error card, not a crash, not wrong data |
 | `supabase/photo-upload-migration.sql` | Photo upload fails with an inline error; the `job-photos` bucket may not exist or may still be public | Visible inline error on upload attempt |
+| `supabase/homeworks-oauth-migration.sql` | The real Homeworks OAuth connection (see `JARVIS_PROGRESS.md`) has nowhere to store tokens | "Not connected" / inline error on Connect or Verify |
 
 All four are additive-only (no existing table/column/row touched) and safe
 to re-run. Apply via Supabase Studio → SQL Editor → paste → Run. After

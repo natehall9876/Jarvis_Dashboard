@@ -1055,6 +1055,35 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["action_requests"]["Insert"]>;
         Relationships: [];
       };
+      /**
+       * NOT YET LIVE — added here ahead of the database so the app is fully
+       * typed the moment `supabase/homeworks-oauth-migration.sql` is run.
+       * Matches that migration exactly.
+       */
+      homeworks_oauth_connection: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          connected_by: string | null;
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          scope: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          connected_by?: string | null;
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          scope?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["homeworks_oauth_connection"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

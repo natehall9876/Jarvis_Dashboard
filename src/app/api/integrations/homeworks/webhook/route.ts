@@ -7,8 +7,13 @@ import { isValidHomeworksSyncPayload, syncHomeworksEntity } from "@/lib/integrat
  * Receives events from a Zapier "Webhooks by Zapier" action, triggered by
  * one of Homeworks' native Zapier triggers (New Customer, New Property,
  * New Invoice, New Payment, etc. — homeworks.com/product/integrations).
- * This is the officially supported Homeworks integration path; there is no
- * documented direct Homeworks API, so this project does not invent one.
+ * This was the only integration path found until 2026-09-18 — a real
+ * direct API (OAuth 2.1 + PKCE + GraphQL, api.home.works) now also exists
+ * and is used by lib/integrations/homeworks-api.ts / homeworks-oauth.ts /
+ * homeworks-connection.ts for direct, on-demand reads. This webhook path
+ * stays in place: it's push-based (fires the moment Homeworks changes,
+ * no polling) and already proven working end-to-end, so there's no reason
+ * to replace it now that a pull-based alternative also exists.
  *
  * This endpoint defines its OWN expected JSON shape — the exact mapping
  * from Homeworks' real fields into that shape happens inside Zapier's own

@@ -4,28 +4,63 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `2b54ff6` — pushed to `origin/main`. Until the
-two migrations below are run, Command Center's Today's Mission and
-Business Pulse cards will show a graceful error state on production (not
-a crash, not wrong data) — expected, goes away the moment you run them.
+**Latest pushed commit:** see bottom of this section after this commit
+lands. Until the migrations below are run, Command Center's Today's
+Mission and Business Pulse cards will show a graceful error state on
+production (not a crash, not wrong data) — expected, goes away the moment
+you run them.
 
-## ⚠️ ACTION NEEDED FROM YOU — 2 minutes, before these features work
+## 🎉 HOMEWORKS: a real, live, verified API connection now exists
 
-Two new database migrations are written but **not yet applied** — I have no
+Everything below was verified directly against the live `api.home.works`
+API this session — not read from documentation and trusted, actually
+probed. Your own account inspection (secure.copilotcrm.com — no visible
+API/developer menu) was correct: there genuinely is no such menu, because
+registration isn't a UI feature at all. It's OAuth Dynamic Client
+Registration (RFC 7591) — a pure API call, "self-serve... no approval
+required." That's why it wasn't findable by clicking around Settings.
+
+**What's real and verified, in order:**
+1. Discovery document fetched live: `https://api.home.works/.well-known/oauth-authorization-server` returns real endpoints (authorize, token, registration, JWKS), OAuth 2.1 + PKCE (S256), no client secret (`token_endpoint_auth_methods_supported: ["none"]`).
+2. Registered a real OAuth client via `POST https://api.home.works/oauth/register` — got back a real `client_id` (`80490095-ab1b-4acb-8c41-92450448511a`), HTTP 201. This is a public identifier, not a secret (PKCE secures the flow), so it's safely stored in `HOMEWORKS_OAUTH_CLIENT_ID`.
+3. Downloaded the real GraphQL schema (`https://api.home.works/graphql/schema.graphql`, 210KB) and confirmed exact field/query names: `customers(where, skip, take, orderBy): [Customer!]!`, `Customer.fullName/address/properties`, `Property.customerId`, etc. — nothing guessed.
+4. Built the authorization URL with the real client_id and valid PKCE parameters, navigated to it in a real browser — **got back a genuine Homeworks "Authorize Access" consent screen** reading "Jarvis (WeedEater Lawn Care) is requesting access to your Homeworks openid company account," with real email/password fields. Screenshotted, confirmed, navigated away without entering anything (I don't enter credentials, ever — that's your login to complete).
+
+**A real bug found and fixed via a live e2e test, not just typechecking**: `proxy.ts`'s password-recovery redirect (built two sessions ago) intercepts *any* request with a `?code=` query param and redirects it to `/reset-password` — which would have silently swallowed the Homeworks OAuth callback's own `?code=...` before it ever reached its route handler, breaking the whole flow. Caught because I wrote a real Playwright test for the new callback route and it failed with exactly this redirect. Fixed by excluding `/api/*` paths (Supabase's recovery redirect never lands directly on an API route, so this can't reintroduce the original bug). 34/34 e2e now, up from 30.
+
+**What I built:**
+- `lib/integrations/homeworks-oauth.ts` — PKCE generation, authorize URL builder, token exchange/refresh, against the real, verified endpoints.
+- `lib/integrations/homeworks-connection.ts` — server-only token storage with auto-refresh (1hr access token, 14-day refresh token — real numbers from the live docs).
+- `lib/integrations/homeworks-api.ts` — a GraphQL client and a real, schema-verified `getSampleCustomers()` query.
+- `/api/integrations/homeworks/oauth/connect` and `/callback` routes — both owner-session-gated (e2e-tested).
+- A new "Homeworks (real API)" card on Settings with a **Verify** button that actually calls the live API for 5 real customers and shows what came back — not a static "Connected" badge.
+- `supabase/homeworks-oauth-migration.sql` — one more migration to add to the batch (below).
+
+**What's NOT done, honestly:** the actual authorization step — you logging into that real consent screen — hasn't happened, because only you can do it. Until you do, "Verify" will correctly report not connected. This environment also still has no authenticated browser session (same constraint as last session), so the full Settings-page UI flow (click Connect → log in → land back on Settings → click Verify → see real customers) is implemented and e2e-tested at the auth-boundary level, but not click-through verified end to end.
+
+**Your exact next action:**
+1. Run the now-three pending migrations (see the updated list below — `homeworks-oauth-migration.sql` is new).
+2. Open Jarvis → Settings → find the new "Homeworks (real API)" card → click **Connect Homeworks** → log into the real Homeworks consent screen with your own credentials → you'll land back on Settings.
+3. Click **Verify — fetch 5 real customers**. If it shows real names, the connection genuinely works. If it errors, send me the exact error text — the most likely one, per Homeworks' own docs, is a plan-tier gate ("API access requires an Enterprise plan or an active Growth trial") — I cannot see your plan tier from here, so if that's the error, that's a Homeworks account/billing question, not a bug in Jarvis.
+
+## ⚠️ ACTION NEEDED FROM YOU — a few minutes, before these features work
+
+Three database migrations are written but **not yet applied** — I have no
 way to run SQL against your live Supabase project myself (no DB console
-access, no linked CLI). Until you run these, the Command Center's "Today's
-Mission" and "Business Pulse" cards will show a graceful "couldn't load"
-error (not broken data, not a crash — the app already degrades safely into
-its existing error-state UI when a query fails) instead of using the new
-demo-data filtering, and photo upload will fail with a clear inline error
-instead of working.
+access, no linked CLI, confirmed directly this session — see below). Until
+you run these: Command Center's "Today's Mission"/"Business Pulse" cards
+show a graceful "couldn't load" error (not broken data, not a crash),
+photo upload fails with a clear inline error, and the new Homeworks OAuth
+connection has nowhere to store its tokens.
 
 1. Open your Supabase project → **SQL Editor**.
 2. Paste and run `supabase/demo-data-classification-migration.sql`.
 3. Paste and run `supabase/photo-upload-migration.sql`.
-4. Refresh Jarvis — Today's Mission and Business Pulse should load normally
-   again, and the Photos section on any Job or Property page should accept
-   an upload.
+4. Paste and run `supabase/homeworks-oauth-migration.sql` (new this session).
+5. Refresh Jarvis — Today's Mission and Business Pulse should load normally,
+   the Photos section on any Job/Property page should accept an upload, and
+   Settings' new "Homeworks (real API)" card is ready for you to click
+   Connect.
 
 Both files are idempotent (safe to run twice) and additive only — nothing
 is deleted, no existing column is dropped, no existing row is overwritten

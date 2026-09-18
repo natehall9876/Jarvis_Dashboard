@@ -49,4 +49,16 @@ test.describe("security probes (unauthenticated)", () => {
     const res = await page.goto("/jobs/not-a-real-uuid");
     expect(res?.status()).toBeLessThan(500);
   });
+
+  test("homeworks oauth connect redirects an unauthenticated visitor to login, not Homeworks", async ({ page }) => {
+    const res = await page.goto("/api/integrations/homeworks/oauth/connect");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("homeworks oauth callback redirects an unauthenticated visitor to login", async ({ page }) => {
+    const res = await page.goto("/api/integrations/homeworks/oauth/callback?code=fake&state=fake");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
 });

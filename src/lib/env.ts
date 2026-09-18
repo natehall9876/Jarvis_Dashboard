@@ -33,6 +33,28 @@ export const homeworksWebhookEnv = {
 };
 
 /**
+ * The real Homeworks API (api.home.works) — OAuth 2.1 + PKCE, verified live
+ * on 2026-09-18 (registered via the API's own self-serve /oauth/register
+ * endpoint, confirmed against the live /.well-known/oauth-authorization-
+ * server discovery document). This is genuinely separate from
+ * homeworksWebhookEnv above, which only ever receives data pushed in by
+ * Zapier — this is Jarvis authenticating outbound TO Homeworks.
+ *
+ * client_id is a public identifier, not a secret — this OAuth client uses
+ * `token_endpoint_auth_method: "none"` (PKCE secures the flow instead of a
+ * client secret), the same trust model as a mobile app or SPA's OAuth
+ * client id. Safe to keep in a plain env var; nothing here needs to be
+ * treated as sensitive the way an API key or client secret would.
+ */
+export const homeworksOAuthEnv = {
+  clientId: process.env.HOMEWORKS_OAUTH_CLIENT_ID ?? "",
+};
+
+export function isHomeworksOAuthConfigured(): boolean {
+  return homeworksOAuthEnv.clientId.length > 0;
+}
+
+/**
  * Integration environment flags. These only report whether credentials are
  * present, never whether the third-party service actually accepted them —
  * that distinction matters on the Settings / Integrations page, where

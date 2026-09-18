@@ -69,8 +69,17 @@ export async function proxy(request: NextRequest) {
   // straight to /reset-password, which exchanges it for a session itself;
   // must run before the signed-out check below since this request has no
   // session yet and would otherwise be redirected to /login, losing the code.
+  //
+  // Excludes /api/* — a real bug caught by a live e2e test (2026-09-18):
+  // the Homeworks OAuth callback (/api/integrations/homeworks/oauth/
+  // callback?code=...) uses the same `?code=` convention for a completely
+  // unrelated OAuth authorization code, and was being silently hijacked
+  // to /reset-password before ever reaching its own route handler.
+  // Supabase's recovery redirect always lands on a normal page (the Site
+  // URL), never directly on an API route, so this exclusion can't
+  // reintroduce the original bug this code was written for.
   const recoveryCode = request.nextUrl.searchParams.get("code");
-  if (recoveryCode && pathname !== "/reset-password") {
+  if (recoveryCode && pathname !== "/reset-password" && !isApiPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/reset-password";
     return NextResponse.redirect(url);
