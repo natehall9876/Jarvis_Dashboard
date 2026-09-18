@@ -132,6 +132,11 @@ export async function syncHomeworksEntity(
               company_name: payload.company_name ?? null,
               email: payload.email ?? null,
               phone: payload.phone ?? null,
+              // Arrived through a real Homeworks sync path (Zapier webhook,
+              // admin import, or the direct API) — genuinely sourced, never
+              // 'demo'. Doesn't overwrite an existing row's data_source with
+              // anything other than this same value on repeat syncs.
+              data_source: "homeworks_sync",
             },
             { onConflict: "homeworks_id" },
           )

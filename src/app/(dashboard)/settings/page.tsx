@@ -37,6 +37,7 @@ export default async function SettingsPage({
       <HomeworksConnectionCard
         connected={homeworksConnection.connected}
         connectedAt={homeworksConnection.connected ? homeworksConnection.connectedAt : null}
+        statusError={!homeworksConnection.connected ? homeworksConnection.error : null}
         configured={isHomeworksOAuthConfigured()}
         urlMessage={homeworksStatus === "connected" || homeworksStatus === "error" ? { status: homeworksStatus, message: homeworksMessage } : null}
       />

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { verifyHomeworksConnection, disconnectHomeworksAction, type VerifyResult } from "@/lib/actions/homeworks-oauth";
 import { previewHomeworksSync, type SyncPreviewResult } from "@/lib/actions/homeworks-sync-preview";
+import { confirmHomeworksImport, type ImportResult } from "@/lib/actions/homeworks-import";
 
 /**
  * A "Connected" badge is not evidence (per explicit instruction) — this
@@ -14,30 +15,39 @@ import { previewHomeworksSync, type SyncPreviewResult } from "@/lib/actions/home
  * Homeworks GraphQL API for a handful of real customers and shows exactly
  * what came back, so "connected" means something checkable, not asserted.
  * "Preview Full Sync" goes further: paginates through every accessible
- * customer and compares against what's already in Jarvis — still entirely
- * read-only, no import button exists yet (that's the deliberate next step,
- * gated on the owner reviewing real counts first).
+ * customer and compares against what's already in Jarvis, still entirely
+ * read-only. "Confirm Import" only appears after a preview has actually
+ * run in this session (real React state, not a URL param — refreshing
+ * clears it), and asks for a native confirm() naming the exact counts
+ * before doing anything, so an import can never fire from a stale or
+ * unreviewed preview.
  */
 export function HomeworksConnectionCard({
   connected,
   connectedAt,
+  statusError,
   configured,
   urlMessage,
 }: {
   connected: boolean;
   connectedAt: string | null;
+  /** A real backend error reading the connection status — distinct from "just never connected yet". */
+  statusError: string | null;
   configured: boolean;
   urlMessage: { status: "connected" | "error"; message?: string } | null;
 }) {
   const router = useRouter();
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [preview, setPreview] = useState<SyncPreviewResult | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [pending, startTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
+  const [importPending, startImportTransition] = useTransition();
 
   function verify() {
     setResult(null);
     setPreview(null);
+    setImportResult(null);
     startTransition(async () => {
       setResult(await verifyHomeworksConnection());
     });
@@ -45,8 +55,24 @@ export function HomeworksConnectionCard({
 
   function runPreview() {
     setPreview(null);
+    setImportResult(null);
     startPreviewTransition(async () => {
       setPreview(await previewHomeworksSync());
+    });
+  }
+
+  function runImport() {
+    if (!preview || !preview.ok) return;
+    const confirmed = window.confirm(
+      `Import ${preview.wouldCreate} new customer(s) and update ${preview.wouldUpdate} existing one(s) from Homeworks?\n\n` +
+        `${preview.possibleDuplicates} possible duplicate(s) will be skipped, not merged.\n\nThis writes real records to your database.`,
+    );
+    if (!confirmed) return;
+    setImportResult(null);
+    startImportTransition(async () => {
+      const res = await confirmHomeworksImport();
+      setImportResult(res);
+      if (res.ok) router.refresh();
     });
   }
 
@@ -55,6 +81,7 @@ export function HomeworksConnectionCard({
       await disconnectHomeworksAction();
       setResult(null);
       setPreview(null);
+      setImportResult(null);
       router.refresh();
     });
   }
@@ -76,6 +103,14 @@ export function HomeworksConnectionCard({
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
             Connected — click Verify below to confirm real data comes back.
+          </p>
+        ) : null}
+        {statusError ? (
+          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Couldn&apos;t read the connection status: {statusError}. If this mentions the table not existing, the
+            <code className="mx-1 rounded bg-[var(--color-surface-3)] px-1 py-0.5">homeworks-oauth-migration.sql</code>
+            migration hasn&apos;t been run yet.
           </p>
         ) : null}
 
@@ -166,7 +201,8 @@ export function HomeworksConnectionCard({
               </div>
             </div>
             <p className="text-[11px] text-[var(--color-text-muted)]">
-              Nothing has been written — this is a preview only. No import button exists yet; that comes after you&apos;ve reviewed these real numbers.
+              Nothing has been written yet — everything above is a preview. Confirming below writes the create/update rows only;
+              possible duplicates are always skipped, never auto-merged.
             </p>
             <details className="text-xs">
               <summary className="cursor-pointer text-[var(--color-text-secondary)]">Show all {preview.rows.length} records</summary>
@@ -189,6 +225,39 @@ export function HomeworksConnectionCard({
                 ))}
               </ul>
             </details>
+            {preview.wouldCreate + preview.wouldUpdate > 0 ? (
+              <Button type="button" onClick={runImport} disabled={importPending} className="w-full justify-center">
+                {importPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Confirm import — write {preview.wouldCreate + preview.wouldUpdate} record(s) to Jarvis
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {importResult && !importResult.ok ? (
+          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Import failed: {importResult.message}
+          </p>
+        ) : null}
+        {importResult && importResult.ok ? (
+          <div className="space-y-1.5 rounded-lg border border-[var(--color-accent)]/40 p-2">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-accent)]">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Import complete: {importResult.created} created, {importResult.updated} updated, {importResult.propertiesSynced} properties synced,{" "}
+              {importResult.skippedDuplicates} duplicates skipped{importResult.errors > 0 ? `, ${importResult.errors} errors` : ""}.
+            </p>
+            {importResult.errors > 0 ? (
+              <ul className="space-y-1 text-xs text-[var(--color-critical)]">
+                {importResult.rows
+                  .filter((r) => r.outcome === "error")
+                  .map((r) => (
+                    <li key={r.homeworksId}>
+                      {r.name}: {r.detail}
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
           </div>
         ) : null}
       </CardBody>

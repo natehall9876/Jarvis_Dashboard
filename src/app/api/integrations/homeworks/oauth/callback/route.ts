@@ -47,7 +47,14 @@ export async function GET(request: Request) {
     return redirectWithStatus(request, "error", result.message);
   }
 
-  await saveConnection(result.data, user.id);
+  const saveResult = await saveConnection(result.data, user.id);
+  if (!saveResult.ok) {
+    // The token exchange itself succeeded, but persisting it failed — the
+    // real bug this fixes: this used to be un-checked, so a failed save
+    // (e.g. the migration creating this table hadn't been run) still
+    // redirected here claiming "connected" even though nothing was saved.
+    return redirectWithStatus(request, "error", saveResult.message);
+  }
 
   const response = redirectWithStatus(request, "connected");
   response.cookies.delete("hw_oauth_verifier");
