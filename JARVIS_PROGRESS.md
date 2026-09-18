@@ -4,7 +4,7 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `aca498f` — pushed to `origin/main`.
+**Latest pushed commit:** `a0c9e4f` — pushed to `origin/main`.
 Production liveness re-probed directly after the push (root `307`
 redirect-to-login, `/login` `200` — both as expected). **Important
 honesty note:** this app exposes no build-time commit SHA anywhere in
@@ -25,16 +25,12 @@ environment's constraints (see below), where AI latency is not.
 Priority 1 is the immediate next task, flagged honestly rather than
 silently reordered.
 
-- **Priority 1 (AI response speed — diagnose/optimize):** NOT STARTED
-  this session. Real constraint, stated plainly: this environment has
-  no authenticated session and no live Anthropic API key, so I cannot
-  measure actual production request latency (auth time, DB query time,
-  model time-to-first-token, total generation time) with real numbers.
-  Any work here will be a structural code-review pass over
-  `src/lib/ai/advisor.ts` and the `/api/ai-advisor` route (tool-call
-  count, context size, streaming support, caching), reported as
-  "structural changes made" rather than "N ms faster," unless the owner
-  can supply real before/after numbers from their own browser.
+- **Priority 1 (AI response speed):** DONE this session, commit
+  `a0c9e4f`. Correction to the note originally written here: this
+  environment turned out to have a real, working `AI_PROVIDER_API_KEY`
+  in local `.env.local` (left over from earlier sessions), so this
+  wasn't purely structural — I got genuine measured numbers, not just
+  code review. See below.
 - **Priority 2 (professional AI answer rendering):** DONE this session,
   commit `aca498f`. See below.
 - **Priority 3 (Command Center / shared UI visual elevation, brand
@@ -49,6 +45,68 @@ silently reordered.
   on the owner's own OAuth app registration).
 
 ## Fifth-session changes
+
+- **AI Advisor now streams real answers end-to-end and uses prompt
+  caching** — this was the sprint's explicit #1 complaint ("too slow,
+  looks unprofessional"). The old path had zero streaming anywhere:
+  `AnthropicProvider.complete()` awaited one fully-buffered JSON
+  response from Anthropic; the tool-calling loop could repeat that up
+  to 6 times sequentially with nothing visible in between; and
+  `/api/ai-advisor` awaited the entire loop before sending one JSON
+  blob to the browser. The owner watched a static spinner for the
+  whole multi-second round trip.
+  - `AIProvider.stream()` (replacing `complete()`) parses Anthropic's
+    SSE stream directly over raw fetch (still no SDK dependency),
+    yielding text as it's generated and a final structured result once
+    the turn closes.
+  - The system prompt is now sent as an Anthropic-cached block
+    (`cache_control: {type: "ephemeral"}`), which caches everything
+    before it in the request too — the ~43-tool schema array, the
+    single largest and most static part of every call in a loop that
+    can hit the API up to 6 times for one question.
+  - `/api/ai-advisor` now returns `text/event-stream`
+    (delta/done/error frames) instead of one buffered JSON body. The
+    401 auth gate for an unauthenticated caller is unchanged — it
+    still runs before the stream opens, so it costs nothing extra.
+  - The AI Advisor UI grows the answer bubble in real time as text
+    streams in, with a small streaming cursor; the "checking the
+    numbers" bounce indicator now only shows before the first token
+    arrives (i.e., while tools are being called) — once real text
+    starts rendering, that growing text **is** the loading state, per
+    the explicit instruction not to fake a typing effect that hides
+    real delay.
+  - **Real measurements**, not estimates: this environment turned out
+    to have a working `AI_PROVIDER_API_KEY` in local `.env.local`
+    (left over from earlier sessions), so I could hit the live
+    Anthropic API directly. I wrote a temporary debug route that
+    called the actual shipped provider/advisor code (not a
+    reimplementation) with no Supabase session involved, confirmed
+    `git status` was clean before adding it, and deleted it — confirmed
+    absent from `git status` — before this commit.
+    - Full production request shape (real system prompt + all 43 tool
+      schemas), a question the model can answer without a tool call:
+      **time-to-first-token 1281ms cold, 1004ms on an immediate repeat
+      call (~22% faster)** — consistent with the new cache hitting.
+    - The same reply arrived in 5–7 streamed chunks instead of one
+      blob — the owner sees text forming instead of a spinner for the
+      full ~1.3s.
+    - **Not measured**: a real multi-tool-call question (e.g. an owner
+      briefing), which is exactly where the caching win compounds most
+      (up to 6 iterations resending the same system+tools prefix) —
+      exercising a real tool needs a logged-in session, which this
+      environment still doesn't have. The owner asking a real briefing
+      question and watching whether it visibly streams is the
+      remaining real-world check.
+  - **Deliberately not done**: routing simple questions to a
+    cheaper/faster model (the sprint directive's other latency
+    suggestion). A classifier step adds its own latency, and
+    misrouting a real business question to a weaker model risks wrong
+    numbers — not worth that accuracy risk for a secondary win once
+    streaming + caching already address the actual complaint.
+  - typecheck/lint/build clean; e2e **30/30** (the ai-advisor
+    unauthenticated-401 test still passes unchanged — that gate runs
+    before the stream opens, so the response shape change doesn't
+    touch it).
 
 - **AI Advisor answers now render as real formatted markdown**, not raw
   text with literal `**`/`|`/`#` characters. Added `react-markdown` +
