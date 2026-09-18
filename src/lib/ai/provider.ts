@@ -66,14 +66,24 @@ export type AICompletionResult = {
 /** "auto" (default) lets the model choose; "none" forces a text-only reply even though tools are still listed — used to make the model wrap up in plain language right after proposing a write action, instead of chaining more tool calls the same turn. */
 export type AIToolChoice = "auto" | "none";
 
+/** Emitted while a turn is still generating; `text` is the incremental chunk to append, not the running total. */
+export type AIStreamDelta = { type: "text_delta"; text: string };
+
 export interface AIProvider {
   readonly name: string;
   isConfigured(): boolean;
-  complete(params: {
+  /**
+   * Streams one turn: yields text deltas as they arrive, then yields exactly
+   * one final `AICompletionResult` once the turn is fully received (needed
+   * because tool_use input and stop_reason are only known once the stream
+   * ends). Callers that don't care about incremental text can drain the
+   * generator and use only the last value.
+   */
+  stream(params: {
     system: string;
     messages: AIMessage[];
     tools: ToolDefinition[];
     maxTokens?: number;
     toolChoice?: AIToolChoice;
-  }): Promise<AICompletionResult>;
+  }): AsyncGenerator<AIStreamDelta | AICompletionResult>;
 }

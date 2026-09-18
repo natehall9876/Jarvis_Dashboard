@@ -1,7 +1,7 @@
 import { AnthropicProvider } from "@/lib/ai/providers/anthropic";
 import { ALL_TOOLS, findTool, toolDefinitions } from "@/lib/ai/tools";
 import { isProposedAction, type ProposedAction } from "@/lib/ai/action-types";
-import type { AIMessage, AIContentBlock } from "@/lib/ai/provider";
+import type { AICompletionResult, AIMessage, AIContentBlock } from "@/lib/ai/provider";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { PageContext } from "@/lib/ai/page-context";
 
@@ -74,6 +74,7 @@ export async function askAdvisor(
   question: string,
   pageContext: PageContext | null,
   history: AdvisorTurn[] = [],
+  onTextDelta?: (delta: string) => void,
 ): Promise<AdvisorResponse> {
   if (!provider.isConfigured()) {
     return {
@@ -95,6 +96,11 @@ export async function askAdvisor(
   const references: EntityReference[] = pageContext?.entity ? [pageContext.entity] : [];
   const toolsUsed: string[] = [];
   const tools = toolDefinitions();
+  // Built once per request, not once per tool-call iteration — the prompt's
+  // date fields are only ever stale by the length of one request either way,
+  // and re-deriving it per iteration also breaks Anthropic's prompt caching,
+  // which requires the cached block to be byte-identical across calls.
+  const system = buildSystemPrompt();
 
   // Once a propose_* tool produces a ProposedAction, the model is forced
   // (via tool_choice: "none") to wrap up in plain text on its very next
@@ -105,12 +111,25 @@ export async function askAdvisor(
   let pendingProposal: ProposedAction | null = null;
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    const result = await provider.complete({
-      system: buildSystemPrompt(),
+    // The stream's contract is: zero or more text_delta events, then exactly
+    // one AICompletionResult as its last-yielded value.
+    const turnStream = provider.stream({
+      system,
       messages,
       tools,
       toolChoice: pendingProposal ? "none" : "auto",
     });
+    let result: AICompletionResult | null = null;
+    for await (const event of turnStream) {
+      if ("type" in event) {
+        onTextDelta?.(event.text);
+      } else {
+        result = event;
+      }
+    }
+    if (!result) {
+      return { ok: false, reason: "upstream_error", message: "The AI provider closed the stream without a result." };
+    }
 
     if (result.stopReason === "error") {
       return {

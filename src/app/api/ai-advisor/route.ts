@@ -52,17 +52,47 @@ export async function POST(request: Request) {
 
   const pageContext = typeof path === "string" ? await getPageContext(path) : null;
   const conversationHistory = isValidHistory(history) ? history : [];
-  const result = await askAdvisor(question.trim(), pageContext, conversationHistory);
 
-  if (!result.ok) {
-    const status = result.reason === "not_configured" ? 503 : 502;
-    return NextResponse.json({ error: result.message, reason: result.reason }, { status });
-  }
+  // Server-Sent Events instead of one buffered JSON response: the agentic
+  // loop can take several seconds end to end (tool calls + generation), and
+  // the previous "await the whole thing, then send one blob" shape meant the
+  // owner stared at a static spinner for all of it. Streaming the model's
+  // text as it's generated moves the perceived wait down to time-to-first-
+  // token, which is what a chat UI is actually judged on.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      function send(event: string, data: unknown) {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      }
+      try {
+        const result = await askAdvisor(question.trim(), pageContext, conversationHistory, (delta) => {
+          send("delta", { text: delta });
+        });
 
-  return NextResponse.json({
-    answer: result.answer,
-    references: result.references,
-    toolsUsed: result.toolsUsed,
-    proposedAction: result.proposedAction,
+        if (!result.ok) {
+          send("error", { error: result.message, reason: result.reason });
+        } else {
+          send("done", {
+            answer: result.answer,
+            references: result.references,
+            toolsUsed: result.toolsUsed,
+            proposedAction: result.proposedAction,
+          });
+        }
+      } catch (err) {
+        send("error", { error: err instanceof Error ? err.message : "The advisor failed unexpectedly.", reason: "upstream_error" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    },
   });
 }

@@ -4,6 +4,7 @@ import type {
   AIContentBlock,
   AIMessage,
   AIProvider,
+  AIStreamDelta,
   AIToolUseBlock,
   ToolDefinition,
 } from "@/lib/ai/provider";
@@ -12,15 +13,16 @@ const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-sonnet-5";
 
-type AnthropicResponseBlock =
+/**
+ * In-flight accumulation for one streamed content block — text is built up
+ * from `text_delta` chunks directly; tool_use input arrives as fragments of
+ * a JSON string (`input_json_delta`) that only parses once complete, so it's
+ * buffered as a string and parsed at `content_block_stop`.
+ */
+type StreamBlockState =
   | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: string; [key: string]: unknown };
-
-type AnthropicResponse = {
-  content?: AnthropicResponseBlock[];
-  stop_reason?: string;
-};
+  | { type: "tool_use"; id: string; name: string; jsonBuffer: string }
+  | { type: "opaque"; block: Record<string, unknown> };
 
 /**
  * Talks to Anthropic's Messages API directly over fetch (no SDK dependency —
@@ -38,25 +40,27 @@ export class AnthropicProvider implements AIProvider {
     return isIntegrationConfigured("aiProvider");
   }
 
-  async complete(params: {
+  async *stream(params: {
     system: string;
     messages: AIMessage[];
     tools: ToolDefinition[];
     maxTokens?: number;
     toolChoice?: "auto" | "none";
-  }): Promise<AICompletionResult> {
+  }): AsyncGenerator<AIStreamDelta | AICompletionResult> {
     if (!this.isConfigured()) {
-      return {
+      yield {
         stopReason: "error",
         text: "",
         toolUses: [],
         rawContent: [],
         errorMessage: "Anthropic provider is not configured (AI_PROVIDER_API_KEY missing).",
       };
+      return;
     }
 
+    let response: Response;
     try {
-      const response = await fetch(ANTHROPIC_API_URL, {
+      response = await fetch(ANTHROPIC_API_URL, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -66,68 +70,138 @@ export class AnthropicProvider implements AIProvider {
         body: JSON.stringify({
           model: process.env.AI_PROVIDER_MODEL || DEFAULT_MODEL,
           max_tokens: params.maxTokens ?? 1536,
-          system: params.system,
+          stream: true,
+          // A single ephemeral breakpoint on the (large, per-request-static)
+          // system prompt caches it — and everything before it, i.e. the
+          // tools array too — across this request's own tool-call
+          // iterations and across the owner's next question shortly after,
+          // instead of Anthropic reprocessing ~40 tool schemas plus the full
+          // instruction block from scratch on every single turn.
+          system: [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }],
           tools: params.tools.length > 0 ? params.tools : undefined,
           tool_choice: params.toolChoice === "none" ? { type: "none" } : undefined,
           messages: params.messages.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
-
-      if (!response.ok) {
-        const body = await response.text();
-        return {
-          stopReason: "error",
-          text: "",
-          toolUses: [],
-          rawContent: [],
-          errorMessage: `AI provider returned an error (${response.status}): ${body.slice(0, 400)}`,
-        };
-      }
-
-      const json = (await response.json()) as AnthropicResponse;
-      const blocks = json.content ?? [];
-
-      // Text and tool_use are reconstructed explicitly; any other block type
-      // (e.g. extended-thinking) is passed through verbatim so it can still
-      // be echoed back on the next request without being misread as tool_use.
-      const rawContent: AIContentBlock[] = blocks.map((b) => {
-        if (b.type === "text") return { type: "text", text: (b as { text: string }).text };
-        if (b.type === "tool_use") {
-          const tb = b as { id: string; name: string; input: unknown };
-          return { type: "tool_use", id: tb.id, name: tb.name, input: tb.input };
-        }
-        return b;
-      });
-      const text = blocks
-        .filter((b): b is { type: "text"; text: string } => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
-      const toolUses: AIToolUseBlock[] = blocks
-        .filter((b): b is { type: "tool_use"; id: string; name: string; input: unknown } => b.type === "tool_use")
-        .map((b) => ({ type: "tool_use", id: b.id, name: b.name, input: b.input }));
-
-      const stopReason =
-        json.stop_reason === "tool_use"
-          ? "tool_use"
-          : json.stop_reason === "max_tokens"
-            ? "max_tokens"
-            : "end_turn";
-
-      return {
-        stopReason,
-        text,
-        toolUses: toolUses.map(({ id, name, input }) => ({ id, name, input })),
-        rawContent,
-      };
     } catch (err) {
-      return {
+      yield {
         stopReason: "error",
         text: "",
         toolUses: [],
         rawContent: [],
         errorMessage: err instanceof Error ? err.message : "Failed to reach the AI provider.",
       };
+      return;
     }
+
+    if (!response.ok || !response.body) {
+      const body = response.body ? await response.text() : "No response body.";
+      yield {
+        stopReason: "error",
+        text: "",
+        toolUses: [],
+        rawContent: [],
+        errorMessage: `AI provider returned an error (${response.status}): ${body.slice(0, 400)}`,
+      };
+      return;
+    }
+
+    const blocks = new Map<number, StreamBlockState>();
+    let stopReason: AICompletionResult["stopReason"] = "end_turn";
+    let streamError: string | null = null;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE frames are separated by a blank line; each frame may carry
+        // multiple `field: value` lines but this API only ever sends one
+        // `event:` and one `data:` per frame.
+        let boundary: number;
+        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+          if (!dataLine) continue;
+          const payload = JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>;
+
+          if (payload.type === "content_block_start") {
+            const index = payload.index as number;
+            const block = payload.content_block as Record<string, unknown>;
+            if (block.type === "text") {
+              blocks.set(index, { type: "text", text: "" });
+            } else if (block.type === "tool_use") {
+              blocks.set(index, { type: "tool_use", id: block.id as string, name: block.name as string, jsonBuffer: "" });
+            } else {
+              blocks.set(index, { type: "opaque", block });
+            }
+          } else if (payload.type === "content_block_delta") {
+            const index = payload.index as number;
+            const delta = payload.delta as Record<string, unknown>;
+            const state = blocks.get(index);
+            if (!state) continue;
+            if (delta.type === "text_delta" && state.type === "text") {
+              const chunk = delta.text as string;
+              state.text += chunk;
+              yield { type: "text_delta", text: chunk };
+            } else if (delta.type === "input_json_delta" && state.type === "tool_use") {
+              state.jsonBuffer += delta.partial_json as string;
+            }
+          } else if (payload.type === "message_delta") {
+            const delta = payload.delta as Record<string, unknown>;
+            if (delta.stop_reason === "tool_use") stopReason = "tool_use";
+            else if (delta.stop_reason === "max_tokens") stopReason = "max_tokens";
+          } else if (payload.type === "error") {
+            const error = payload.error as Record<string, unknown> | undefined;
+            streamError = typeof error?.message === "string" ? error.message : "The AI provider returned a stream error.";
+          }
+        }
+      }
+    } catch (err) {
+      yield {
+        stopReason: "error",
+        text: "",
+        toolUses: [],
+        rawContent: [],
+        errorMessage: err instanceof Error ? err.message : "Lost connection to the AI provider mid-response.",
+      };
+      return;
+    }
+
+    if (streamError) {
+      yield { stopReason: "error", text: "", toolUses: [], rawContent: [], errorMessage: streamError };
+      return;
+    }
+
+    const ordered = Array.from(blocks.entries()).sort(([a], [b]) => a - b);
+    const rawContent: AIContentBlock[] = [];
+    const toolUses: AIToolUseBlock[] = [];
+    let text = "";
+
+    for (const [, state] of ordered) {
+      if (state.type === "text") {
+        rawContent.push({ type: "text", text: state.text });
+        text += state.text;
+      } else if (state.type === "tool_use") {
+        let input: unknown = {};
+        try {
+          input = state.jsonBuffer.trim() ? JSON.parse(state.jsonBuffer) : {};
+        } catch {
+          input = {};
+        }
+        rawContent.push({ type: "tool_use", id: state.id, name: state.name, input });
+        toolUses.push({ type: "tool_use", id: state.id, name: state.name, input });
+      } else {
+        rawContent.push(state.block as AIContentBlock);
+      }
+    }
+
+    yield { stopReason, text: text.trim(), toolUses, rawContent };
   }
 }

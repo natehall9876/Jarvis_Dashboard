@@ -40,7 +40,9 @@ type Exchange = {
   /** Stable identity for React's list key — exchanges are prepended (newest first), so an array index would silently shift onto a different exchange every time a new one arrives, carrying over that DOM node's local state (e.g. a ProposedActionCard's confirm/cancel status) onto unrelated content. */
   id: string;
   question: string;
+  /** Grows as text_delta events arrive; empty string is a valid in-progress state, distinct from null (no text at all, e.g. an error before generation started). */
   answer: string | null;
+  status: "streaming" | "done" | "error";
   error: string | null;
   references: EntityReference[];
   toolsUsed: string[];
@@ -92,44 +94,84 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
       .reverse()
       .map((h) => ({ question: h.question, answer: h.answer as string }));
 
+    const id = crypto.randomUUID();
+    setHistory((prev) => [
+      { id, question: trimmed, answer: "", status: "streaming", error: null, references: [], toolsUsed: [], proposedAction: null },
+      ...prev,
+    ]);
+
+    function patch(update: Partial<Exchange>) {
+      setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, ...update } : h)));
+    }
+
     try {
       const res = await fetch("/api/ai-advisor", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question: trimmed, path: pathname, history: conversationHistory }),
       });
-      const json = (await res.json()) as {
-        answer?: string;
-        error?: string;
-        references?: EntityReference[];
-        toolsUsed?: string[];
-        proposedAction?: ProposedAction | null;
-      };
-      setHistory((prev) => [
-        {
-          id: crypto.randomUUID(),
-          question: trimmed,
-          answer: json.answer ?? null,
-          error: res.ok ? null : json.error ?? "Something went wrong.",
-          references: json.references ?? [],
-          toolsUsed: json.toolsUsed ?? [],
-          proposedAction: json.proposedAction ?? null,
-        },
-        ...prev,
-      ]);
+
+      if (!res.ok) {
+        let message = "Something went wrong.";
+        try {
+          const json = (await res.json()) as { error?: string };
+          message = json.error ?? message;
+        } catch {
+          // Non-JSON error body — fall back to the generic message above.
+        }
+        patch({ status: "error", error: message, answer: null });
+        return;
+      }
+      if (!res.body) {
+        patch({ status: "error", error: "The advisor didn't return a response stream.", answer: null });
+        return;
+      }
+
+      // Hand-parsed SSE: the response is a sequence of `event: <name>\ndata:
+      // <json>\n\n` frames — `delta` frames append streamed text as it's
+      // generated, and exactly one terminal `done` or `error` frame closes
+      // out the exchange with the full structured result (references, tools
+      // used, any proposed action).
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let settled = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary: number;
+        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
+          const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+          if (!eventLine || !dataLine) continue;
+          const eventName = eventLine.slice(6).trim();
+          const data = JSON.parse(dataLine.slice(5).trim());
+
+          if (eventName === "delta") {
+            setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, answer: (h.answer ?? "") + data.text } : h)));
+          } else if (eventName === "done") {
+            settled = true;
+            patch({
+              status: "done",
+              answer: data.answer ?? "",
+              references: data.references ?? [],
+              toolsUsed: data.toolsUsed ?? [],
+              proposedAction: data.proposedAction ?? null,
+            });
+          } else if (eventName === "error") {
+            settled = true;
+            patch({ status: "error", error: data.error ?? "Something went wrong.", answer: null });
+          }
+        }
+      }
+      if (!settled) {
+        patch({ status: "error", error: "The advisor's response stream ended unexpectedly.", answer: null });
+      }
     } catch {
-      setHistory((prev) => [
-        {
-          id: crypto.randomUUID(),
-          question: trimmed,
-          answer: null,
-          error: "Couldn't reach the advisor. Check your connection and try again.",
-          references: [],
-          toolsUsed: [],
-          proposedAction: null,
-        },
-        ...prev,
-      ]);
+      patch({ status: "error", error: "Couldn't reach the advisor. Check your connection and try again.", answer: null });
     } finally {
       setLoading(false);
     }
@@ -264,7 +306,14 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         </p>
       ) : null}
 
-      {loading ? (
+      {/* Only shown before the first token arrives (i.e. while Jarvis is
+          still calling tools) — once text starts streaming into the answer
+          bubble below, that growing text *is* the loading state, so this
+          bounce indicator steps aside rather than running alongside real
+          content. This is genuine progress, not a fake typing effect: the
+          dots show while nothing has been generated yet, and disappear the
+          instant real tokens start arriving. */}
+      {loading && history[0]?.status === "streaming" && !history[0]?.answer ? (
         <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
           <span className="flex gap-0.5">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)] [animation-delay:-0.3s]" />
@@ -300,13 +349,18 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
                 {exchange.question}
               </p>
               <div className="p-3">
-              {exchange.answer ? (
+              {exchange.status !== "error" ? (
                 <>
                   <div className="flex items-start gap-2">
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)]">
-                      <Sparkles className="h-3 w-3 text-[var(--color-accent)]" />
+                      <Sparkles className={`h-3 w-3 text-[var(--color-accent)] ${exchange.status === "streaming" ? "animate-pulse" : ""}`} />
                     </span>
-                    <MarkdownMessage text={exchange.answer} />
+                    <div className="min-w-0 flex-1">
+                      <MarkdownMessage text={exchange.answer ?? ""} />
+                      {exchange.status === "streaming" && exchange.answer ? (
+                        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[var(--color-accent)] align-middle" />
+                      ) : null}
+                    </div>
                   </div>
                   {exchange.references.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
