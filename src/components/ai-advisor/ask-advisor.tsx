@@ -7,6 +7,7 @@ import { AlertTriangle, Loader2, Mic, Send, Sparkles, Square, Wrench } from "luc
 import { Button } from "@/components/ui/button";
 import { getContextualQuestions, getPageContextLabel } from "@/lib/ai/questions";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
+import { MarkdownMessage } from "@/components/ai-advisor/markdown-message";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { ProposedAction } from "@/lib/ai/action-types";
 
@@ -305,7 +306,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)]">
                       <Sparkles className="h-3 w-3 text-[var(--color-accent)]" />
                     </span>
-                    <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{exchange.answer}</p>
+                    <MarkdownMessage text={exchange.answer} />
                   </div>
                   {exchange.references.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
