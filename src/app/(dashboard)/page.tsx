@@ -1,14 +1,24 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { TodaysMission } from "@/components/command-center/todays-mission";
+import { UpcomingWork } from "@/components/command-center/upcoming-work";
 import { BusinessPulse } from "@/components/command-center/business-pulse";
 import { AIAdvisorPanel } from "@/components/command-center/ai-advisor-panel";
 import { WeatherCard } from "@/components/command-center/weather-card";
 import { getTodaysMission, getBusinessPulse } from "@/lib/data/command-center";
+import { getWorkloadSummary } from "@/lib/data/jobs";
 
 export const dynamic = "force-dynamic";
 
+function toISODate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
 export default async function CommandCenterPage() {
-  const [mission, pulse] = await Promise.all([getTodaysMission(), getBusinessPulse()]);
+  const today = new Date();
+  const tomorrow = toISODate(new Date(today.getTime() + 86_400_000));
+  const weekOut = toISODate(new Date(today.getTime() + 7 * 86_400_000));
+
+  const [mission, pulse, upcoming] = await Promise.all([getTodaysMission(), getBusinessPulse(), getWorkloadSummary(tomorrow, weekOut)]);
 
   return (
     <div className="space-y-6">
@@ -32,6 +42,8 @@ export default async function CommandCenterPage() {
         </div>
         <WeatherCard />
       </div>
+
+      <UpcomingWork data={upcoming.data} error={upcoming.error} />
 
       <BusinessPulse data={pulse.data} error={pulse.error} />
       <AIAdvisorPanel />
