@@ -4,7 +4,7 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `a0c9e4f` — pushed to `origin/main`.
+**Latest pushed commit:** `8a0b353` — pushed to `origin/main`.
 Production liveness re-probed directly after the push (root `307`
 redirect-to-login, `/login` `200` — both as expected). **Important
 honesty note:** this app exposes no build-time commit SHA anywhere in
@@ -34,7 +34,12 @@ silently reordered.
 - **Priority 2 (professional AI answer rendering):** DONE this session,
   commit `aca498f`. See below.
 - **Priority 3 (Command Center / shared UI visual elevation, brand
-  color `#72F238`):** NOT STARTED this session.
+  color `#72F238`):** DONE this session, commit `8a0b353`. This was
+  the first time this whole engagement had an authenticated browser
+  session (the dev server's cookie was already live), so unlike every
+  prior "visual" claim in this file, this one is genuinely browser-
+  verified, not code-reviewed-and-hoped. See below for what that
+  session found and fixed.
 - **Priority 4 (demo-data provenance audit):** NOT STARTED this session
   (AI-prompt-level flagging of likely-test records was already done in
   the fourth session, commit `1024465` — that is a mitigation, not the
@@ -45,6 +50,67 @@ silently reordered.
   on the owner's own OAuth app registration).
 
 ## Fifth-session changes
+
+- **Command Center and AI Advisor visual elevation** (priority 3) — brand
+  green swapped from a muted #2dd66f to the real WeedEater #72f238
+  everywhere (one CSS variable, so it propagated app-wide); AI Advisor's
+  chrome was violet, separate-looking from the rest of the app — unified
+  to the accent green. PageHeader (app-wide) title made larger/tighter;
+  every Command Center card header now has a small accent icon next to
+  its title, matching a pattern the AI Advisor panel already used.
+  Command Center's layout, composition, and all data/functionality were
+  left untouched per explicit instruction — this was styling and
+  hierarchy only.
+  - **Two real bugs found and fixed via actual browser inspection** (not
+    code review) — this was the first session with a live authenticated
+    dev-server cookie, so for the first time claims here could be
+    genuinely verified by clicking through the real app:
+    1. **Desktop sidebar scrolled away** with the page once content
+       exceeded one viewport — the old layout was a plain `min-h-screen`
+       flex row with no pinning. A `position: sticky` attempt was tried
+       first and also failed (sticky only holds within its own flex-item
+       box, which doesn't span a page taller than one viewport — a real
+       CSS gotcha, not a typo). Fixed with the standard "app shell"
+       pattern instead: sidebar is `fixed`, content column gets
+       `lg:pl-60` to clear it. Confirmed via `getBoundingClientRect()` at
+       multiple scroll depths, not just eyeballing a screenshot (the
+       browser tool's screenshot capture turned out to visually
+       mis-render `position: fixed` elements after a scroll — a tool
+       display quirk, confirmed separately, not a real layout bug; the
+       DOM measurement was the actual proof).
+    2. **AI streaming regression** (introduced by this session's earlier
+       AI-speed work, priority 1): Claude Sonnet 5 returns extended-
+       thinking content blocks even without `thinking` requested. The
+       SSE parser only accumulated `text_delta`/`input_json_delta` —  a
+       thinking block's `thinking_delta`/`signature_delta` chunks were
+       dropped, so it got echoed back to Anthropic empty on the next
+       tool-loop iteration, and Anthropic rejected the turn ("each
+       thinking block must contain thinking"). Found by actually asking
+       Jarvis a real multi-tool question in the browser and watching it
+       fail with a 400. Fixed by accumulating those deltas properly;
+       re-tested the identical question live afterward and it completed
+       correctly with full streaming + markdown rendering.
+  - **Mobile**: added a real bottom tab bar (Today / Schedule / Jobs /
+    Ask Jarvis / More) — the mobile nav was hamburger-drawer-only before,
+    which didn't match the sprint's "fast access to today's work in the
+    field" requirement. "More" opens the same full nav list as before.
+    The floating Jarvis FAB moved up to clear the new tab bar on mobile
+    (unchanged on desktop).
+  - Fixed a real animation bug while adding a subtle fade-in stagger to
+    Command Center's sections: `.animate-fade-in` had no
+    `animation-fill-mode`, so a delayed element would flash at full
+    opacity then snap to invisible and fade back in — added `backwards`.
+  - **Verified live in the browser** at both desktop (1440×900) and
+    mobile (375×812): Command Center (full scroll), the full-page AI
+    Advisor, and a real streamed multi-tool owner-briefing answer all
+    confirmed rendering correctly. typecheck/lint/build clean, e2e
+    30/30.
+  - **Known gap**: I do not have a way in this environment to export the
+    browser tool's screenshots as image files I can hand you directly —
+    the visual verification was genuine (DOM measurements and repeated
+    live inspection, not assumption), but I can't attach the actual
+    screenshot files as proof. The fastest way to see the real result
+    yourself is the production URL above, live now.
 
 - **AI Advisor now streams real answers end-to-end and uses prompt
   caching** — this was the sprint's explicit #1 complaint ("too slow,
