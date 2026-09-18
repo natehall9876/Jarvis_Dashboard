@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { homeworksWebhookEnv } from "@/lib/env";
-import { isValidHomeworksSyncPayload, syncHomeworksEntity, type HomeworksSyncPayload } from "@/lib/integrations/homeworks-sync";
+import { dryRunHomeworksEntity, isValidHomeworksSyncPayload, syncHomeworksEntity, type HomeworksSyncPayload } from "@/lib/integrations/homeworks-sync";
 
 /**
  * One-time (or repeatable) BULK backfill for records that already existed
@@ -16,11 +16,16 @@ import { isValidHomeworksSyncPayload, syncHomeworksEntity, type HomeworksSyncPay
  * or verify without a live account) and applies the exact same safe,
  * idempotent upsert logic as the live webhook.
  *
- * Body: { records: HomeworksSyncPayload[] } — same per-record shape the
- * webhook uses. Processes sequentially (not parallel) and keeps going past
- * individual failures, so one bad row (e.g. a property referencing a
- * customer not yet synced) doesn't abort the whole batch — the response
- * reports success/failure per record so nothing fails silently.
+ * Body: { records: HomeworksSyncPayload[], dry_run?: boolean } — same
+ * per-record shape the webhook uses. With dry_run: true, nothing is
+ * written — every record is checked against the database (and against
+ * customers appearing earlier in the same batch) and the response reports
+ * exactly how many would be created vs. updated vs. fail, so a real export
+ * can be validated before a single row changes. Without dry_run, processes
+ * sequentially (not parallel) and keeps going past individual failures, so
+ * one bad row (e.g. a property referencing a customer not yet synced)
+ * doesn't abort the whole batch — the response reports success/failure per
+ * record so nothing fails silently.
  *
  * Same shared-secret auth as the webhook (HOMEWORKS_WEBHOOK_SECRET) — this
  * is not a lighter-security bulk-loading backdoor, just a batched version
@@ -68,6 +73,28 @@ export async function POST(request: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Supabase admin client is not configured.";
     return NextResponse.json({ error: message }, { status: 503 });
+  }
+
+  const dryRun = (body as { dry_run?: unknown }).dry_run === true;
+  if (dryRun) {
+    const customersSeen = new Set<string>();
+    const preview = [];
+    for (const record of validRecords) {
+      preview.push(await dryRunHomeworksEntity(supabase, record, customersSeen));
+      if (record.entity_type === "customer") customersSeen.add(record.homeworks_id);
+    }
+    const toCreate = preview.filter((p) => p.action === "create").length;
+    const toUpdate = preview.filter((p) => p.action === "update").length;
+    const wouldFail = preview.filter((p) => p.action === "would_fail").length;
+    return NextResponse.json({
+      ok: true,
+      dry_run: true,
+      total: preview.length,
+      would_create: toCreate,
+      would_update: toUpdate,
+      would_fail: wouldFail,
+      preview,
+    });
   }
 
   // Sequential, not Promise.all — customers should generally be imported

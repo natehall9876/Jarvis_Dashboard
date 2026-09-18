@@ -63,6 +63,58 @@ export function isValidHomeworksSyncPayload(value: unknown): value is HomeworksS
   return v.entity_type === "customer";
 }
 
+export type HomeworksDryRunResult =
+  | { homeworks_id: string; entity_type: string; action: "create" | "update" }
+  | { homeworks_id: string; entity_type: string; action: "would_fail"; error: string };
+
+/**
+ * Read-only preview of what syncHomeworksEntity would do — no insert,
+ * update, or upsert call, ever. Used by the bulk import endpoint's
+ * `dry_run: true` mode so a real Homeworks export can be checked (would
+ * this create N new clients or update M existing ones? does every
+ * property/invoice reference a customer that's actually in the batch or
+ * already synced?) before a single row is written.
+ */
+export async function dryRunHomeworksEntity(
+  supabase: SupabaseClient<Database>,
+  payload: HomeworksSyncPayload,
+  /**
+   * customer_homeworks_id values already checked as "create" earlier in
+   * this same dry-run batch — a real import processes sequentially, so a
+   * property listed after its customer in the same file would succeed
+   * even though the customer isn't in the database yet at dry-run time.
+   * Without this, the dry-run would incorrectly flag that as a failure.
+   */
+  customersSeenInBatch: ReadonlySet<string>,
+): Promise<HomeworksDryRunResult> {
+  const table = payload.entity_type === "customer" ? "clients" : payload.entity_type === "property" ? "properties" : "invoices";
+
+  if (payload.entity_type !== "customer" && !customersSeenInBatch.has(payload.customer_homeworks_id)) {
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("homeworks_id", payload.customer_homeworks_id)
+      .maybeSingle();
+    if (clientError) {
+      return { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type, action: "would_fail", error: extractErrorMessage(clientError) };
+    }
+    if (!client) {
+      return {
+        homeworks_id: payload.homeworks_id,
+        entity_type: payload.entity_type,
+        action: "would_fail",
+        error: `No client with homeworks_id "${payload.customer_homeworks_id}" found already synced or earlier in this same batch — reorder so the customer comes first.`,
+      };
+    }
+  }
+
+  const { data: existing, error } = await supabase.from(table).select("id").eq("homeworks_id", payload.homeworks_id).maybeSingle();
+  if (error) {
+    return { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type, action: "would_fail", error: extractErrorMessage(error) };
+  }
+  return { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type, action: existing ? "update" : "create" };
+}
+
 export async function syncHomeworksEntity(
   supabase: SupabaseClient<Database>,
   payload: HomeworksSyncPayload,

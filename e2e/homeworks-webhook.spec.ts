@@ -54,4 +54,14 @@ test.describe("Homeworks bulk import security boundary", () => {
     });
     expect(res.status()).toBeLessThan(500);
   });
+
+  test("dry_run mode still enforces the same auth gate as a real import", async ({ request }) => {
+    // dry_run must never be a lighter-security preview path — a wrong
+    // secret should be rejected identically whether or not dry_run is set.
+    const res = await request.post("/api/integrations/homeworks/import", {
+      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
+      data: { records: [{ entity_type: "customer", homeworks_id: "test" }], dry_run: true },
+    });
+    expect([401, 503]).toContain(res.status());
+  });
 });
