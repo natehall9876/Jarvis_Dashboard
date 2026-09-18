@@ -4,7 +4,30 @@
 sprint" — see full directive at top of session transcript; this entry
 covers only the first completed deliverable from that sprint).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `8a0b353` — pushed to `origin/main`.
+**Latest pushed commit:** see bottom of this section after this commit lands.
+
+## ⚠️ ACTION NEEDED FROM YOU — 2 minutes, before these features work
+
+Two new database migrations are written but **not yet applied** — I have no
+way to run SQL against your live Supabase project myself (no DB console
+access, no linked CLI). Until you run these, the Command Center's "Today's
+Mission" and "Business Pulse" cards will show a graceful "couldn't load"
+error (not broken data, not a crash — the app already degrades safely into
+its existing error-state UI when a query fails) instead of using the new
+demo-data filtering, and photo upload will fail with a clear inline error
+instead of working.
+
+1. Open your Supabase project → **SQL Editor**.
+2. Paste and run `supabase/demo-data-classification-migration.sql`.
+3. Paste and run `supabase/photo-upload-migration.sql`.
+4. Refresh Jarvis — Today's Mission and Business Pulse should load normally
+   again, and the Photos section on any Job or Property page should accept
+   an upload.
+
+Both files are idempotent (safe to run twice) and additive only — nothing
+is deleted, no existing column is dropped, no existing row is overwritten
+beyond the specific reclassification the demo-data migration documents
+inline.
 Production liveness re-probed directly after the push (root `307`
 redirect-to-login, `/login` `200` — both as expected). **Important
 honesty note:** this app exposes no build-time commit SHA anywhere in
@@ -48,6 +71,175 @@ silently reordered.
   below (Homeworks substantially built; daily-ops workflows functional;
   PWA essentials built; QuickBooks/Google Calendar not started, blocked
   on the owner's own OAuth app registration).
+
+## Sixth-session changes — "business activation" sprint
+
+Priority 0 (preserve everything) confirmed first: `git log`/`git status`
+showed a clean tree at commit `356ef13`, matching exactly what the fifth
+session's write-up claimed — nothing was lost, nothing rewritten. All
+changes below are additive on top of that.
+
+### Homeworks — real investigation, no guessed code
+
+Fetched `home.works/connect` directly (not assumed). Real findings:
+- Homeworks now has an actual **GraphQL API** with **OAuth 2.1 + PKCE**
+  auth ("Self-serve app registration — live in minutes") — this is new
+  since the last time this was investigated (a prior session correctly
+  found only a Zapier app, no direct API; Homeworks appears to have added
+  a real API since).
+- Separately, Homeworks also offers an **MCP connection** ("talk to your
+  Homeworks data through an AI assistant... Claude, ChatGPT"). This is a
+  *different* thing from the API — confirmed your instinct: an MCP
+  connection for a coding assistant does NOT give the deployed Jarvis web
+  app access. The API (OAuth 2.1 + PKCE, GraphQL) is the correct
+  integration path for the deployed app, not MCP.
+- **What I could not find, and did not guess**: the actual OAuth
+  authorize/token endpoint URLs, the GraphQL schema/endpoint, or exact
+  scope names. These aren't in any public documentation I could reach —
+  the marketing page says app registration happens "from Settings" inside
+  your own Homeworks account, meaning these specifics only become visible
+  once you're logged into your own account. I deliberately did **not**
+  write speculative OAuth/GraphQL integration code against guessed
+  endpoints — that would risk confidently-wrong code presented as working,
+  which the standing instruction explicitly rules out.
+- **Your exact next action**: log into your Homeworks account → find
+  Settings → look for "API," "Developer," or "Connect" → register a new
+  API application (their own copy says this takes minutes) → note the
+  Client ID and the exact OAuth/GraphQL endpoint URLs it shows you (these
+  are not secret) → put the Client Secret directly into Vercel's
+  environment variables yourself (never paste it in chat, matching the
+  standing rule) → tell me the Client ID + endpoint URLs and I'll build
+  the real integration against real, confirmed specifics instead of
+  guesses.
+
+### Demo data — real evidence found, not just flagged
+
+While verifying the Clients page in an authenticated session (before this
+session's browser cookie expired — see note below), found concrete,
+citable evidence: **five client records — Jessica Alvarez, Linda Park
+(Greenfield HOA), Mike Thompson, Robert Chen, Sarah Delgado — all share
+phone numbers in the exact `704-555-01XX` block.** `555-0100`–`555-0199`
+is reserved by the North American Numbering Plan exclusively for
+fictional use; these were never real assigned numbers. This is a
+verifiable fact about the numbers, not a guess about the names, and it's
+independent of whether the records have realistic-looking jobs/invoices
+attached (they do — Robert Chen shows a $70 balance, Sarah Delgado $65 —
+which is exactly why phone-number provenance matters more than "does it
+look plausible").
+
+Implemented:
+- `clients.data_source` column (`demo` | `homeworks_sync` | `owner_verified`
+  | `unverified`) — supabase/demo-data-classification-migration.sql.
+  Backfills the 5 confirmed-demo clients and anything with a real
+  `homeworks_id`; everything else stays `unverified` (the honest default —
+  NOT the same as demo, never treated as fake).
+- `src/lib/data/data-source.ts` — `getDemoClientIds()`/`getDemoPropertyIds()`.
+- Wired into the two places that actually compute "real business totals":
+  `getBusinessPulse` (revenue/AR/quote-acceptance) and `getTodaysMission`
+  (today's revenue/hours/priorities) in `lib/data/command-center.ts`, and
+  `getOverdueInvoices` in `lib/data/invoices.ts` (feeds Command Center
+  priorities + the AI's get_overdue_invoices/get_attention_items tools).
+  Deliberately did NOT filter the raw Clients/Jobs/Invoices list pages —
+  those still show every record; a "Demo data" badge appears on the
+  Clients list instead, so nothing is hidden, only excluded from totals.
+- `createClient` (the manual "Add Client" form) now stamps
+  `data_source: "owner_verified"` — going forward, anything the owner
+  types in is correctly classified from the start, not left "unverified."
+- AI Advisor system prompt: `data_source: "demo"` is now an authoritative
+  signal, in addition to the existing name-pattern heuristic ("Test",
+  "@example.com", etc.) from the prior session.
+- **Not done**: Travis Willams (401-323-0497, a real-looking RI number)
+  was left `unverified`, not `owner_verified` — I have no actual
+  confirmation he's real, only that his number doesn't match the fake
+  pattern. Reports/Invoices/Quotes list pages and payments/labor-cost
+  figures in Business Pulse are not yet demo-filtered (lower-stakes than
+  revenue/AR, deferred for time).
+
+### Natural-language job logging — the core of "remembering your business"
+
+`propose_create_job` (the AI's existing job-creation tool) only supported
+scheduling *future* work before this session — no way to log something
+already done. Extended it (no schema migration needed — `jobs.actual_hours`,
+`completion_notes`, `completed_at` already existed, unused) to handle both:
+- **Completed work** ("I mowed Maria's today for $65, took 35 minutes"):
+  `is_completed_log=true`, status becomes `completed`, price is what was
+  charged, actual_hours is the duration converted to decimal, scheduled_date
+  defaults to today unless a different date was given.
+- **Future scheduling** (unchanged behavior): status stays `scheduled`.
+- An uncertain/approximate date ("sometime last week") is never turned into
+  a guessed exact date — the system prompt now explicitly instructs leaving
+  scheduled_date unset and recording the approximate timing in notes
+  instead, with the AI saying plainly that it's an unverified note.
+- Every write still goes through the existing propose → owner confirms →
+  execute pipeline (`lib/ai/actions/execute.ts`) — nothing new bypasses
+  that. `executeCreateJob` now passes through status/actual_hours/
+  completion_notes/completed_at to the real insert.
+- **Verification status**: typecheck/lint/build clean, e2e 30/30. **Not
+  live-verified this session** — the dev server's authenticated session
+  expired partway through (a usage-limit reset dropped the browser
+  cookie), and re-authenticating requires typing a password, which I don't
+  do. Earlier in this same session, before the reset, I did verify the
+  underlying streaming/tool-call pipeline works correctly end-to-end on a
+  real multi-tool question — this specific new tool path uses that same
+  verified pipeline, but the tool itself hasn't been exercised live. Ask
+  Jarvis something like "I mowed the Willams property today for $65" and
+  check the proposal card before confirming it.
+
+### Photo upload — the foundation, built on existing infrastructure
+
+Found that `job_photos` table, and photo-grid *display* code on the Job and
+Property detail pages, already existed from an earlier session — but
+nothing could ever get a photo INTO that table (no upload path existed),
+and the display code assumed a PUBLIC storage bucket
+(`getJobPhotoUrl` built a permanent public URL), which directly conflicts
+with "never expose customer photographs publicly." Fixed both problems
+rather than building a parallel system:
+- supabase/photo-upload-migration.sql: makes `job_photos.job_id` nullable
+  and adds `property_id`/`client_id` (a photo can be tied to whichever of
+  job/property/client is actually known, with a check constraint requiring
+  at least one), plus `uploaded_by`/`content_type`/`size_bytes`/
+  `original_filename`/`source`. Creates the `job-photos` Storage bucket as
+  **private** (`public: false`), with RLS policies scoping both the table
+  and the storage objects to authenticated users only.
+- `lib/supabase/storage.ts`: rewritten to generate short-lived (10-minute)
+  **signed URLs** instead of permanent public links — the security fix.
+- `lib/actions/photos.ts` — `uploadJobPhoto`: validates file type/size
+  (15MB max, image formats only), uploads through the owner's own
+  authenticated Supabase client (not the service-role admin client — same
+  RLS-bound pattern as everything else in the app), inserts the
+  `job_photos` row, cleans up the uploaded file if the DB insert fails so
+  nothing is orphaned.
+- `components/photos/photo-upload-form.tsx` — a compact upload form
+  (file input with `capture="environment"` for a phone camera, optional
+  caption) added inline to the existing Photos cards on both the Job and
+  Property detail pages — no new page, no new nav entry, reusing exactly
+  the UI real estate that already displayed photos with nothing to show.
+- **Not done**: image/work-sheet OCR extraction (the sprint's Step 5
+  second milestone) — not started. The upload foundation itself needed a
+  database migration I can't self-apply, which only became clear partway
+  through; building OCR extraction on top of an unverified upload path
+  isn't a good sequencing choice. Once the migration is confirmed applied
+  and a real upload is verified working, this is the next logical piece.
+- **Verification status**: typecheck/lint/build clean, e2e 30/30. **Not
+  live-verified** — same session-expiry reason as above, and this
+  specifically also needs the migration run first before any live test is
+  possible at all.
+
+### Manual entry, voice input — confirmed already real, not rebuilt
+
+- "Add Client" / "Create Job" modal forms already existed
+  (`clients/page.tsx`, `jobs/page.tsx`) from earlier sessions. Confirmed
+  via the live Clients page (before the session reset) that a manually-
+  created test record ("ZZZ-JarvisQA TestClient," from an earlier session)
+  was still present — real evidence persistence survives across sessions,
+  not just page refreshes. Did not rebuild this.
+- Voice input (Web Speech API mic button in the AI Advisor's question box)
+  already existed from an earlier session, wired to the same `submit()`
+  path as typed questions. Untouched this session. Combined with the new
+  completed-job-logging tool above, speaking "I mowed Maria's for $65"
+  into the mic should now flow all the way to a real proposed job record —
+  this specific combination has not been tested live (same reason as
+  above).
 
 ## Fifth-session changes
 

@@ -18,6 +18,7 @@ export const MOCK_CLIENTS: Client[] = [
     status: "active",
     notes: "Prefers morning appointments. Gate code changes seasonally.",
     homeworks_id: null,
+    data_source: "demo",
   },
 ];
 

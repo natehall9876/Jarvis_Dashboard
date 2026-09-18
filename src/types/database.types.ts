@@ -70,6 +70,8 @@ export type Database = {
           notes: string | null;
           /** Requires supabase/homeworks-integration-migration.sql — see docs/CURRENT_STATE.md before assuming this column is live. */
           homeworks_id: string | null;
+          /** Requires supabase/demo-data-classification-migration.sql. 'demo' | 'homeworks_sync' | 'owner_verified' | 'unverified'. */
+          data_source: string;
         };
         Insert: {
           id?: string;
@@ -84,6 +86,7 @@ export type Database = {
           status?: string | null;
           notes?: string | null;
           homeworks_id?: string | null;
+          data_source?: string;
         };
         Update: Partial<Database["public"]["Tables"]["clients"]["Insert"]>;
         Relationships: [];
@@ -918,18 +921,33 @@ export type Database = {
         Row: {
           id: string;
           created_at: string;
-          job_id: string;
+          job_id: string | null;
           photo_type: string | null;
           storage_path: string;
           caption: string | null;
+          /** Requires supabase/photo-upload-migration.sql. */
+          property_id: string | null;
+          client_id: string | null;
+          uploaded_by: string | null;
+          content_type: string | null;
+          size_bytes: number | null;
+          original_filename: string | null;
+          source: string;
         };
         Insert: {
           id?: string;
           created_at?: string;
-          job_id: string;
+          job_id?: string | null;
           photo_type?: string | null;
           storage_path: string;
           caption?: string | null;
+          property_id?: string | null;
+          client_id?: string | null;
+          uploaded_by?: string | null;
+          content_type?: string | null;
+          size_bytes?: number | null;
+          original_filename?: string | null;
+          source?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [

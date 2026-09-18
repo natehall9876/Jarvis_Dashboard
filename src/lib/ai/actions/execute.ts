@@ -334,6 +334,9 @@ async function executeCreateJob(action: ProposedAction): Promise<ExecuteActionRe
     ? action.payload.employee_ids.filter((id): id is string => typeof id === "string")
     : [];
 
+  const status = action.payload.status === "completed" ? "completed" : "scheduled";
+  const completedAt = typeof action.payload.completed_at === "string" ? action.payload.completed_at : null;
+
   const fields: JobInsert = {
     property_id: propertyId,
     service_id: typeof action.payload.service_id === "string" ? action.payload.service_id : null,
@@ -341,29 +344,35 @@ async function executeCreateJob(action: ProposedAction): Promise<ExecuteActionRe
     scheduled_start_time: typeof action.payload.scheduled_start_time === "string" ? action.payload.scheduled_start_time : null,
     price,
     budgeted_hours: typeof action.payload.budgeted_hours === "number" ? action.payload.budgeted_hours : null,
+    actual_hours: typeof action.payload.actual_hours === "number" ? action.payload.actual_hours : null,
     notes: typeof action.payload.notes === "string" ? action.payload.notes : null,
-    status: "scheduled",
+    completion_notes: typeof action.payload.completion_notes === "string" ? action.payload.completion_notes : null,
+    completed_at: status === "completed" ? completedAt : null,
+    status,
   };
 
   const jobId = await insertJob(fields, employeeIds);
-  await appendJobAuditNote(jobId, "Created by owner confirmation via Jarvis.");
+  await appendJobAuditNote(jobId, status === "completed" ? "Logged as completed work by owner confirmation via Jarvis." : "Created by owner confirmation via Jarvis.");
   await logActivity({
     entityType: "job",
     entityId: jobId,
     eventType: "job_created",
-    summary: `Job created for ${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`,
-    detail: { property_id: propertyId, scheduled_date: scheduledDate, price, reason: action.explanation },
+    summary: `${status === "completed" ? "Completed job logged" : "Job created"} for ${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`,
+    detail: { property_id: propertyId, scheduled_date: scheduledDate, price, status, reason: action.explanation },
     source: "jarvis",
   });
 
   const created = await getJobById(jobId);
-  if (created.error !== null || !created.data) return fail("server_error", "Job created, but couldn't be re-read to verify.");
+  if (created.error !== null || !created.data) return fail("server_error", "Job saved, but couldn't be re-read to verify.");
 
   const label = `${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`;
   return {
     ok: true,
-    message: `Created a new job for ${label}${scheduledDate ? ` on ${scheduledDate}` : ""}.`,
-    result: { job_id: jobId, scheduled_date: created.data.scheduled_date, price: created.data.price },
+    message:
+      status === "completed"
+        ? `Logged completed work for ${label}${scheduledDate ? ` on ${scheduledDate}` : ""}${price !== null ? ` — $${price}` : ""}.`
+        : `Created a new job for ${label}${scheduledDate ? ` on ${scheduledDate}` : ""}.`,
+    result: { job_id: jobId, scheduled_date: created.data.scheduled_date, price: created.data.price, status: created.data.status },
     references: [
       { type: "job", id: jobId, label },
       { type: "property", id: propertyId, label: propertyAddress(property.data.property) },

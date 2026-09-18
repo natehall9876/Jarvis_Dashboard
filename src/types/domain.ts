@@ -85,7 +85,7 @@ export type ClientWithBalance = Client & {
 };
 
 export type PropertyWithClient = Property & {
-  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name"> | null;
+  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name" | "data_source"> | null;
 };
 
 export type JobWithRelations = Job & {
@@ -104,12 +104,12 @@ export type RouteWithStops = Route & {
 };
 
 export type QuoteWithItems = Quote & {
-  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name"> | null;
+  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name" | "data_source"> | null;
   items: QuoteItem[];
 };
 
 export type InvoiceWithClient = Invoice & {
-  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name"> | null;
+  client: Pick<Client, "id" | "first_name" | "last_name" | "company_name" | "data_source"> | null;
   property: Pick<Property, "id" | "street"> | null;
   balance: number;
   days_overdue: number;

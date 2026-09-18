@@ -179,18 +179,24 @@ export const actionTools: ToolSpec[] = [
   {
     name: "propose_create_job",
     description:
-      "Prepare a proposed NEW job for one specific property — this does NOT create it. Only call this once you have a single, confirmed property_id (from search_properties or a client's property list) — never guess when a client has multiple properties.",
+      "Prepare a proposed job for one specific property — this does NOT create it. Covers TWO distinct cases the owner asks for in plain language, distinguished by whether the work already happened:\n" +
+      "1. LOGGING COMPLETED WORK ('I mowed Maria's today for $65, took 35 minutes', 'we finished Ronnie's aeration'): set is_completed_log=true, price to the actual amount charged (not an estimate), actual_hours if a duration was mentioned (convert to decimal hours, e.g. 35 minutes = 0.58), and status defaults to 'completed'. scheduled_date defaults to TODAY if the owner didn't give a date — never invent a specific past date beyond what they said; if they say 'a few days ago' or 'sometime last week', leave scheduled_date null and put the approximate timing in notes instead of guessing an exact date.\n" +
+      "2. SCHEDULING FUTURE WORK ('schedule Maria for next Tuesday', 'add a job for Frank Friday'): is_completed_log=false (default), status stays 'scheduled', scheduled_date is the future date given.\n" +
+      "Only call this once you have a single, confirmed property_id (from search_properties or a client's property list) — never guess when a client has multiple properties. Never mark something completed and paid in the same breath unless the owner explicitly says it was paid — price here means what was charged/quoted, not that payment was collected.",
     input_schema: {
       type: "object",
       properties: {
         property_id: { type: "string", description: "The exact property UUID to schedule the job at." },
-        scheduled_date: { type: "string", description: "Optional scheduled date, ISO YYYY-MM-DD." },
+        is_completed_log: { type: "string", enum: ["true", "false"], description: "'true' if logging work already done; 'false' (default) if scheduling future work." },
+        scheduled_date: { type: "string", description: "ISO YYYY-MM-DD. For a completed-work log with no date mentioned, use today's date from the system prompt. For future scheduling, the date requested. Omit only when even an approximate date can't be determined." },
         scheduled_start_time: { type: "string", description: "Optional start time, HH:MM 24-hour." },
         service_id: { type: "string", description: "Optional service UUID." },
-        price: { type: "string", description: "Optional price for the job." },
-        budgeted_hours: { type: "string", description: "Optional budgeted labor hours." },
+        price: { type: "string", description: "The amount charged/quoted for this job." },
+        budgeted_hours: { type: "string", description: "Optional budgeted/estimated labor hours (future jobs)." },
+        actual_hours: { type: "string", description: "Actual hours worked, as a decimal (e.g. '0.58' for 35 minutes) — only for a completed-work log where a duration was mentioned." },
         employee_ids: { type: "string", description: "Optional comma-separated employee UUIDs to assign as crew." },
-        notes: { type: "string", description: "Optional notes." },
+        notes: { type: "string", description: "Optional notes — also where to put an approximate/uncertain date the owner gave instead of guessing an exact one." },
+        completion_notes: { type: "string", description: "Optional notes specific to how the completed work went (only for is_completed_log=true)." },
         reason: { type: "string", description: "Optional short reason shown to the owner." },
       },
       required: ["property_id"],
@@ -199,36 +205,52 @@ export const actionTools: ToolSpec[] = [
       const propertyId = String(input.property_id);
       const result = await getPropertyById(propertyId);
       return unwrap(result, (detail) => {
+        const isCompletedLog = input.is_completed_log === "true" || input.is_completed_log === true;
         const price = typeof input.price === "string" ? Number(input.price) : typeof input.price === "number" ? input.price : null;
         const budgetedHours =
           typeof input.budgeted_hours === "string" ? Number(input.budgeted_hours) : typeof input.budgeted_hours === "number" ? input.budgeted_hours : null;
+        const actualHours =
+          typeof input.actual_hours === "string" ? Number(input.actual_hours) : typeof input.actual_hours === "number" ? input.actual_hours : null;
         const employeeIds =
           typeof input.employee_ids === "string" ? input.employee_ids.split(",").map((s) => s.trim()).filter(Boolean) : [];
-        const scheduledDate = typeof input.scheduled_date === "string" ? input.scheduled_date : null;
+        // A completed-work log with no explicit date defaults to today —
+        // scheduling a FUTURE job with no date is left null rather than
+        // silently defaulting, since that would put unscheduled work on
+        // today's board.
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const scheduledDate =
+          typeof input.scheduled_date === "string" ? input.scheduled_date : isCompletedLog ? todayIso : null;
+        const status = isCompletedLog ? "completed" : "scheduled";
 
         const label = `${clientDisplayName(detail.client)} — ${propertyAddress(detail.property)}`;
         return buildAction({
           type: "create_job",
-          title: `Create a new job for ${label}`,
+          title: isCompletedLog ? `Log completed work for ${label}` : `Create a new job for ${label}`,
           target: null,
           current: null,
           proposed: {
             property: label,
+            status,
             scheduled_date: scheduledDate,
             scheduled_start_time: typeof input.scheduled_start_time === "string" ? input.scheduled_start_time : null,
             price: Number.isFinite(price) ? price : null,
             budgeted_hours: Number.isFinite(budgetedHours) ? budgetedHours : null,
+            actual_hours: Number.isFinite(actualHours) ? actualHours : null,
             crew_size: employeeIds.length,
           },
           explanation: typeof input.reason === "string" ? input.reason : "Requested by owner.",
           payload: {
             property_id: propertyId,
+            status,
             scheduled_date: scheduledDate,
             scheduled_start_time: typeof input.scheduled_start_time === "string" ? input.scheduled_start_time : null,
             service_id: typeof input.service_id === "string" ? input.service_id : null,
             price: Number.isFinite(price) ? price : null,
             budgeted_hours: Number.isFinite(budgetedHours) ? budgetedHours : null,
+            actual_hours: Number.isFinite(actualHours) ? actualHours : null,
             notes: typeof input.notes === "string" ? input.notes : null,
+            completion_notes: typeof input.completion_notes === "string" ? input.completion_notes : null,
+            completed_at: isCompletedLog ? new Date().toISOString() : null,
             employee_ids: employeeIds,
           },
           snapshot: null,

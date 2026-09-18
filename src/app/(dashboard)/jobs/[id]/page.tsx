@@ -9,12 +9,13 @@ import { StatusQuickChange } from "@/components/jobs/status-quick-change";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
 import { formatCurrency, formatDateOnly, formatHours, formatTime, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
-import { getJobPhotoUrl } from "@/lib/supabase/storage";
+import { getJobPhotoUrls } from "@/lib/supabase/storage";
 import { getJobById, jobProductionRate } from "@/lib/data/jobs";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
 import { updateJob, changeJobStatus } from "@/lib/actions/jobs";
 import { getActivityForEntity } from "@/lib/data/activity-log";
 import { ActivityTimeline } from "@/components/ui/activity-timeline";
+import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function JobDetailPage({
   if (error) return <ErrorState description={error} />;
   if (!job) return null;
 
+  const photoUrls = await getJobPhotoUrls(job.photos.map((p) => p.storage_path));
   const rate = jobProductionRate(job);
   const client = job.property?.client ?? null;
   const updateJobWithId = updateJob.bind(null, id);
@@ -178,20 +180,30 @@ export default async function JobDetailPage({
 
       <Card>
         <CardHeader title="Before / After Photos" description={`${job.photos.length} on file`} />
-        <CardBody>
+        <CardBody className="space-y-4">
+          <PhotoUploadForm jobId={id} />
           {job.photos.length === 0 ? (
             <EmptyState title="No photos yet" />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {job.photos.map((photo) => (
-                <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={getJobPhotoUrl(photo.storage_path)} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
-                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
-                    {photo.photo_type}
+              {job.photos.map((photo) => {
+                const url = photoUrls.get(photo.storage_path);
+                return (
+                  <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+                    {url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={url} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-28 w-full items-center justify-center bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-muted)]">
+                        Unavailable
+                      </div>
+                    )}
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
+                      {photo.caption ?? photo.photo_type ?? "Photo"}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardBody>

@@ -6,7 +6,7 @@ import type { DataResult, Invoice, InvoiceItem, InvoiceWithClient, Payment } fro
 
 const INVOICE_SELECT = `
   *,
-  client:clients(id, first_name, last_name, company_name),
+  client:clients(id, first_name, last_name, company_name, data_source),
   property:properties(id, street)
 `;
 
@@ -80,13 +80,21 @@ export async function getInvoiceById(id: string): Promise<DataResult<InvoiceDeta
   });
 }
 
+/**
+ * Feeds "what needs attention" summaries (Command Center priorities, the AI
+ * Advisor's get_overdue_invoices/get_attention_items tools) — confirmed-demo
+ * clients are excluded here so a seed-data invoice never shows up as real
+ * money owed. The raw Invoices list page uses getInvoices() directly and
+ * intentionally still shows every record (nothing is hidden there, only
+ * excluded from "this is real business money" summaries).
+ */
 export async function getOverdueInvoices(limit = 10): Promise<DataResult<InvoiceWithClient[]>> {
   const result = await getInvoices();
   if (result.error !== null) return { data: null, error: result.error };
 
   return {
     data: result.data
-      .filter((inv) => inv.balance > 0 && inv.days_overdue > 0)
+      .filter((inv) => inv.balance > 0 && inv.days_overdue > 0 && inv.client?.data_source !== "demo")
       .sort((a, b) => b.days_overdue - a.days_overdue)
       .slice(0, limit),
     error: null,

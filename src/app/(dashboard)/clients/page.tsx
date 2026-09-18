@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { SearchForm } from "@/components/ui/search-form";
 import { DataStateGate } from "@/components/ui/states";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/badge";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { ClientForm } from "@/components/clients/client-form";
@@ -32,7 +32,14 @@ export default async function ClientsPage({
         const personName = clientPersonName(c);
         return (
           <div>
-            <div className="font-medium text-[var(--color-text-primary)]">{personName ?? c.company_name ?? "Unnamed client"}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-[var(--color-text-primary)]">{personName ?? c.company_name ?? "Unnamed client"}</span>
+              {c.data_source === "demo" ? (
+                <Badge tone="warning" className="shrink-0">
+                  Demo data
+                </Badge>
+              ) : null}
+            </div>
             {personName && c.company_name ? (
               <div className="text-xs text-[var(--color-text-muted)]">{c.company_name}</div>
             ) : null}

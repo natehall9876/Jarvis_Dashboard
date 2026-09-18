@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { withDataResult } from "@/lib/data/shared";
 import { getOverdueInvoices } from "@/lib/data/invoices";
 import { getEquipment } from "@/lib/data/equipment";
+import { getDemoClientIds, getDemoPropertyIds } from "@/lib/data/data-source";
 import {
   averageTicket,
   grossProfit,
@@ -16,9 +17,14 @@ import type { EquipmentWithMaintenanceFlag } from "@/lib/data/equipment";
 
 const JOB_RELATIONS_SELECT = `
   *,
-  property:properties(*, client:clients(id, first_name, last_name, company_name)),
+  property:properties(*, client:clients(id, first_name, last_name, company_name, data_source)),
   service:services(id, name)
 `;
+
+/** True once a client is *confirmed* demo/seed data — never true for merely-unverified provenance. */
+function isDemoJob(job: { property?: { client?: { data_source?: string } | null } | null }): boolean {
+  return job.property?.client?.data_source === "demo";
+}
 
 function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -78,7 +84,10 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
     if (jobsError) throw jobsError;
 
     const todaysJobs = (jobs ?? []) as unknown as JobWithRelations[];
-    const activeJobs = todaysJobs.filter((j) => j.status !== "cancelled");
+    // Confirmed-demo jobs still render in the raw job list (so nothing looks
+    // like it silently vanished), but never count toward the real revenue/
+    // hours totals or the crew/route rollups below.
+    const activeJobs = todaysJobs.filter((j) => j.status !== "cancelled" && !isDemoJob(j));
     const scheduleChanges = todaysJobs.filter((j) => j.status === "cancelled" || j.status === "skipped");
 
     const jobIds = todaysJobs.map((j) => j.id);
@@ -101,14 +110,14 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
 
     const { data: quotes } = await supabase
       .from("quotes")
-      .select(`*, client:clients(id, first_name, last_name, company_name), items:quote_items(*)`)
+      .select(`*, client:clients(id, first_name, last_name, company_name, data_source), items:quote_items(*)`)
       .eq("status", "sent");
 
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - FOLLOW_UP_AFTER_DAYS);
     const quotesNeedingFollowUp = ((quotes ?? []) as unknown as QuoteWithItems[]).filter((q) => {
       const sentAt = q.sent_at ? new Date(q.sent_at) : null;
-      return sentAt !== null && sentAt <= cutoff;
+      return sentAt !== null && sentAt <= cutoff && q.client?.data_source !== "demo";
     });
 
     const [overdueResult, equipmentResult] = await Promise.all([getOverdueInvoices(5), getEquipment()]);
@@ -235,14 +244,23 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
     const weekStartStr = toISODate(startOfWeek(now));
     const monthStartStr = toISODate(startOfMonth(now));
 
-    const { data: monthJobs, error: jobsError } = await supabase
-      .from("jobs")
-      .select("id, price, actual_hours, scheduled_date, status")
-      .gte("scheduled_date", monthStartStr)
-      .lte("scheduled_date", today);
+    const [{ data: monthJobs, error: jobsError }, demoPropertyIds, demoClientIds] = await Promise.all([
+      supabase
+        .from("jobs")
+        .select("id, price, actual_hours, scheduled_date, status, property_id")
+        .gte("scheduled_date", monthStartStr)
+        .lte("scheduled_date", today),
+      getDemoPropertyIds(),
+      getDemoClientIds(),
+    ]);
     if (jobsError) throw jobsError;
 
-    const completedJobs = (monthJobs ?? []).filter((j) => j.status === "completed");
+    // Confirmed-demo jobs/invoices/quotes are excluded from every figure
+    // below — this is the one place Business Pulse's real $ totals are
+    // computed, so it's the one place that matters most.
+    const completedJobs = (monthJobs ?? []).filter(
+      (j) => j.status === "completed" && !demoPropertyIds.has(j.property_id),
+    );
 
     const revenueToday = completedJobs
       .filter((j) => j.scheduled_date === today)
@@ -274,19 +292,23 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
     );
 
     const [invoicesResult, quotesResponse] = await Promise.all([
-      supabase.from("invoices").select("total, amount_paid, status"),
-      supabase.from("quotes").select("status, accepted_at, declined_at").gte("created_at", monthStartStr),
+      supabase.from("invoices").select("total, amount_paid, status, client_id"),
+      supabase.from("quotes").select("status, accepted_at, declined_at, client_id").gte("created_at", monthStartStr),
     ]);
 
     // Void invoices are cancelled debt, not outstanding receivables.
-    const nonDraftInvoices = (invoicesResult.data ?? []).filter((i) => i.status !== "draft" && i.status !== "void");
+    const nonDraftInvoices = (invoicesResult.data ?? []).filter(
+      (i) => i.status !== "draft" && i.status !== "void" && !demoClientIds.has(i.client_id),
+    );
     const accountsReceivable = nonDraftInvoices.reduce(
       (sum, inv) => sum + Math.max(0, inv.total - inv.amount_paid),
       0,
     );
     const outstandingInvoiceCount = nonDraftInvoices.filter((inv) => inv.total - inv.amount_paid > 0).length;
 
-    const decidedQuotes = (quotesResponse.data ?? []).filter((q) => q.accepted_at !== null || q.declined_at !== null);
+    const decidedQuotes = (quotesResponse.data ?? []).filter(
+      (q) => (q.accepted_at !== null || q.declined_at !== null) && !demoClientIds.has(q.client_id),
+    );
     const acceptedQuotes = decidedQuotes.filter((q) => q.accepted_at !== null);
 
     return {

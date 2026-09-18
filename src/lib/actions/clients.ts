@@ -15,6 +15,10 @@ function clientFieldsFromForm(formData: FormData): ClientInsert {
     preferred_contact_method: optionalString(formData, "preferred_contact_method"),
     status: optionalString(formData, "status") ?? "active",
     notes: optionalString(formData, "notes"),
+    // Typed in by the owner through this form, by definition not demo data —
+    // stamped explicitly rather than left to the column's 'unverified'
+    // default, which is for pre-existing records of genuinely unknown origin.
+    data_source: "owner_verified",
   };
 }
 

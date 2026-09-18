@@ -9,10 +9,11 @@ import { Modal } from "@/components/ui/modal";
 import { PropertyForm } from "@/components/properties/property-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
-import { getJobPhotoUrl } from "@/lib/supabase/storage";
+import { getJobPhotoUrls } from "@/lib/supabase/storage";
 import { getPropertyById } from "@/lib/data/properties";
 import { getClientOptions } from "@/lib/data/options";
 import { updateProperty, archiveProperty } from "@/lib/actions/properties";
+import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function PropertyDetailPage({
   if (!data) return null;
 
   const { property, client, route, agreements, jobs, quotes, invoices, photos } = data;
+  const photoUrls = await getJobPhotoUrls(photos.map((p) => p.storage_path));
   const updatePropertyWithId = updateProperty.bind(null, id);
   const archivePropertyWithId = archiveProperty.bind(null, id);
 
@@ -197,17 +199,27 @@ export default async function PropertyDetailPage({
 
       <Card>
         <CardHeader title="Photos" description={`${photos.length} on file`} />
-        <CardBody>
+        <CardBody className="space-y-4">
+          <PhotoUploadForm propertyId={id} clientId={client?.id} />
           {photos.length === 0 ? (
             <EmptyState title="No photos yet" description="Before/after photos from completed jobs will appear here." />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {photos.map((photo) => (
-                <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={getJobPhotoUrl(photo.storage_path)} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
-                </div>
-              ))}
+              {photos.map((photo) => {
+                const url = photoUrls.get(photo.storage_path);
+                return (
+                  <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+                    {url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={url} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-28 w-full items-center justify-center bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-muted)]">
+                        Unavailable
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardBody>
