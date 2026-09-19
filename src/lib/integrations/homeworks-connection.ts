@@ -1,12 +1,53 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { refreshAccessToken, type TokenResponse } from "@/lib/integrations/homeworks-oauth";
+
+/**
+ * homeworks_oauth_connection holds live bearer tokens for an external
+ * system — a materially different risk class than ordinary business data
+ * (clients, jobs, invoices), which is why this file is the second
+ * deliberate exception to "every query goes through the RLS-scoped
+ * client" (see lib/supabase/admin.ts's updated doc comment for the first).
+ *
+ * Why RLS alone can't protect this table: Postgres RLS evaluates against
+ * the calling role/JWT, and both "my server code's Supabase client" and "an
+ * authenticated owner's own browser calling Supabase's REST API directly"
+ * present as the exact same `authenticated` role with the exact same JWT —
+ * RLS has no way to tell them apart. A `using (true)` policy (the
+ * project's normal pattern for ordinary business tables) would let any
+ * authenticated session read raw access/refresh tokens directly, bypassing
+ * this file's "never import in a client component" discipline entirely,
+ * since that discipline isn't something RLS can see or enforce.
+ *
+ * Scoping by `connected_by = auth.uid()` was considered and rejected —
+ * verified by checking every caller (2026-09-18): getValidAccessToken() is
+ * reached from Server Actions (verify/preview/import) that any signed-in
+ * session can invoke, not necessarily the same session that originally
+ * connected. This is a single shared business integration, not a per-user
+ * resource, so scoping by row ownership would silently break the
+ * integration for anyone except whoever happened to click Connect.
+ *
+ * The actual fix: RLS denies `authenticated`/`anon` entirely (no policy —
+ * see supabase/homeworks-oauth-security-fix.sql), and every function here
+ * uses the service-role client instead. Since that bypasses RLS
+ * completely, this file — not the database — is now the only access
+ * control, so every exported function independently verifies a real
+ * Supabase Auth session before touching the table, rather than trusting
+ * callers to have already checked (several current callers didn't).
+ */
+async function requireAuthenticatedUser(): Promise<{ ok: true; userId: string } | { ok: false }> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user ? { ok: true, userId: user.id } : { ok: false };
+}
 
 export type SaveConnectionResult = { ok: true } | { ok: false; message: string };
 
 /**
  * Single-row token store (this is a single-owner app — see
- * supabase/homeworks-oauth-migration.sql). Server-only: nothing here is
- * ever imported by a client component. Access tokens live 1 hour; this
+ * supabase/homeworks-oauth-migration.sql). Access tokens live 1 hour; this
  * refreshes automatically (with a 2-minute safety margin) whenever a
  * caller asks for a valid token, so callers never have to think about
  * expiry themselves.
@@ -21,7 +62,10 @@ export type SaveConnectionResult = { ok: true } | { ok: false; message: string }
  * "Connected" message that didn't survive a refresh.
  */
 export async function saveConnection(tokens: TokenResponse, userId: string | null): Promise<SaveConnectionResult> {
-  const supabase = await createSupabaseServerClient();
+  const auth = await requireAuthenticatedUser();
+  if (!auth.ok) return { ok: false, message: "You must be signed in." };
+
+  const supabase = createSupabaseAdminClient();
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   // Single-row table: clear any prior connection before inserting the new
   // one, rather than trying to upsert against a key that doesn't mean
@@ -53,7 +97,10 @@ export type ConnectionStatus =
  * button to seem to vanish (2026-09-18).
  */
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
-  const supabase = await createSupabaseServerClient();
+  const auth = await requireAuthenticatedUser();
+  if (!auth.ok) return { connected: false, error: null };
+
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("homeworks_oauth_connection")
     .select("created_at, scope")
@@ -65,11 +112,14 @@ export async function getConnectionStatus(): Promise<ConnectionStatus> {
   return { connected: true, connectedAt: data.created_at, scope: data.scope };
 }
 
-export type ValidTokenResult = { ok: true; accessToken: string } | { ok: false; reason: "not_connected" | "refresh_failed"; message: string };
+export type ValidTokenResult = { ok: true; accessToken: string } | { ok: false; reason: "not_connected" | "refresh_failed" | "auth"; message: string };
 
 /** Returns a definitely-valid access token, refreshing first if the stored one is expired or about to be. */
 export async function getValidAccessToken(): Promise<ValidTokenResult> {
-  const supabase = await createSupabaseServerClient();
+  const auth = await requireAuthenticatedUser();
+  if (!auth.ok) return { ok: false, reason: "auth", message: "You must be signed in." };
+
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("homeworks_oauth_connection")
     .select("id, access_token, refresh_token, expires_at")
@@ -102,6 +152,8 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
 }
 
 export async function disconnectHomeworks(): Promise<void> {
-  const supabase = await createSupabaseServerClient();
+  const auth = await requireAuthenticatedUser();
+  if (!auth.ok) return;
+  const supabase = createSupabaseAdminClient();
   await supabase.from("homeworks_oauth_connection").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 }

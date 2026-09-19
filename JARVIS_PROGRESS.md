@@ -4,7 +4,7 @@
 sleep after ~7 hours of same-night troubleshooting; worked independently
 from a written directive, no back-and-forth).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `de2ab8e` — pushed to `origin/main`. Production
+**Latest pushed commit:** `deeea45` — pushed to `origin/main`. Production
 confirmed reachable (HTTP 307 on `/`, 200 on `/login`) after this push —
 I cannot cryptographically confirm this exact commit is what's serving
 traffic (the app exposes no build SHA), only that a healthy deployment
@@ -13,6 +13,59 @@ far. Until the migrations below are run, Command Center's Today's Mission
 and Business Pulse cards will show a graceful error state on production
 (not a crash, not wrong data) — expected, goes away the moment you run
 them.
+
+## Real RLS vulnerability found and fixed — homeworks_oauth_connection
+
+The owner caught this directly, correctly, and it was real: the original
+`homeworks-oauth-migration.sql` gave `homeworks_oauth_connection` this
+project's normal `to authenticated using (true)` policy — the right
+pattern for ordinary business tables (clients, jobs, invoices), wrong here
+because this table holds live bearer tokens for an external system, a
+materially worse exposure if read by the wrong party.
+
+**Why this needed real investigation, not a quick patch**: Postgres RLS
+structurally cannot distinguish "this app's own server code" from "an
+authenticated owner's browser calling Supabase's REST API directly with
+the same JWT" — both present as the identical `authenticated` role. So
+`using (true)` let any authenticated session read raw tokens directly,
+completely bypassing the "never import this in a client component"
+discipline the code already followed, since RLS doesn't know or care
+about that discipline.
+
+The owner's own instinct — don't assume `connected_by = auth.uid()` is
+safe to lean on — turned out to be exactly right: checked every caller of
+`getValidAccessToken()` and confirmed it's reached from Server Actions
+(verify/preview/import) any signed-in session can invoke, not necessarily
+whichever session originally clicked Connect. Scoping by row ownership
+would have silently broken the integration for anyone except the original
+connector — a real, single shared business integration, not a per-user
+resource.
+
+**The fix**: RLS now denies `authenticated`/`anon` entirely on this one
+table (no policy at all) — genuinely unreachable except via the
+service-role client. `lib/integrations/homeworks-connection.ts` now uses
+`createSupabaseAdminClient()`, and — because bypassing RLS means the
+application code is now the *only* access control — every exported
+function in that file independently calls `auth.getUser()` before
+touching the table. This mattered concretely: none of the Server Actions
+that reach this table (verify, preview, disconnect) had their own auth
+check before this fix — they relied entirely on RLS silently denying
+unauthenticated queries. Switching to the admin client without adding
+these checks would have been a *worse* vulnerability than the one being
+fixed (unauthenticated access to trigger Homeworks queries), so both
+changes shipped together, verified by re-reading every call site, not
+assumed. `lib/supabase/admin.ts`'s doc comment now documents this as the
+second of exactly two deliberate, independently-justified RLS exceptions
+in the project.
+
+**Action needed**: this requires one more small migration —
+`supabase/homeworks-oauth-security-fix.sql` — since the vulnerable table
+already exists in production; editing the original migration file doesn't
+retroactively fix an already-applied one. It only drops the old policy and
+adds no replacement (no table/column/row is touched). Run it, then
+reconnect Homeworks (the previous connection attempt during this
+back-and-forth was never actually saved, so there's nothing stored to
+lose).
 
 ## Overnight session — root-caused the missing Preview button, built the confirmation-gated import
 
