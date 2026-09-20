@@ -1,15 +1,74 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-20, following a session where the owner connected
-a real Homeworks MCP server directly to this Claude session (separate
-credential from the Jarvis app's own OAuth connection).
+**Last updated:** 2026-09-20, following the owner's real customer import
+(25 customers) and report that the import created 25 records instead of
+the previewed 23-create/2-duplicate, plus 0 jobs visible on Sunday 9/20
+and unverified $0 client balances.
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `2966726` — pushed to `origin/main`. Production
-confirmed reachable (HTTP 307 on `/`, 200 on `/login`) after this push —
-I cannot cryptographically confirm this exact commit is what's serving
-traffic (the app exposes no build SHA), only that a healthy deployment
-exists; Vercel has auto-deployed every push in this project reliably so
-far.
+**Latest pushed commit:** `97857ef` — pushed to `origin/main`. Production
+confirmed reachable (HTTP 200 on `/login`) after this push — I cannot
+cryptographically confirm this exact commit is what's serving traffic (the
+app exposes no build SHA), only that a healthy deployment exists; Vercel
+has auto-deployed every push in this project reliably so far.
+
+## This session: found the real import-duplicate bug, built jobs sync, balance/duplicate visibility
+
+**Root cause of the 25-created/0-skipped import** (the owner's main
+question): `confirmHomeworksImport()` had `if (c.homeworks_id) continue;`
+in its duplicate-detection pre-scan, which exempted *any* existing client
+carrying *any* homeworks_id — even a stale or mismatched one — from
+phone/email duplicate matching. `previewHomeworksSync()` never had this
+guard, which is exactly why preview correctly predicted 2 duplicates but
+the real import skipped 0. Fixed by removing the guard so both paths use
+identical logic. **This only prevents future duplicates — it does not
+retroactively clean up whatever the bug already created** (most likely a
+second "Jarvis Integration Test" row, since that's a name flagged earlier
+as having a homeworks_id from prior webhook testing).
+
+**Built to let you find and decide on any existing duplicates yourself**:
+a read-only "Check for duplicate client records" panel now on the Clients
+page (`src/components/clients/duplicate-audit-panel.tsx`, backed by
+`findDuplicateClients()` in `src/lib/actions/client-duplicate-audit.ts`).
+It groups all clients by normalized phone and email and shows any group
+with 2+ members — name, data source, homeworks_id, created date. It makes
+no changes on its own. Per your explicit instruction, no merge or delete
+was implemented — that's a decision only you can make, with the evidence
+this panel surfaces.
+
+**Jobs sync — built, not yet run by you.** `supabase/homeworks-jobs-migration.sql`
+is a **fourth pending migration** (adds `jobs.homeworks_id` unique
+column, same idempotent pattern as the other three). Once run, the
+Settings → Homeworks card has a new "Scheduled jobs (next 7 days)"
+section: **Preview job sync (read-only)** shows would-create/would-update/
+blocked-by-unsynced-property counts, then **Confirm import** (behind a
+native `confirm()` naming exact counts) does the write, upserting on
+`homeworks_id`. Start times are only ever set when Homeworks reports
+`hasTime: true` — never invented for all-day events. No crew/employee
+assignment is attempted (none exists in the source data). Confirmed via
+live MCP query that the real 15 jobs fall on 9/21, 9/24, and 9/25, 2026 —
+**zero on Sunday 9/20 is correct, not a sync failure**, matching your own
+hypothesis.
+
+**Balances**: clients synced from Homeworks with no synced invoices now
+show "Not synced" instead of a misleading $0, via a new `balance_verified`
+flag (`src/lib/data/clients.ts`, both Clients pages). Invoices are not yet
+part of any Homeworks sync path, so every homeworks_sync client will show
+"Not synced" until that's built — this is expected, not a bug.
+
+**Verification actually run this session**: `npm run typecheck` (clean),
+`npm run lint` (clean, after fixing one `react/no-unescaped-entities`),
+`npm run build` (succeeded), `npx playwright test` (34/34 passed, chromium
++ mobile-safari). All were run against the real code, not assumed. Still
+not verified: whether the import/jobs/balance code paths behave correctly
+against your live, authenticated session — no Supabase service-role key or
+authenticated browser session is available in this environment, same
+structural limitation as every prior session.
+
+**Four migrations now pending your action, in order:**
+1. `supabase/homeworks-oauth-migration.sql` (if not already run)
+2. `supabase/homeworks-oauth-security-fix.sql`
+3. `supabase/demo-data-classification-migration.sql` / `supabase/photo-upload-migration.sql`
+4. `supabase/homeworks-jobs-migration.sql` (**new this session**)
 
 ## Real Homeworks data confirmed to exist — via MCP, not yet via the Jarvis app
 
