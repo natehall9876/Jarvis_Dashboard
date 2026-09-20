@@ -1,17 +1,65 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-18, overnight autonomous session (owner went to
-sleep after ~7 hours of same-night troubleshooting; worked independently
-from a written directive, no back-and-forth).
+**Last updated:** 2026-09-20, following a session where the owner connected
+a real Homeworks MCP server directly to this Claude session (separate
+credential from the Jarvis app's own OAuth connection).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
-**Latest pushed commit:** `deeea45` — pushed to `origin/main`. Production
+**Latest pushed commit:** `2966726` — pushed to `origin/main`. Production
 confirmed reachable (HTTP 307 on `/`, 200 on `/login`) after this push —
 I cannot cryptographically confirm this exact commit is what's serving
 traffic (the app exposes no build SHA), only that a healthy deployment
 exists; Vercel has auto-deployed every push in this project reliably so
-far. Until the migrations below are run, Command Center's Today's Mission
-and Business Pulse cards will show a graceful error state on production
-(not a crash, not wrong data) — expected, goes away the moment you run
+far.
+
+## Real Homeworks data confirmed to exist — via MCP, not yet via the Jarvis app
+
+The owner connected a genuine Homeworks MCP server to this Claude session
+(`api.home.works/mcp`, a separate OAuth grant from the Jarvis app's own
+stored token). Using it directly — real, live queries, not samples —
+confirmed:
+- **Real account**: `natehall9876@gmail.com` at **WeedEater Lawn Care**
+  (Homeworks company id 10154).
+- **25 real customers** (complete list, not a sample — Nick Hall, Alicia
+  Rathbun, Ron Gengron, Travis Willams, and 21 others, plus one visibly-
+  test record, "Jarvis Integration Test," correctly identifiable as such).
+- **15 real scheduled jobs** in the next 7 days (2026-09-20 through
+  2026-09-27), all lawn-maintenance visits across real Smithfield/North
+  Smithfield/Johnston/Burrillville, RI addresses. None have a crew
+  assigned yet.
+
+**This is not the same thing as the Jarvis application being connected.**
+That MCP session is a separate credential, scoped to this Claude
+conversation, with no relationship to the `homeworks_oauth_connection`
+table the Jarvis app reads from. What it's genuinely useful for: every
+GraphQL query the Jarvis app makes to Homeworks can now be empirically
+tested against the real API before being written into application code,
+instead of only cross-checked against the schema file. That testing
+caught two real bugs this session (below) that schema-reading alone would
+have missed — both are exactly the kind of "looks right, fails at
+runtime" errors GraphQL's scalar/enum coercion produces, and neither
+would have been visible without an actual authenticated call.
+
+## Two real bugs found via live testing, fixed before they reached the app
+
+1. `orderBy: [{ startDate: ASC }]` — Homeworks' API rejected this
+   ("does not exist in SortOrder enum, did you mean asc or desc").
+   Lowercase fixed it.
+2. More subtly: the exact same query, sent as a *parameterized* query
+   (`$from: LocalDate!`) instead of inline literals, failed differently
+   — "$from of type LocalDate! used in position expecting type Date."
+   `Event.startDate`'s own field type is `LocalDate`, but the filter
+   input (`DateFilter.gte`/`lte`) expects the separate `Date` scalar.
+   This is exactly the kind of app-only failure that can't be caught by
+   testing an inline query — the Jarvis app always sends parameterized
+   queries (never inline literals), so this specific bug would only have
+   surfaced when the owner actually clicked Preview in production.
+   Retested the corrected, parameterized shape and confirmed real
+   results before writing it into `lib/integrations/homeworks-api.ts`.
+
+Command Center's Today's Mission and Business Pulse cards will show a
+graceful error state on production (not a crash, not wrong data) until
+the migrations below are confirmed run — I still cannot verify migration
+status directly (no DB access, see below).
 them.
 
 ## Real RLS vulnerability found and fixed — homeworks_oauth_connection
