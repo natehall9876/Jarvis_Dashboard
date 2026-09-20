@@ -1,7 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getAllCustomers, type HomeworksCustomerSample } from "@/lib/integrations/homeworks-api";
+import { getAllCustomers, getUpcomingJobs, getConnectedAccount, type HomeworksCustomerSample } from "@/lib/integrations/homeworks-api";
 
 /**
  * Read-only comparison between real, live Homeworks customers and what's
@@ -21,12 +21,14 @@ export type SyncPreviewRow = {
 export type SyncPreviewResult =
   | {
       ok: true;
+      account: { userEmail: string; companyName: string } | null;
       totalHomeworksCustomers: number;
       pageCount: number;
       hitPageCap: boolean;
       wouldCreate: number;
       wouldUpdate: number;
       possibleDuplicates: number;
+      upcomingJobCount: number;
       rows: SyncPreviewRow[];
     }
   | { ok: false; message: string };
@@ -38,8 +40,17 @@ function normalizePhone(phone: string | null | undefined): string | null {
 }
 
 export async function previewHomeworksSync(): Promise<SyncPreviewResult> {
-  const homeworksResult = await getAllCustomers();
+  const [homeworksResult, accountResult, upcomingJobsResult] = await Promise.all([
+    getAllCustomers(),
+    getConnectedAccount(),
+    getUpcomingJobs(7),
+  ]);
   if (!homeworksResult.ok) return { ok: false, message: homeworksResult.message };
+  // account/upcoming-jobs failures don't block the preview — the customer
+  // comparison (the actual point of this action) still ran successfully;
+  // an account-identity or job-count hiccup is shown as absent, not fatal.
+  const account = accountResult.ok ? accountResult.data : null;
+  const upcomingJobCount = upcomingJobsResult.ok ? upcomingJobsResult.data.jobs.length : 0;
 
   const supabase = await createSupabaseServerClient();
   const { data: existingClients, error } = await supabase.from("clients").select("id, homeworks_id, phone, email, first_name, last_name, company_name");
@@ -76,12 +87,14 @@ export async function previewHomeworksSync(): Promise<SyncPreviewResult> {
 
   return {
     ok: true,
+    account,
     totalHomeworksCustomers: homeworksResult.data.customers.length,
     pageCount: homeworksResult.data.pageCount,
     hitPageCap: homeworksResult.data.hitCap,
     wouldCreate: rows.filter((r) => r.action === "would_create").length,
     wouldUpdate: rows.filter((r) => r.action === "would_update").length,
     possibleDuplicates: rows.filter((r) => r.action === "possible_duplicate").length,
+    upcomingJobCount,
     rows,
   };
 }

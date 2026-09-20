@@ -114,3 +114,81 @@ export async function getAllCustomers(): Promise<GraphQLResult<{ customers: Home
   }
   return { ok: true, data: { customers: all, pageCount: page, hitCap: true } };
 }
+
+export type HomeworksUpcomingJob = {
+  id: string;
+  title: string;
+  status: string;
+  startDate: string;
+  hasTime: boolean;
+  startTime: string | null;
+  customer: { fullName: string } | null;
+  property: { name: string; address: { street1: string; city: string | null; state: string | null } | null } | null;
+};
+
+/**
+ * This exact query shape was empirically run against the live API this
+ * session (not just read from the schema), through two real, caught
+ * errors: `orderBy: [{ startDate: ASC }]` was rejected ("does not exist in
+ * SortOrder enum, did you mean asc or desc") — lowercase fixed it. Then,
+ * as a parameterized query (variables, not inline literals),
+ * `$from`/`$to` typed as `LocalDate!` were rejected too ("used in position
+ * expecting type Date") — `Event.startDate` is a `LocalDate`, but
+ * `DateFilter.gte`/`lte` expect the separate `Date` scalar. Both fixed and
+ * re-verified with real results before this was written into the app.
+ * `status: { equals: OPEN }` matches the live playbook's own definition of
+ * "scheduled/active" jobs (CLOSED = complete, SKIPPED/CANCELLED/WAITLISTED
+ * are excluded).
+ */
+const UPCOMING_JOBS_QUERY = `
+  query UpcomingJobs($from: Date!, $to: Date!) {
+    events(
+      where: { status: { equals: OPEN }, startDate: { gte: $from, lte: $to }, isDeleted: false }
+      orderBy: [{ startDate: asc }]
+    ) {
+      id
+      title
+      status
+      startDate
+      hasTime
+      startTime
+      customer { fullName }
+      property { name address { street1 city state } }
+    }
+  }
+`;
+
+function toISODate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Read-only. Defaults to today through 7 days out, matching the Command Center's own "next 7 days" convention elsewhere in the app. */
+export async function getUpcomingJobs(days = 7): Promise<GraphQLResult<{ jobs: HomeworksUpcomingJob[] }>> {
+  const today = new Date();
+  const to = new Date(today.getTime() + days * 86_400_000);
+  const result = await queryHomeworks<{ events: HomeworksUpcomingJob[] }>(UPCOMING_JOBS_QUERY, {
+    from: toISODate(today),
+    to: toISODate(to),
+  });
+  if (!result.ok) return result;
+  return { ok: true, data: { jobs: result.data.events } };
+}
+
+const WHO_AM_I_QUERY = `
+  query WhoAmI {
+    currentUser {
+      id
+      email
+      company { id name }
+    }
+  }
+`;
+
+export type HomeworksAccount = { userEmail: string; companyName: string };
+
+/** Read-only. Shows which real Homeworks account/company the connection is authorized against — not just "Connected", an actual identity check. */
+export async function getConnectedAccount(): Promise<GraphQLResult<HomeworksAccount>> {
+  const result = await queryHomeworks<{ currentUser: { email: string; company: { name: string } | null } }>(WHO_AM_I_QUERY);
+  if (!result.ok) return result;
+  return { ok: true, data: { userEmail: result.data.currentUser.email, companyName: result.data.currentUser.company?.name ?? "(unknown company)" } };
+}

@@ -180,11 +180,17 @@ export function HomeworksConnectionCard({
         ) : null}
         {preview && preview.ok ? (
           <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-2">
+            {preview.account ? (
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                Authenticated as <span className="text-[var(--color-text-primary)]">{preview.account.userEmail}</span> at{" "}
+                <span className="text-[var(--color-text-primary)]">{preview.account.companyName}</span>.
+              </p>
+            ) : null}
             <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-accent)]">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {preview.totalHomeworksCustomers} real customer{preview.totalHomeworksCustomers === 1 ? "" : "s"} found in Homeworks
               {preview.hitPageCap ? " (stopped at the pagination safety cap — there may be more)" : ""}, across {preview.pageCount} page
-              {preview.pageCount === 1 ? "" : "s"}.
+              {preview.pageCount === 1 ? "" : "s"}. {preview.upcomingJobCount} job{preview.upcomingJobCount === 1 ? "" : "s"} scheduled in the next 7 days.
             </p>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="rounded-md bg-[var(--color-surface-2)] p-2">
