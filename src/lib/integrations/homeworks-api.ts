@@ -122,8 +122,11 @@ export type HomeworksUpcomingJob = {
   startDate: string;
   hasTime: boolean;
   startTime: string | null;
-  customer: { fullName: string } | null;
-  property: { name: string; address: { street1: string; city: string | null; state: string | null } | null } | null;
+  total: string;
+  /** Non-null means this event is part of a recurring series — there is no separate isRecurring field on Event (verified against the live schema, not assumed). */
+  recurringEventId: string | null;
+  customer: { id: string; fullName: string } | null;
+  property: { id: string; name: string; address: { street1: string; city: string | null; state: string | null } | null } | null;
 };
 
 /**
@@ -152,8 +155,10 @@ const UPCOMING_JOBS_QUERY = `
       startDate
       hasTime
       startTime
-      customer { fullName }
-      property { name address { street1 city state } }
+      total
+      recurringEventId
+      customer { id fullName }
+      property { id name address { street1 city state } }
     }
   }
 `;

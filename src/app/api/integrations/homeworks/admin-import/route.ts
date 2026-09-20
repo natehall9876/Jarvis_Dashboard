@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { dryRunHomeworksEntity, isValidHomeworksSyncPayload, syncHomeworksEntity, type HomeworksSyncPayload } from "@/lib/integrations/homeworks-sync";
+import { dryRunHomeworksEntity, isValidHomeworksSyncPayload, syncHomeworksEntity, type BulkImportPayload } from "@/lib/integrations/homeworks-sync";
 
 /**
  * The owner-facing counterpart to /api/integrations/homeworks/import.
@@ -42,14 +42,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Max 500 records per request — split larger exports into batches." }, { status: 400 });
   }
 
-  const invalid = records.filter((r) => !isValidHomeworksSyncPayload(r));
+  // "job" is a real entity_type, but only for the direct-API sync path
+  // (lib/actions/homeworks-job-sync.ts) — this bulk CSV/JSON endpoint's
+  // contract never included jobs, so reject it explicitly.
+  const invalid = records.filter((r) => !isValidHomeworksSyncPayload(r) || (r as { entity_type?: string }).entity_type === "job");
   if (invalid.length > 0) {
     return NextResponse.json(
-      { error: `${invalid.length} of ${records.length} records are missing required fields (entity_type, homeworks_id, and customer_homeworks_id for property/invoice).` },
+      {
+        error: `${invalid.length} of ${records.length} records are missing required fields (entity_type, homeworks_id, and customer_homeworks_id for property/invoice), or use entity_type "job" (not supported by this bulk endpoint — jobs sync via Settings' Homeworks card instead).`,
+      },
       { status: 400 },
     );
   }
-  const validRecords = records as HomeworksSyncPayload[];
+  const validRecords = records as BulkImportPayload[];
 
   const dryRun = (body as { dry_run?: unknown }).dry_run === true;
 

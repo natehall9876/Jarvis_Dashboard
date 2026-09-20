@@ -43,6 +43,7 @@ export const MOCK_JOBS: Job[] = [
     completion_notes: null,
     started_at: null,
     completed_at: null,
+    homeworks_id: null,
   },
 ];
 

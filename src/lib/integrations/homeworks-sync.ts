@@ -45,7 +45,36 @@ export type InvoicePayload = {
   invoice_date?: string;
 };
 
-export type HomeworksSyncPayload = CustomerPayload | PropertyPayload | InvoicePayload;
+export type JobPayload = {
+  entity_type: "job";
+  homeworks_id: string;
+  property_homeworks_id: string;
+  /** ISO YYYY-MM-DD. */
+  scheduled_date?: string;
+  /**
+   * Only set when Homeworks' own `hasTime` was true for this event —
+   * never invented. An all-day event (hasTime: false) must sync with
+   * scheduled_start_time left unset, not defaulted to a guessed time.
+   */
+  scheduled_start_time?: string;
+  /** The real quoted/invoiced total from Homeworks (Event.total), not an estimate. */
+  price?: number;
+  /** Already mapped by the caller to a valid Jarvis job status — this function doesn't interpret Homeworks' own EventStatus. */
+  status?: string;
+  notes?: string;
+};
+
+export type HomeworksSyncPayload = CustomerPayload | PropertyPayload | InvoicePayload | JobPayload;
+
+/**
+ * Jobs were never part of the bulk-CSV/JSON import + dry-run feature
+ * (admin-import UI, ../import/route.ts) — that path only ever constructs
+ * customer/property/invoice payloads. dryRunHomeworksEntity below is
+ * scoped to this narrower type rather than the full HomeworksSyncPayload
+ * union so adding JobPayload above doesn't force it to handle a job case
+ * it was never designed for.
+ */
+export type BulkImportPayload = CustomerPayload | PropertyPayload | InvoicePayload;
 
 export type HomeworksSyncResult = { ok: true; entity_type: string; id: string } | { ok: false; error: string };
 
@@ -57,6 +86,7 @@ export function isValidHomeworksSyncPayload(value: unknown): value is HomeworksS
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (!isNonEmptyString(v.entity_type) || !isNonEmptyString(v.homeworks_id)) return false;
+  if (v.entity_type === "job") return isNonEmptyString(v.property_homeworks_id);
   if (v.entity_type === "property" || v.entity_type === "invoice") {
     return isNonEmptyString(v.customer_homeworks_id);
   }
@@ -77,7 +107,7 @@ export type HomeworksDryRunResult =
  */
 export async function dryRunHomeworksEntity(
   supabase: SupabaseClient<Database>,
-  payload: HomeworksSyncPayload,
+  payload: BulkImportPayload,
   /**
    * customer_homeworks_id values already checked as "create" earlier in
    * this same dry-run batch — a real import processes sequentially, so a
@@ -207,6 +237,38 @@ export async function syncHomeworksEntity(
           .single();
         if (error) throw error;
         return { ok: true, entity_type: "invoice", id: data.id };
+      }
+      case "job": {
+        const { data: property, error: propertyError } = await supabase
+          .from("properties")
+          .select("id")
+          .eq("homeworks_id", payload.property_homeworks_id)
+          .maybeSingle();
+        if (propertyError) throw propertyError;
+        if (!property) {
+          return { ok: false, error: `No property found with homeworks_id "${payload.property_homeworks_id}" — sync the customer/property first.` };
+        }
+        const { data, error } = await supabase
+          .from("jobs")
+          .upsert(
+            {
+              homeworks_id: payload.homeworks_id,
+              property_id: property.id,
+              scheduled_date: payload.scheduled_date ?? null,
+              // Deliberately null, never defaulted, when Homeworks didn't
+              // report a specific time (hasTime: false) — an all-day event
+              // has no real start time to invent.
+              scheduled_start_time: payload.scheduled_start_time ?? null,
+              price: typeof payload.price === "number" ? payload.price : null,
+              status: payload.status ?? "scheduled",
+              notes: payload.notes ?? null,
+            },
+            { onConflict: "homeworks_id" },
+          )
+          .select("id")
+          .single();
+        if (error) throw error;
+        return { ok: true, entity_type: "job", id: data.id };
       }
     }
   } catch (err) {

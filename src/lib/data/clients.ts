@@ -53,15 +53,24 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
     }
 
     const balanceByClient = new Map<string, number>();
+    const hasAnyInvoiceByClient = new Set<string>();
     for (const inv of invoices ?? []) {
       const balance = inv.total - inv.amount_paid;
       balanceByClient.set(inv.client_id, (balanceByClient.get(inv.client_id) ?? 0) + balance);
+      hasAnyInvoiceByClient.add(inv.client_id);
     }
 
     return clients.map((client): ClientWithBalance => ({
       ...client,
       properties_count: propertyCountByClient.get(client.id) ?? 0,
       outstanding_balance: balanceByClient.get(client.id) ?? 0,
+      // A homeworks_sync client with zero Jarvis invoice rows has an
+      // unknown real balance, not a verified $0 — invoices aren't synced
+      // from Homeworks yet, so that $0 is an artifact of nothing to sum,
+      // not evidence the customer is paid up. Any other data_source (or a
+      // homeworks_sync client that does have at least one real invoice
+      // row already) keeps the computed figure as genuinely verified.
+      balance_verified: client.data_source !== "homeworks_sync" || hasAnyInvoiceByClient.has(client.id),
     }));
   });
 }
@@ -73,6 +82,8 @@ export type ClientDetail = {
   quotes: Quote[];
   invoices: Invoice[];
   outstanding_balance: number;
+  /** See ClientWithBalance.balance_verified — same reasoning, computed the same way. */
+  balance_verified: boolean;
 };
 
 export async function getClientById(id: string): Promise<DataResult<ClientDetail>> {
@@ -118,6 +129,7 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
       quotes: quotes ?? [],
       invoices: invoices ?? [],
       outstanding_balance: outstandingBalance,
+      balance_verified: client.data_source !== "homeworks_sync" || (invoices ?? []).length > 0,
     };
   });
 }

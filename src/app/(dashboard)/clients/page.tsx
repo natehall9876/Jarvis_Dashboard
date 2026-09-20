@@ -9,6 +9,7 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { ClientForm } from "@/components/clients/client-form";
+import { DuplicateAuditPanel } from "@/components/clients/duplicate-audit-panel";
 import { formatCurrency, clientPersonName } from "@/lib/format";
 import { getClients } from "@/lib/data/clients";
 import { createClient } from "@/lib/actions/clients";
@@ -61,11 +62,14 @@ export default async function ClientsPage({
       key: "balance",
       header: "Outstanding Balance",
       align: "right",
-      render: (c) => (
-        <span className={c.outstanding_balance > 0 ? "text-[var(--color-warning)]" : undefined}>
-          {formatCurrency(c.outstanding_balance)}
-        </span>
-      ),
+      render: (c) =>
+        c.balance_verified ? (
+          <span className={c.outstanding_balance > 0 ? "text-[var(--color-warning)]" : undefined}>{formatCurrency(c.outstanding_balance)}</span>
+        ) : (
+          <span className="text-[var(--color-text-muted)]" title="Synced from Homeworks — invoices aren't synced yet, so the real balance isn't known.">
+            Not synced
+          </span>
+        ),
     },
   ];
 
@@ -86,6 +90,8 @@ export default async function ClientsPage({
           </div>
         }
       />
+
+      <DuplicateAuditPanel />
 
       <Card>
         <DataStateGate

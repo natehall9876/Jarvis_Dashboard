@@ -347,6 +347,8 @@ export type Database = {
           completion_notes: string | null;
           started_at: string | null;
           completed_at: string | null;
+          /** Requires supabase/homeworks-jobs-migration.sql. */
+          homeworks_id: string | null;
         };
         Insert: {
           id?: string;
@@ -356,6 +358,7 @@ export type Database = {
           service_id?: string | null;
           service_agreement_id?: string | null;
           route_id?: string | null;
+          homeworks_id?: string | null;
           scheduled_date?: string | null;
           scheduled_start_time?: string | null;
           stop_order?: number | null;

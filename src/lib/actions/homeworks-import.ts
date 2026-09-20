@@ -62,7 +62,19 @@ export async function confirmHomeworksImport(): Promise<ImportResult> {
   const byPhone = new Map<string, boolean>();
   const byEmail = new Map<string, boolean>();
   for (const c of existingClients ?? []) {
-    if (c.homeworks_id) continue; // already-synced clients aren't duplicate-match candidates for a different homeworks_id
+    // A real bug, found by auditing an actual discrepancy (2026-09-20):
+    // this used to `continue` (skip indexing) for any client with ANY
+    // homeworks_id, on the assumption that already-linked clients can't be
+    // duplicate-match candidates. That's wrong when the existing
+    // homeworks_id doesn't match the CURRENT Homeworks customer being
+    // processed (e.g. a stale/test id from an earlier manual test) — such
+    // a client was silently exempted from phone/email duplicate-checking
+    // entirely, so a real match against it fell through and got created
+    // as a brand-new row instead of being flagged. previewHomeworksSync()
+    // never had this bug (it indexes every existing client unconditionally),
+    // which is exactly why preview correctly predicted duplicates that the
+    // import then failed to skip. Both functions must apply the identical
+    // check — removed the guard so this one now matches preview exactly.
     const phone = normalizePhone(c.phone);
     if (phone) byPhone.set(phone, true);
     if (c.email) byEmail.set(c.email.toLowerCase().trim(), true);

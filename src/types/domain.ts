@@ -82,6 +82,16 @@ export type {
 export type ClientWithBalance = Client & {
   properties_count: number;
   outstanding_balance: number;
+  /**
+   * False means outstanding_balance is a computed $0 from zero real
+   * invoice rows, not a verified "this client owes nothing" — true for
+   * any homeworks_sync client until real invoice data has actually been
+   * synced for them (Homeworks itself tracks a real balance for these
+   * customers; Jarvis just doesn't have it yet). Presenting that
+   * computed $0 as if verified would be actively misleading, not just
+   * incomplete — it reads as "paid in full."
+   */
+  balance_verified: boolean;
 };
 
 export type PropertyWithClient = Property & {

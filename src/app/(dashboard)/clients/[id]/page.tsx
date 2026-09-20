@@ -30,7 +30,7 @@ export default async function ClientDetailPage({
   if (error) return <ErrorState description={error} />;
   if (!data) notFound();
 
-  const { client, properties, jobs, quotes, invoices, outstanding_balance } = data;
+  const { client, properties, jobs, quotes, invoices, outstanding_balance, balance_verified } = data;
   const updateClientWithId = updateClient.bind(null, id);
   const archiveClientWithId = archiveClient.bind(null, id);
 
@@ -76,9 +76,15 @@ export default async function ClientDetailPage({
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Outstanding Balance</div>
-            <div className={`mt-1 text-sm font-semibold ${outstanding_balance > 0 ? "text-[var(--color-warning)]" : "text-[var(--color-text-primary)]"}`}>
-              {formatCurrency(outstanding_balance)}
-            </div>
+            {balance_verified ? (
+              <div className={`mt-1 text-sm font-semibold ${outstanding_balance > 0 ? "text-[var(--color-warning)]" : "text-[var(--color-text-primary)]"}`}>
+                {formatCurrency(outstanding_balance)}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm font-semibold text-[var(--color-text-muted)]" title="Synced from Homeworks — invoices aren't synced yet, so the real balance isn't known.">
+                Not synced
+              </div>
+            )}
           </CardBody>
         </Card>
       </div>

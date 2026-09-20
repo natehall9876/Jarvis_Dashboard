@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { verifyHomeworksConnection, disconnectHomeworksAction, type VerifyResult } from "@/lib/actions/homeworks-oauth";
 import { previewHomeworksSync, type SyncPreviewResult } from "@/lib/actions/homeworks-sync-preview";
 import { confirmHomeworksImport, type ImportResult } from "@/lib/actions/homeworks-import";
+import { previewHomeworksJobSync, confirmHomeworksJobImport, type JobPreviewResult, type JobImportResult } from "@/lib/actions/homeworks-job-sync";
 
 /**
  * A "Connected" badge is not evidence (per explicit instruction) — this
@@ -40,9 +41,13 @@ export function HomeworksConnectionCard({
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [preview, setPreview] = useState<SyncPreviewResult | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [jobPreview, setJobPreview] = useState<JobPreviewResult | null>(null);
+  const [jobImportResult, setJobImportResult] = useState<JobImportResult | null>(null);
   const [pending, startTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
   const [importPending, startImportTransition] = useTransition();
+  const [jobPreviewPending, startJobPreviewTransition] = useTransition();
+  const [jobImportPending, startJobImportTransition] = useTransition();
 
   function verify() {
     setResult(null);
@@ -76,12 +81,37 @@ export function HomeworksConnectionCard({
     });
   }
 
+  function runJobPreview() {
+    setJobPreview(null);
+    setJobImportResult(null);
+    startJobPreviewTransition(async () => {
+      setJobPreview(await previewHomeworksJobSync());
+    });
+  }
+
+  function runJobImport() {
+    if (!jobPreview || !jobPreview.ok) return;
+    const confirmed = window.confirm(
+      `Import ${jobPreview.wouldCreate} new job(s) and update ${jobPreview.wouldUpdate} existing one(s) from Homeworks?\n\n` +
+        `${jobPreview.blockedNoProperty} job(s) can't sync yet (their property hasn't been imported) and will be skipped.\n\nThis writes real records to your database.`,
+    );
+    if (!confirmed) return;
+    setJobImportResult(null);
+    startJobImportTransition(async () => {
+      const res = await confirmHomeworksJobImport();
+      setJobImportResult(res);
+      if (res.ok) router.refresh();
+    });
+  }
+
   function disconnectNow() {
     startTransition(async () => {
       await disconnectHomeworksAction();
       setResult(null);
       setPreview(null);
       setImportResult(null);
+      setJobPreview(null);
+      setJobImportResult(null);
       router.refresh();
     });
   }
@@ -263,6 +293,67 @@ export function HomeworksConnectionCard({
                     </li>
                   ))}
               </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {connected ? (
+          <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">Scheduled jobs (next 7 days)</p>
+            <p className="text-[11px] text-[var(--color-text-muted)]">
+              Jobs can only sync for a property that&apos;s already been imported above — sync customers/properties first.
+            </p>
+            <Button type="button" variant="secondary" onClick={runJobPreview} disabled={jobPreviewPending}>
+              {jobPreviewPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Preview job sync (read-only)
+            </Button>
+
+            {jobPreview && !jobPreview.ok ? (
+              <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {jobPreview.message}
+              </p>
+            ) : null}
+            {jobPreview && jobPreview.ok ? (
+              <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-2">
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  {jobPreview.totalUpcomingJobs} real job{jobPreview.totalUpcomingJobs === 1 ? "" : "s"} found in the next 7 days.
+                </p>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded-md bg-[var(--color-surface-2)] p-2">
+                    <div className="text-lg font-semibold text-[var(--color-accent)]">{jobPreview.wouldCreate}</div>
+                    <div className="text-[var(--color-text-muted)]">would create</div>
+                  </div>
+                  <div className="rounded-md bg-[var(--color-surface-2)] p-2">
+                    <div className="text-lg font-semibold text-[var(--color-info)]">{jobPreview.wouldUpdate}</div>
+                    <div className="text-[var(--color-text-muted)]">would update</div>
+                  </div>
+                  <div className="rounded-md bg-[var(--color-surface-2)] p-2">
+                    <div className="text-lg font-semibold text-[var(--color-warning)]">{jobPreview.blockedNoProperty}</div>
+                    <div className="text-[var(--color-text-muted)]">property not synced</div>
+                  </div>
+                </div>
+                {jobPreview.wouldCreate + jobPreview.wouldUpdate > 0 ? (
+                  <Button type="button" onClick={runJobImport} disabled={jobImportPending} className="w-full justify-center">
+                    {jobImportPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Confirm import — write {jobPreview.wouldCreate + jobPreview.wouldUpdate} job(s) to Jarvis
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {jobImportResult && !jobImportResult.ok ? (
+              <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Job import failed: {jobImportResult.message}
+              </p>
+            ) : null}
+            {jobImportResult && jobImportResult.ok ? (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-accent)]">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Job import complete: {jobImportResult.created} created, {jobImportResult.updated} updated, {jobImportResult.blocked} blocked
+                {jobImportResult.errors > 0 ? `, ${jobImportResult.errors} errors` : ""}.
+              </p>
             ) : null}
           </div>
         ) : null}
