@@ -10,6 +10,7 @@ import { previewHomeworksSync, type SyncPreviewResult } from "@/lib/actions/home
 import { confirmHomeworksImport, type ImportResult } from "@/lib/actions/homeworks-import";
 import { HomeworksLinkPanel } from "@/components/settings/homeworks-link-panel";
 import { HomeworksReconcilePanel } from "@/components/settings/homeworks-reconcile-panel";
+import { HomeworksEnrichPanel } from "@/components/settings/homeworks-enrich-panel";
 import { addDaysISO, rangeForDays, todayInZone, validateRange, type DateRange } from "@/lib/integrations/homeworks-dates";
 import { previewHomeworksJobSync, confirmHomeworksJobImport, type JobPreviewResult, type JobImportResult } from "@/lib/actions/homeworks-job-sync";
 
@@ -319,6 +320,7 @@ export function HomeworksConnectionCard({
         ) : null}
 
         {connected ? <HomeworksReconcilePanel /> : null}
+        {connected ? <HomeworksEnrichPanel /> : null}
 
         {connected ? (
           <div className="space-y-2 border-t border-[var(--color-border)] pt-3">

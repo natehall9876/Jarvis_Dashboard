@@ -10,6 +10,7 @@ import { expenseTools } from "@/lib/ai/tools/expenses";
 import { businessTools } from "@/lib/ai/tools/business";
 import { attentionTools } from "@/lib/ai/tools/attention";
 import { actionTools } from "@/lib/ai/tools/actions";
+import { taskTools } from "@/lib/ai/tools/tasks";
 import type { ToolSpec } from "@/lib/ai/tool-types";
 
 /**
@@ -34,6 +35,7 @@ export const ALL_TOOLS: ToolSpec[] = [
   ...businessTools,
   ...attentionTools,
   ...actionTools,
+  ...taskTools,
   ...jobTools,
   ...clientTools,
   ...propertyTools,

@@ -102,7 +102,8 @@ export function formatTime(value: string | Date | null | undefined): string {
 }
 
 export function formatHours(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  // A missing value is "Not set", never a dash or a fabricated zero.
+  if (value === null || value === undefined || Number.isNaN(value)) return "Not set";
   return `${formatNumber(value, 1)} hr`;
 }
 

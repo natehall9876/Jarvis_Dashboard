@@ -78,9 +78,14 @@ export async function getPropertyById(id: string): Promise<DataResult<PropertyDe
     }
 
     const jobIds = (jobs ?? []).map((j) => j.id);
-    const { data: photos } = jobIds.length
-      ? await supabase.from("job_photos").select("*").in("job_id", jobIds)
-      : { data: [] };
+    // Photos tied to one of this property's jobs AND photos uploaded straight to
+    // the property (job_id is null for those — querying by job alone made a photo
+    // uploaded from this very page invisible).
+    const { data: photos } = await supabase
+      .from("job_photos")
+      .select("*")
+      .or(jobIds.length ? `property_id.eq.${id},job_id.in.(${jobIds.join(",")})` : `property_id.eq.${id}`)
+      .order("created_at", { ascending: false });
 
     return {
       property: propertyRow,

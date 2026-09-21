@@ -68,6 +68,10 @@ type JarvisContextValue = {
   voiceError: string | null;
   panelOpen: boolean;
   activeCapabilities: string[];
+  /** The exchange currently shown in the dock's answer bubble (null when none). */
+  bubbleId: string | null;
+  dismissBubble: () => void;
+  clearVoiceError: () => void;
   submit: (text: string, options?: { viaVoice?: boolean }) => Promise<void>;
   retry: (id: string) => void;
   startListening: () => void;
@@ -105,7 +109,7 @@ function loadPersisted(): Exchange[] {
   }
 }
 
-export function JarvisProvider({ children }: { children: ReactNode }) {
+export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactNode; pathPrefix?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const pathRef = useRef(pathname);
@@ -136,6 +140,9 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
   const [actionExecuting, setActionExecuting] = useState(false);
   const [flash, setFlash] = useState<"success" | "error" | null>(null);
   const [activeCapabilities, setActiveCapabilities] = useState<string[]>([]);
+  const [bubbleId, setBubbleId] = useState<string | null>(null);
+  const dismissBubble = useCallback(() => setBubbleId(null), []);
+  const clearVoiceError = useCallback(() => setVoiceError(null), []);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speakQueueRef = useRef<string[]>([]);
@@ -146,10 +153,10 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
   // initial empty list would overwrite it.
   const hydratedRef = useRef(false);
 
-  function later(fn: () => void, ms: number) {
+  const later = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(fn, ms);
     timersRef.current.push(id);
-  }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -193,6 +200,21 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    // One-time unlock of spoken replies on the very first tap/keypress.
+    const unlock = () => {
+      unlockSpeech();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [unlockSpeech]);
+
   const startListeningRef = useRef<() => void>(() => {});
   const pumpRef = useRef<() => void>(() => {});
 
@@ -215,7 +237,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     };
     setSpeaking(true);
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [later]);
 
   useEffect(() => {
     pumpRef.current = pumpSpeech;
@@ -248,7 +270,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
   const finishFlash = useCallback((kind: "success" | "error", ms: number) => {
     setFlash(kind);
     later(() => setFlash(null), ms);
-  }, []);
+  }, [later]);
 
   const submit = useCallback(
     async (text: string, options: { viaVoice?: boolean } = {}) => {
@@ -260,6 +282,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       setVoiceError(null);
 
       const id = crypto.randomUUID();
+      setBubbleId(id);
       const base: Exchange = { id, question: trimmed, answer: "", status: "streaming", error: null, references: [], toolsUsed: [], proposedAction: null, viaVoice };
 
       // Deterministic navigation needs no language model.
@@ -267,7 +290,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       if (nav.kind === "route") {
         const reply = `Opening ${nav.target.label}.`;
         setExchanges((prev) => [{ ...base, answer: reply, status: "done" }, ...prev]);
-        router.push(nav.target.href);
+        router.push(pathPrefix + nav.target.href);
         finishFlash("success", 1400);
         if (viaVoice) {
           streamDoneRef.current = true;
@@ -350,7 +373,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
               // "Pull up Rob Elliott": navigate only when exactly one record matched.
               if (nav.kind === "entity") {
                 const navigable = references.filter((r) => ENTITY_PATHS[r.type]);
-                if (navigable.length === 1) router.push(`${ENTITY_PATHS[navigable[0].type]}/${navigable[0].id}`);
+                if (navigable.length === 1) router.push(`${pathPrefix}${ENTITY_PATHS[navigable[0].type]}/${navigable[0].id}`);
               }
             } else if (eventName === "error") {
               settled = true;
@@ -369,6 +392,8 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       } finally {
         loadingRef.current = false;
         streamDoneRef.current = true;
+        // The bubble fades out on its own once the answer has been readable for a while.
+        later(() => setBubbleId((cur) => (cur === id ? null : cur)), 30000);
         if (mountedRef.current) {
           setLoading(false);
           setGotFirstToken(false);
@@ -377,7 +402,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
         if (!speakQueueRef.current.length && !window.speechSynthesis?.speaking) pumpSpeech();
       }
     },
-    [enqueueSpeech, finishFlash, patch, pumpSpeech, router, stopSpeaking, unlockSpeech],
+    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopSpeaking, unlockSpeech],
   );
 
   const retry = useCallback(
@@ -398,7 +423,6 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       setVoiceError("Voice input isn't supported in this browser. Use Chrome, Edge, or Safari, or type instead.");
       return;
     }
-    unlockSpeech();
     stopSpeaking(); // barge-in: talking over Jarvis interrupts it
     setVoiceError(null);
     const recognition = new Ctor();
@@ -422,6 +446,10 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       }
     };
     recognition.onerror = (event) => {
+      // Some engines skip onend after an error; release the slot ourselves.
+      recognitionRef.current = null;
+      setListening(false);
+      setInterim("");
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         setVoiceError("Microphone access is blocked. Allow the microphone for this site in your browser settings.");
       } else if (event.error === "no-speech") {
@@ -447,15 +475,29 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       recognitionRef.current = null;
       setListening(false);
     }
-  }, [stopSpeaking, submit, unlockSpeech]);
+  }, [stopSpeaking, submit]);
 
   useEffect(() => {
     startListeningRef.current = startListening;
   }, [startListening]);
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-  }, []);
+    const r = recognitionRef.current;
+    if (!r) {
+      setListening(false);
+      return;
+    }
+    r.stop();
+    // If the engine never fires onend, force-release after a moment.
+    later(() => {
+      if (recognitionRef.current === r) {
+        r.abort?.();
+        recognitionRef.current = null;
+        setListening(false);
+        setInterim("");
+      }
+    }, 1500);
+  }, [later]);
 
   const toggleMute = useCallback(() => {
     const next = !mutedRef.current;
@@ -507,6 +549,9 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       voiceError,
       panelOpen,
       activeCapabilities,
+      bubbleId,
+      dismissBubble,
+      clearVoiceError,
       submit,
       retry,
       startListening,
@@ -533,6 +578,9 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       voiceError,
       panelOpen,
       activeCapabilities,
+      bubbleId,
+      dismissBubble,
+      clearVoiceError,
       submit,
       retry,
       startListening,

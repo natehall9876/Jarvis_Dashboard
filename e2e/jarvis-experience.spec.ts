@@ -51,6 +51,8 @@ test.describe("navigation intent", () => {
     expect(toolToCapabilities("get_workload_summary")).toEqual(["schedule", "jobs"]);
     expect(toolToCapabilities("get_overdue_invoices")).toEqual(["finances"]);
     expect(toolToCapabilities("propose_reschedule_job")).toContain("schedule");
+    expect(toolToCapabilities("get_open_tasks")).toEqual(["tasks"]);
+    expect(toolToCapabilities("propose_add_job_note")).toEqual(["jobs", "tasks"]);
     expect(toolToCapabilities("something_unknown")).toEqual([]);
   });
 });
@@ -104,7 +106,10 @@ test.describe("capability map is honest", () => {
     expect(finances.status).toBe("partial");
     expect(finances.detail).toMatch(/QuickBooks is not connected/);
     expect(CAPABILITIES.find((c) => c.id === "routes")!.detail).toMatch(/No travel-time/);
-    expect(CAPABILITIES.find((c) => c.id === "tasks")!.status).toBe("planned");
+    // Tasks/notes are built but cannot save until the migration is applied — so never "connected" in the static map.
+    const tasks = CAPABILITIES.find((c) => c.id === "tasks")!;
+    expect(tasks.status).toBe("partial");
+    expect(tasks.detail).toMatch(/migration/);
   });
 
   test("ids are unique", () => {

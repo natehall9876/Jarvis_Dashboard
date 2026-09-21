@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { Mic, Square, Volume2, VolumeX, X } from "lucide-react";
+import Link from "next/link";
 import { AskAdvisor } from "@/components/ai-advisor/ask-advisor";
+import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
 import { IntelligenceNetwork } from "@/components/jarvis/intelligence-network";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
 
@@ -28,7 +30,8 @@ const STATE_LABEL = {
 export function VoiceDock() {
   const pathname = usePathname();
   const jarvis = useJarvis();
-  const { panelOpen, setPanelOpen, listening, speaking, loading, visualState, interim, muted, voiceSupported, speechOutputSupported } = jarvis;
+  const { panelOpen, setPanelOpen, listening, speaking, loading, visualState, interim, muted, voiceSupported, speechOutputSupported, exchanges, bubbleId, voiceError } = jarvis;
+  const bubble = !panelOpen ? exchanges.find((e) => e.id === bubbleId) : undefined;
   const lastPath = useRef(pathname);
 
   useEffect(() => {
@@ -49,8 +52,62 @@ export function VoiceDock() {
 
   return (
     <>
+      {voiceError && !bubble && !panelOpen && !onAdvisorPage ? (
+        <div
+          className="fixed right-3 z-40 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-[var(--color-warning)]/50 bg-[var(--color-surface-1)]/95 p-3 shadow-[var(--shadow-raised)] backdrop-blur-md lg:right-6"
+          style={{ bottom: "calc(9.25rem + env(safe-area-inset-bottom))" }}
+          role="alert"
+          data-testid="jarvis-voice-error"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm text-[var(--color-warning)]">{voiceError}</p>
+            <button type="button" onClick={jarvis.clearVoiceError} aria-label="Dismiss" className="shrink-0 rounded p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {bubble && !onAdvisorPage ? (
+        <div
+          className="fixed right-3 z-40 max-h-[60vh] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/95 p-3 shadow-[var(--shadow-raised)] backdrop-blur-md animate-fade-in lg:right-6"
+          style={{ bottom: "calc(9.25rem + env(safe-area-inset-bottom))" }}
+          role="status"
+          aria-live="polite"
+          data-testid="jarvis-bubble"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+              {bubble.viaVoice ? <Mic className="h-3 w-3 shrink-0" aria-label="Spoken" /> : null}
+              <span className="truncate">{bubble.question}</span>
+            </p>
+            <button type="button" onClick={jarvis.dismissBubble} aria-label="Dismiss" className="shrink-0 rounded p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {bubble.status === "error" ? (
+            <p className="mt-1.5 text-sm text-[var(--color-warning)]">{bubble.error}</p>
+          ) : (
+            <p className="mt-1.5 line-clamp-5 whitespace-pre-line text-sm text-[var(--color-text-primary)]" data-testid="jarvis-bubble-answer">
+              {bubble.answer || "Checking…"}
+            </p>
+          )}
+          {bubble.proposedAction ? (
+            <ProposedActionCard key={bubble.proposedAction.id} action={bubble.proposedAction} onExecutingChange={jarvis.setActionExecuting} onSettled={jarvis.noteActionSettled} />
+          ) : null}
+          <div className="mt-2 flex items-center gap-3 text-xs">
+            <button type="button" onClick={() => setPanelOpen(true)} className="text-[var(--color-accent)] hover:underline">
+              Open conversation
+            </button>
+            {bubble.references.length === 1 ? (
+              <Link href={`/${{ client: "clients", property: "properties", job: "jobs", invoice: "invoices", quote: "quotes", employee: "employees", equipment: "equipment", route: "routes" }[bubble.references[0].type]}/${bubble.references[0].id}`} className="text-[var(--color-text-secondary)] hover:underline">
+                Open {bubble.references[0].label}
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <div
-        className="fixed right-3 z-40 flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/90 p-1.5 pr-2 shadow-[var(--shadow-raised)] backdrop-blur-md lg:right-6 lg:bottom-6"
+        className={`fixed right-3 z-[60] flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/90 p-1.5 pr-2 shadow-[var(--shadow-raised)] backdrop-blur-md lg:bottom-6 ${panelOpen && !onAdvisorPage ? "lg:right-[29.5rem]" : "lg:right-6"}`}
         style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
         role="region"
         aria-label="Jarvis voice"

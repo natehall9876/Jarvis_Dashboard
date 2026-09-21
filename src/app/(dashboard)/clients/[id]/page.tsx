@@ -11,6 +11,9 @@ import { ClientForm } from "@/components/clients/client-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
 import { formatCurrency, formatDateOnly, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getClientById } from "@/lib/data/clients";
+import { getClientPhotos } from "@/lib/data/client-photos";
+import { getJobPhotoUrls } from "@/lib/supabase/storage";
+import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
 import { updateClient, archiveClient } from "@/lib/actions/clients";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +34,8 @@ export default async function ClientDetailPage({
   if (!data) notFound();
 
   const { client, properties, jobs, quotes, invoices, outstanding_balance, balance_verified } = data;
+  const clientPhotos = await getClientPhotos(id);
+  const clientPhotoUrls = await getJobPhotoUrls(clientPhotos.data.map((p) => p.storage_path));
   const updateClientWithId = updateClient.bind(null, id);
   const archiveClientWithId = archiveClient.bind(null, id);
 
@@ -195,6 +200,34 @@ export default async function ClientDetailPage({
           </CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader title="Photos" description={`${clientPhotos.data.length} on file`} />
+        <CardBody className="space-y-4">
+          <PhotoUploadForm clientId={id} />
+          {clientPhotos.error ? <p className="text-xs text-[var(--color-warning)]">{clientPhotos.error}</p> : null}
+          {clientPhotos.data.length === 0 ? (
+            <EmptyState title="No photos yet" description="Photos of this customer's properties and work appear here." />
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {clientPhotos.data.map((photo) => {
+                const url = clientPhotoUrls.get(photo.storage_path);
+                return (
+                  <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+                    {url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={url} alt={photo.caption ?? "Customer photo"} className="h-28 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-28 w-full items-center justify-center bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-muted)]">Unavailable</div>
+                    )}
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">{photo.caption ?? "Photo"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {isEditing ? (
         <Modal title="Edit Client" closeHref={`/clients/${id}`}>

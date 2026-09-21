@@ -1,6 +1,8 @@
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { CommandHero } from "@/components/command-center/command-hero";
 import { AgentNetwork } from "@/components/command-center/agent-network";
+import { TasksCard } from "@/components/command-center/tasks-card";
+import { getOpenTasks } from "@/lib/data/notes-tasks";
 import { BRAND } from "@/components/layout/nav-config";
 import { buildBriefing, hourInZone } from "@/lib/jarvis/briefing";
 import { addDaysISO, todayInZone } from "@/lib/integrations/homeworks-dates";
@@ -19,7 +21,7 @@ export default async function CommandCenterPage() {
   const tomorrow = addDaysISO(today, 1);
   const weekOut = addDaysISO(today, 7);
 
-  const [mission, pulse, upcoming] = await Promise.all([getTodaysMission(), getBusinessPulse(), getWorkloadSummary(tomorrow, weekOut)]);
+  const [mission, pulse, upcoming, tasks] = await Promise.all([getTodaysMission(), getBusinessPulse(), getWorkloadSummary(tomorrow, weekOut), getOpenTasks()]);
 
   // The briefing is built only from today's real job rows; confirmed demo
   // records are excluded exactly as they are from the mission totals.
@@ -50,6 +52,15 @@ export default async function CommandCenterPage() {
           <TodaysMission data={mission.data} error={mission.error} />
         </div>
         <WeatherCard />
+      </div>
+
+      <div className="animate-fade-in" style={{ animationDelay: "30ms" }}>
+        <Card>
+          <CardHeader title="Your tasks" description="Reminders and to-dos — add them here or just tell Jarvis" />
+          <CardBody>
+            <TasksCard tasks={tasks.data} needsMigration={tasks.needsMigration} error={tasks.error} today={today} />
+          </CardBody>
+        </Card>
       </div>
 
       <div className="animate-fade-in" style={{ animationDelay: "40ms" }}>

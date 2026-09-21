@@ -16,6 +16,8 @@ import { updateJob, changeJobStatus } from "@/lib/actions/jobs";
 import { getActivityForEntity } from "@/lib/data/activity-log";
 import { ActivityTimeline } from "@/components/ui/activity-timeline";
 import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
+import { JobNotes } from "@/components/jobs/job-notes";
+import { getJobNotes } from "@/lib/data/notes-tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +30,14 @@ export default async function JobDetailPage({
 }) {
   const { id } = await params;
   const { edit: isEditing, error: formError } = await searchParams;
-  const [{ data: job, error }, properties, services, routes, employees, { data: activity }] = await Promise.all([
+  const [{ data: job, error }, properties, services, routes, employees, { data: activity }, jobNotes] = await Promise.all([
     getJobById(id),
     isEditing ? getPropertyOptions() : Promise.resolve({ data: [] }),
     isEditing ? getServiceOptions() : Promise.resolve({ data: [] }),
     isEditing ? getRouteOptions() : Promise.resolve({ data: [] }),
     isEditing ? getEmployeeOptions() : Promise.resolve({ data: [] }),
     getActivityForEntity("job", id),
+    getJobNotes(id),
   ]);
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
@@ -50,7 +53,7 @@ export default async function JobDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={job.service?.name ?? "Job"}
+        title={job.service?.name ?? "Service not set"}
         description={`${clientDisplayName(client)} — ${propertyAddress(job.property)}`}
         action={
           <div className="flex items-center gap-2">
@@ -79,7 +82,7 @@ export default async function JobDetailPage({
             <Row label="Client" value={client ? <Link href={`/clients/${client.id}`} className="text-[var(--color-accent)] hover:underline">{clientDisplayName(client)}</Link> : "—"} />
             <Row label="Property" value={job.property ? <Link href={`/properties/${job.property.id}`} className="text-[var(--color-accent)] hover:underline">{propertyAddress(job.property)}</Link> : "—"} />
             <Row label="Scheduled Date" value={formatDateOnly(job.scheduled_date)} />
-            <Row label="Scheduled Start" value={formatTimeString(job.scheduled_start_time)} />
+            <Row label="Scheduled Start" value={job.scheduled_start_time ? formatTimeString(job.scheduled_start_time) : "Unscheduled time"} />
             <Row label="Started" value={formatTime(job.started_at)} />
             <Row label="Completed" value={formatTime(job.completed_at)} />
             <Row label="Planned Crew Size" value={job.crew_size ?? "—"} />
@@ -179,6 +182,13 @@ export default async function JobDetailPage({
       ) : null}
 
       <Card>
+        <CardHeader title="Job Notes" description="Dated notes — type one here, or tell Jarvis" />
+        <CardBody>
+          <JobNotes jobId={id} notes={jobNotes.data} needsMigration={jobNotes.needsMigration} error={jobNotes.error} />
+        </CardBody>
+      </Card>
+
+      <Card>
         <CardHeader title="Before / After Photos" description={`${job.photos.length} on file`} />
         <CardBody className="space-y-4">
           <PhotoUploadForm jobId={id} />
@@ -235,9 +245,9 @@ export default async function JobDetailPage({
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
-      <span className="text-[var(--color-text-muted)]">{label}</span>
-      <span className="text-[var(--color-text-primary)]">{value}</span>
+    <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
+      <span className="shrink-0 text-[var(--color-text-muted)]">{label}</span>
+      <span className="min-w-0 break-words text-right text-[var(--color-text-primary)]">{value}</span>
     </div>
   );
 }

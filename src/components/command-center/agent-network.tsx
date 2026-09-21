@@ -20,7 +20,9 @@ const RY = 148;
 
 function position(index: number, total: number): { x: number; y: number } {
   const angle = -Math.PI / 2 + (index / total) * Math.PI * 2;
-  return { x: CX + Math.cos(angle) * RX, y: CY + Math.sin(angle) * RY };
+  // Rounded: raw trig floats serialize differently on the server and in the browser, which caused a hydration mismatch.
+  const round = (v: number) => Math.round(v * 100) / 100;
+  return { x: round(CX + Math.cos(angle) * RX), y: round(CY + Math.sin(angle) * RY) };
 }
 
 /**

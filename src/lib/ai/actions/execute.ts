@@ -5,6 +5,7 @@ import { getEmployeeById } from "@/lib/data/employees";
 import { insertJob, updateJobFields, updateJobStatus } from "@/lib/actions/jobs";
 import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
 import { logActivity } from "@/lib/data/activity-log";
+import { isMissingTableError, validateNote, validateTask } from "@/lib/jarvis/notes-tasks-validation";
 import { clientDisplayName, propertyAddress } from "@/lib/format";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { EntityReference } from "@/lib/ai/tool-types";
@@ -150,6 +151,15 @@ export async function executeProposedAction(action: ProposedAction): Promise<Exe
         break;
       case "create_job":
         result = await executeCreateJob(action);
+        break;
+      case "add_job_note":
+        result = await executeAddJobNote(action);
+        break;
+      case "create_task":
+        result = await executeCreateTask(action);
+        break;
+      case "complete_task":
+        result = await executeCompleteTask(action);
         break;
       default:
         result = fail("invalid", `Unsupported action type "${action.type as string}".`);
@@ -378,4 +388,112 @@ async function executeCreateJob(action: ProposedAction): Promise<ExecuteActionRe
       { type: "property", id: propertyId, label: propertyAddress(property.data.property) },
     ],
   };
+}
+
+const MIGRATION_MESSAGE = "Notes and tasks aren't set up yet — run supabase/job-notes-tasks-migration.sql in the Supabase SQL editor first.";
+
+async function executeAddJobNote(action: ProposedAction): Promise<ExecuteActionResult> {
+  const jobId = action.target?.id;
+  if (!jobId) return fail("invalid", "No job specified.");
+  const note = validateNote(action.payload.note);
+  if (!note.ok) return fail("invalid", note.message);
+
+  const current = await getJobById(jobId);
+  if (current.error !== null || !current.data) return fail("not_found", "That job no longer exists.");
+  const job = current.data;
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: inserted, error } = await supabase
+    .from("job_notes")
+    .insert({ job_id: jobId, body: note.value, source: "voice", created_by: user?.id ?? null })
+    .select("id, body")
+    .single();
+  if (error) return fail("server_error", isMissingTableError(error) ? MIGRATION_MESSAGE : error.message);
+
+  // Verify by reading the row back rather than trusting the insert's return.
+  const { data: verify } = await supabase.from("job_notes").select("id").eq("id", inserted.id).maybeSingle();
+  if (!verify) return fail("server_error", "The note was submitted but couldn't be read back to verify.");
+
+  await logActivity({
+    entityType: "job",
+    entityId: jobId,
+    eventType: "job_note_added",
+    summary: `Note added to ${jobLabel(job)}`,
+    detail: { note_id: inserted.id },
+    source: "jarvis",
+  });
+  return {
+    ok: true,
+    message: `Added the note to ${jobLabel(job)}.`,
+    result: { job_id: jobId, note_id: inserted.id },
+    references: [{ type: "job", id: jobId, label: jobLabel(job) }],
+  };
+}
+
+async function executeCreateTask(action: ProposedAction): Promise<ExecuteActionResult> {
+  const validated = validateTask({ title: action.payload.title, notes: action.payload.notes, dueDate: action.payload.due_date });
+  if (!validated.ok) return fail("invalid", validated.message);
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const jobId = typeof action.payload.job_id === "string" ? action.payload.job_id : null;
+  const { data: inserted, error } = await supabase
+    .from("owner_tasks")
+    .insert({
+      title: validated.value.title,
+      notes: validated.value.notes,
+      due_date: validated.value.dueDate,
+      job_id: jobId,
+      source: "voice",
+      created_by: user?.id ?? null,
+    })
+    .select("id, title")
+    .single();
+  if (error) return fail("server_error", isMissingTableError(error) ? MIGRATION_MESSAGE : error.message);
+
+  const { data: verify } = await supabase.from("owner_tasks").select("id, status").eq("id", inserted.id).maybeSingle();
+  if (!verify) return fail("server_error", "The task was submitted but couldn't be read back to verify.");
+
+  // The task row carries who/when/how (created_by, created_at, source); only job-linked tasks also get a job timeline entry.
+  if (jobId) {
+    await logActivity({
+      entityType: "job",
+      entityId: jobId,
+      eventType: "task_created",
+      summary: `Task created: ${inserted.title}`,
+      detail: { task_id: inserted.id, due_date: validated.value.dueDate },
+      source: "jarvis",
+    });
+  }
+  return {
+    ok: true,
+    message: `Added task "${inserted.title}"${validated.value.dueDate ? ` due ${validated.value.dueDate}` : ""}.`,
+    result: { task_id: inserted.id },
+    references: [],
+  };
+}
+
+async function executeCompleteTask(action: ProposedAction): Promise<ExecuteActionResult> {
+  const taskId = typeof action.payload.task_id === "string" ? action.payload.task_id : null;
+  if (!taskId) return fail("invalid", "No task specified.");
+  const supabase = await createSupabaseServerClient();
+  const { data: task, error: readError } = await supabase.from("owner_tasks").select("id, title, status").eq("id", taskId).maybeSingle();
+  if (readError) return fail("server_error", isMissingTableError(readError) ? MIGRATION_MESSAGE : readError.message);
+  if (!task) return fail("not_found", "That task no longer exists.");
+  if (task.status !== "open") return fail("stale", `That task is already ${task.status}.`);
+
+  const { data: updated, error } = await supabase
+    .from("owner_tasks")
+    .update({ status: "done", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", taskId)
+    .eq("status", "open")
+    .select("id, status");
+  if (error) return fail("server_error", error.message);
+  if (!updated || updated.length === 0 || updated[0].status !== "done") return fail("stale", "The task changed before it could be completed.");
+  return { ok: true, message: `Marked "${task.title}" done.`, result: { task_id: taskId }, references: [] };
 }

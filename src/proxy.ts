@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseEnv } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/reset-password"];
+// /voice-lab is a development-only test harness (it 404s in production builds).
+const PUBLIC_PATHS = ["/login", "/auth", "/reset-password", ...(process.env.NODE_ENV !== "production" ? ["/voice-lab"] : [])];
 
 /**
  * Refreshes the Supabase auth session cookie on every request and gates

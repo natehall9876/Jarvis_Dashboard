@@ -11,6 +11,31 @@ cryptographically confirm this exact commit is what's serving traffic (the
 app exposes no build SHA), only that a healthy deployment exists; Vercel
 has auto-deployed every push in this project reliably so far.
 
+## Voice fixes, enrichment, notes/tasks, photos (2026-09-22)
+
+Voice: hardened the provider (a recognizer that never fires "end" can no longer leave the
+mic stuck; speech is unlocked on the first tap instead of inside the mic tap). Real bugs
+found by the new dev-only `/voice-lab` harness (404 in production): the conversation panel
+covered the dock's mic button; mic errors were only visible inside the closed panel; answers
+were invisible when the panel was closed (now a dock bubble that also carries the Confirm
+card). Tests drive the real provider with a FAKE SpeechRecognition/speechSynthesis and a MOCKED
+advisor — they prove wiring, NOT a physical microphone.
+
+Enrichment: fills blank service (first line-item name — not the event title) and budgeted
+hours on EXISTING jobs by Homeworks event ID; never overwrites a set value, never creates
+jobs, never invents a start time. Preview + `Confirm enrichment — update existing HomeWorks
+jobs`. Missing hours display as "Not set". No migration needed.
+
+Notes/tasks: NEW additive migration `supabase/job-notes-tasks-migration.sql` (job_notes,
+owner_tasks). Until it is run the UI says so and nothing can save. Jarvis tools:
+propose_add_job_note / propose_create_task / propose_complete_task (confirm-gated).
+
+Photos: found two real bugs — uploads went through a Server Action (1 MB default cap, ~4.5 MB
+on Vercel) so phone photos likely failed; and photos uploaded from a Property page (no job)
+never displayed. Now: browser -> private Storage via one-time signed upload URL, server
+verifies the object then records the row; property query fixed; customer page has photos.
+NOT verified against real Storage (needs a signed-in session).
+
 ## Jarvis experience rebuild (2026-09-21): living network, persistent voice, capability map
 
 Built (code-level verified: typecheck, lint, build, 188 Playwright tests; NOT yet

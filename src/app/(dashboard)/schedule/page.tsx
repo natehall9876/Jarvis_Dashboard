@@ -194,7 +194,7 @@ export default async function SchedulePage({
                                 </span>
                                 <span className="text-[var(--color-accent)]">{formatCurrency(job.price)}</span>
                                 <span className={hasHours ? "text-[var(--color-text-secondary)]" : "text-[var(--color-text-muted)]"}>
-                                  {hasHours ? formatHours(job.budgeted_hours) : "No budgeted hours"}
+                                  {hasHours ? `${formatHours(job.budgeted_hours)} budgeted` : "Hours: Not set"}
                                 </span>
                                 <span className={crew.length ? "text-[var(--color-text-secondary)]" : "text-[var(--color-text-muted)]"}>
                                   {crew.length ? crew.join(", ") : "Unassigned"}

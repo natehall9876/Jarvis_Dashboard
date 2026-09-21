@@ -8,39 +8,28 @@ import { insertJob } from "@/lib/actions/jobs";
 import { logActivity } from "@/lib/data/activity-log";
 import { getPropertyById } from "@/lib/data/properties";
 import { clientDisplayName, propertyAddress } from "@/lib/format";
+import { MAX_PHOTO_BYTES, buildStoragePath, isOwnStoragePath, validatePhotoRequest, type PhotoRequest } from "@/lib/jarvis/photo-validation";
 
 const JOB_PHOTOS_BUCKET = "job-photos";
-const MAX_SIZE_BYTES = 15 * 1024 * 1024;
-const ALLOWED_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
-
 export type UploadPhotoResult = { ok: true; photoId: string } | { ok: false; message: string };
+export type PreparedUpload = { ok: true; path: string; token: string; contentType: string } | { ok: false; message: string };
 
 /**
- * Uploads through the owner's own authenticated Supabase client — not the
- * service-role admin client — so this is bound by the same RLS policies as
- * everything else a signed-in owner does. Requires at least one of
- * job_id/property_id/client_id (job_photos_has_association, see
- * supabase/photo-upload-migration.sql) so a photo is never orphaned.
+ * Photo intake is a three-step flow that never sends image bytes through a
+ * Server Action (those are capped at 1 MB by default, and Vercel functions at
+ * about 4.5 MB — almost every phone photo is larger):
+ *   1. prepareJobPhotoUpload  — validates the request and issues a one-time
+ *      signed upload URL for a path inside the caller's own folder.
+ *   2. the browser uploads the file directly to PRIVATE Storage with that token.
+ *   3. finalizeJobPhotoUpload — confirms the object really exists (and its real
+ *      size/type), then records the job_photos row tied to a job/property/client.
+ * Everything runs under the owner's own authenticated session and RLS; the
+ * service-role client is never used. Photos are only ever read back through
+ * short-lived signed URLs (lib/supabase/storage.ts).
  */
-export async function uploadJobPhoto(formData: FormData): Promise<UploadPhotoResult> {
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, message: "Choose a photo to upload." };
-  }
-  if (file.size > MAX_SIZE_BYTES) {
-    return { ok: false, message: "That file is too large (15MB max)." };
-  }
-  if (!ALLOWED_CONTENT_TYPES.has(file.type)) {
-    return { ok: false, message: "Unsupported file type — use JPEG, PNG, WEBP, or HEIC." };
-  }
-
-  const jobId = optional(formData, "job_id");
-  const propertyId = optional(formData, "property_id");
-  const clientId = optional(formData, "client_id");
-  const caption = optional(formData, "caption");
-  if (!jobId && !propertyId && !clientId) {
-    return { ok: false, message: "A photo needs to be tied to a job, property, or client." };
-  }
+export async function prepareJobPhotoUpload(req: PhotoRequest): Promise<PreparedUpload> {
+  const valid = validatePhotoRequest(req);
+  if (!valid.ok) return valid;
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -48,27 +37,49 @@ export async function uploadJobPhoto(formData: FormData): Promise<UploadPhotoRes
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "You must be signed in to upload a photo." };
 
-  const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
-  const storagePath = `${user.id}/${randomUUID()}${extension}`;
+  const path = buildStoragePath(user.id, randomUUID(), req.name);
+  const { data, error } = await supabase.storage.from(JOB_PHOTOS_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, message: `Couldn't start the upload: ${error?.message ?? "no upload URL returned"}` };
+  return { ok: true, path, token: data.token, contentType: valid.contentType };
+}
 
-  const buffer = await file.arrayBuffer();
-  const { error: uploadError } = await supabase.storage.from(JOB_PHOTOS_BUCKET).upload(storagePath, buffer, {
-    contentType: file.type,
-    upsert: false,
-  });
-  if (uploadError) return { ok: false, message: `Upload failed: ${uploadError.message}` };
+export async function finalizeJobPhotoUpload(input: PhotoRequest & { path: string; caption?: string | null }): Promise<UploadPhotoResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "You must be signed in to upload a photo." };
+  if (!isOwnStoragePath(user.id, input.path)) return { ok: false, message: "Invalid upload path." };
+
+  const valid = validatePhotoRequest(input);
+  if (!valid.ok) {
+    await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([input.path]);
+    return valid;
+  }
+
+  // Verify against what Storage actually holds, not what the browser claims.
+  const folder = user.id;
+  const fileName = input.path.slice(folder.length + 1);
+  const { data: listed, error: listError } = await supabase.storage.from(JOB_PHOTOS_BUCKET).list(folder, { search: fileName, limit: 5 });
+  const object = listed?.find((o) => o.name === fileName);
+  if (listError || !object) return { ok: false, message: "The upload didn't reach storage — please try again." };
+  const realSize = Number((object.metadata as { size?: number } | null)?.size ?? input.size);
+  if (realSize > MAX_PHOTO_BYTES) {
+    await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([input.path]);
+    return { ok: false, message: "That file is too large (15 MB max)." };
+  }
 
   const { data: inserted, error: insertError } = await supabase
     .from("job_photos")
     .insert({
-      job_id: jobId,
-      property_id: propertyId,
-      client_id: clientId,
-      caption,
-      storage_path: storagePath,
-      original_filename: file.name || null,
-      content_type: file.type,
-      size_bytes: file.size,
+      job_id: input.jobId ?? null,
+      property_id: input.propertyId ?? null,
+      client_id: input.clientId ?? null,
+      caption: input.caption?.trim() || null,
+      storage_path: input.path,
+      original_filename: input.name || null,
+      content_type: valid.contentType,
+      size_bytes: realSize,
       uploaded_by: user.id,
       source: "owner_upload",
     })
@@ -76,15 +87,14 @@ export async function uploadJobPhoto(formData: FormData): Promise<UploadPhotoRes
     .single();
 
   if (insertError || !inserted) {
-    // The file is already in Storage but the DB row failed — clean up so a
-    // retry doesn't leave an orphaned object with no record pointing to it.
-    await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([storagePath]);
+    // The object is already in Storage but the DB row failed — remove it so a retry leaves no orphan.
+    await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([input.path]);
     return { ok: false, message: insertError?.message ?? "Couldn't save the photo record." };
   }
 
-  if (jobId) revalidatePath(`/jobs/${jobId}`);
-  if (propertyId) revalidatePath(`/properties/${propertyId}`);
-
+  if (input.jobId) revalidatePath(`/jobs/${input.jobId}`);
+  if (input.propertyId) revalidatePath(`/properties/${input.propertyId}`);
+  if (input.clientId) revalidatePath(`/clients/${input.clientId}`);
   return { ok: true, photoId: inserted.id as string };
 }
 

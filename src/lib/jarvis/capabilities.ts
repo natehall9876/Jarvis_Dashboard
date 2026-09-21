@@ -27,7 +27,7 @@ export const CAPABILITIES: Capability[] = [
   { id: "equipment", label: "Equipment", href: "/equipment", status: "connected", detail: "Equipment and maintenance records exist and Jarvis can read them." },
   { id: "weather", label: "Weather", href: "/", status: "connected", detail: "Live National Weather Service forecast on the Command Center." },
   { id: "marketing", label: "Marketing", href: null, status: "planned", detail: "No marketing or lead data source exists yet." },
-  { id: "tasks", label: "Tasks", href: null, status: "planned", detail: "No task or reminder store exists yet, so Jarvis cannot save reminders." },
+  { id: "tasks", label: "Tasks & notes", href: "/", status: "partial", detail: "Tasks and job notes are built (typed or by voice with a Confirm tap) but need supabase/job-notes-tasks-migration.sql applied before they can save anything." },
 ];
 
 export const STATUS_LABEL: Record<CapabilityStatus, string> = {

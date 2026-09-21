@@ -147,6 +147,9 @@ export type HomeworksUpcomingJob = {
   /** Present on events fetched by getEventsInRange / getEventsByIds. */
   isDeleted?: boolean;
   endDate?: string | null;
+  /** Only present when fetched with { detail: true }. */
+  budgetedHours?: string | null;
+  lineItems?: { id: string; name: string; description: string | null; quantity: string; price: string; budgetedHours: string | null }[];
 };
 
 /**
@@ -166,27 +169,39 @@ const EVENT_RANGE_FIELDS = `
   property { id name address { street1 city state } }
 `;
 
-const EVENTS_IN_RANGE_QUERY = `
+const eventsInRangeQuery = (fields: string) => `
   query EventsInRange($from: Date!, $to: Date!, $take: SafeInt!, $skip: SafeInt!) {
     events(
       where: { startDate: { gte: $from, lte: $to }, isDeleted: false }
       orderBy: [{ startDate: asc }, { id: asc }]
       take: $take
       skip: $skip
-    ) { ${EVENT_RANGE_FIELDS} }
+    ) { ${fields} }
   }
 `;
 
 // Multi-day events that started before the range but are still running into it.
-const EVENTS_SPANNING_QUERY = `
+const eventsSpanningQuery = (fields: string) => `
   query EventsSpanning($from: Date!, $take: SafeInt!, $skip: SafeInt!) {
     events(
       where: { startDate: { lt: $from }, endDate: { gte: $from }, isDeleted: false }
       orderBy: [{ startDate: asc }, { id: asc }]
       take: $take
       skip: $skip
-    ) { ${EVENT_RANGE_FIELDS} }
+    ) { ${fields} }
   }
+`;
+
+/**
+ * Extra fields for enrichment, verified against the live API (2026-09-21): the
+ * event's budgetedHours (Decimal string, hours) and its line items — the real
+ * service name lives on lineItems[].name (e.g. "Grass maintenance"); the event
+ * title is often "<Customer> Grass" and is NOT a service name.
+ */
+const EVENT_DETAIL_FIELDS = `
+  ${EVENT_RANGE_FIELDS}
+  budgetedHours
+  lineItems { id name description quantity price budgetedHours }
 `;
 
 const EVENTS_BY_IDS_QUERY = `
@@ -213,7 +228,8 @@ export type EventsInRange = { events: HomeworksUpcomingJob[]; meta: EventFetchMe
  * event ID, retries 429/5xx, and REFUSES to return a partial list as complete.
  * Dates are business-local calendar dates (see homeworks-dates.ts) — no UTC math.
  */
-export async function getEventsInRange(range: { from: string; to: string }): Promise<GraphQLResult<EventsInRange>> {
+export async function getEventsInRange(range: { from: string; to: string }, options: { detail?: boolean } = {}): Promise<GraphQLResult<EventsInRange>> {
+  const fields = options.detail ? EVENT_DETAIL_FIELDS : EVENT_RANGE_FIELDS;
   const validation = validateRange(range);
   if (!validation.ok) return { ok: false, message: validation.message };
 
@@ -223,9 +239,9 @@ export async function getEventsInRange(range: { from: string; to: string }): Pro
     return { ok: true, items: result.data.events.map(normalizeJob) };
   };
 
-  const main = await fetchAllPages(page(EVENTS_IN_RANGE_QUERY, { from: range.from, to: range.to }), { pageSize: 200 });
+  const main = await fetchAllPages(page(eventsInRangeQuery(fields), { from: range.from, to: range.to }), { pageSize: 200 });
   if (!main.ok) return { ok: false, message: `${main.message} (${main.partial.items.length} events fetched before the failure — none will be used.)` };
-  const spanning = await fetchAllPages(page(EVENTS_SPANNING_QUERY, { from: range.from }), { pageSize: 200 });
+  const spanning = await fetchAllPages(page(eventsSpanningQuery(fields), { from: range.from }), { pageSize: 200 });
   if (!spanning.ok) return { ok: false, message: `${spanning.message} (multi-day events query.)` };
 
   const byId = new Map<string, HomeworksUpcomingJob>();

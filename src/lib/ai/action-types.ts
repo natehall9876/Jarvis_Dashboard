@@ -17,7 +17,14 @@
  * access to.
  */
 
-export type ProposedActionType = "reschedule_job" | "update_job_status" | "assign_employee" | "create_job";
+export type ProposedActionType =
+  | "reschedule_job"
+  | "update_job_status"
+  | "assign_employee"
+  | "create_job"
+  | "add_job_note"
+  | "create_task"
+  | "complete_task";
 
 export type ProposedActionTarget = { type: "job"; id: string };
 
@@ -54,7 +61,7 @@ export function isProposedAction(value: unknown): value is ProposedAction {
     v.kind === "proposed_action" &&
     typeof v.id === "string" &&
     typeof v.type === "string" &&
-    ["reschedule_job", "update_job_status", "assign_employee", "create_job"].includes(v.type as string) &&
+    ["reschedule_job", "update_job_status", "assign_employee", "create_job", "add_job_note", "create_task", "complete_task"].includes(v.type as string) &&
     typeof v.title === "string" &&
     typeof v.proposed === "object" &&
     v.proposed !== null &&

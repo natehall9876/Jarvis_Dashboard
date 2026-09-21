@@ -995,6 +995,48 @@ export type Database = {
        * `supabase gen types` regeneration after running it should produce
        * an identical shape and can safely replace this block.
        */
+      /** Requires supabase/job-notes-tasks-migration.sql — not live until that is run. */
+      job_notes: {
+        Row: { id: string; created_at: string; job_id: string; body: string; source: string; created_by: string | null };
+        Insert: { id?: string; created_at?: string; job_id: string; body: string; source?: string; created_by?: string | null };
+        Update: Partial<Database["public"]["Tables"]["job_notes"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Requires supabase/job-notes-tasks-migration.sql — not live until that is run. */
+      owner_tasks: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          title: string;
+          notes: string | null;
+          due_date: string | null;
+          status: string;
+          completed_at: string | null;
+          source: string;
+          job_id: string | null;
+          client_id: string | null;
+          property_id: string | null;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          title: string;
+          notes?: string | null;
+          due_date?: string | null;
+          status?: string;
+          completed_at?: string | null;
+          source?: string;
+          job_id?: string | null;
+          client_id?: string | null;
+          property_id?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["owner_tasks"]["Insert"]>;
+        Relationships: [];
+      };
       activity_log: {
         Row: {
           id: string;
