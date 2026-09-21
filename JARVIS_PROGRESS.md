@@ -11,6 +11,38 @@ cryptographically confirm this exact commit is what's serving traffic (the
 app exposes no build SHA), only that a healthy deployment exists; Vercel
 has auto-deployed every push in this project reliably so far.
 
+## Jarvis experience rebuild (2026-09-21): living network, persistent voice, capability map
+
+Built (code-level verified: typecheck, lint, build, 188 Playwright tests; NOT yet
+verified in an authenticated browser session, which this environment cannot open):
+- `src/lib/jarvis/network-engine.ts` — canvas particle network (white + warm-gold
+  points, luminous core, links that form/dissolve). Seven states driven by real
+  events. Verified visually in an isolated harness; lifecycle tested (one loop,
+  clean stop/destroy). `intelligence-network.tsx` pauses off-screen/hidden,
+  honors reduced-motion, adapts density, falls back to a static gradient.
+- `jarvis-provider.tsx` — ONE app-wide session mounted in the dashboard layout
+  (survives client-side navigation): conversation, speech recognition, spoken
+  replies (sentence-streamed), mute, barge-in, hands-free mode, retry, session
+  storage persistence (no audio stored; stale Confirm cards never restored).
+  Deterministic voice navigation ("open my schedule"); entity lookups navigate
+  only when exactly one record matches. Writes still require an explicit tap on
+  Confirm — a transcript is never a confirmation. `voice-dock.tsx` replaces the
+  old drawer (which closed on navigation and lost history).
+- Command Center: hero with the network + briefing built only from real job rows;
+  honest capability map (`capabilities.ts`) — connected / partial / planned, with
+  what is actually missing stated (no QuickBooks, no routing provider, no task store).
+- Schedule: compact cards (service, customer, address, time or "Unscheduled time",
+  price, budgeted hours or "No budgeted hours", crew or "Unassigned", stop order),
+  daily/weekly summary, status filters.
+
+Platform limits (not bugs): browsers/iOS suspend the mic and audio when the app is
+backgrounded or the screen locks; speech recognition needs Chrome/Edge/Safari and
+sends audio to the browser vendor's service; spoken replies begin only after a tap.
+
+Still open: job enrichment (service title from Homeworks line items, budgeted hours),
+sync status panel, photo intake UI, voice notes/reminders (no task store exists),
+route optimization, QuickBooks.
+
 ## Root cause found (2026-09-21): Homeworks IDs are numbers, Jarvis stores text
 
 Live Homeworks GraphQL returns `Customer.id`, `Property.id`, and `Event.id`

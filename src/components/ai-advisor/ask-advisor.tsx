@@ -1,53 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Loader2, Mic, Send, Sparkles, Square, Wrench } from "lucide-react";
+import { AlertTriangle, Loader2, Mic, RotateCw, Send, Sparkles, Square, Trash2, Volume2, VolumeX, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getContextualQuestions, getPageContextLabel } from "@/lib/ai/questions";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
 import { MarkdownMessage } from "@/components/ai-advisor/markdown-message";
+import { useJarvis } from "@/components/jarvis/jarvis-provider";
 import type { EntityReference } from "@/lib/ai/tool-types";
-import type { ProposedAction } from "@/lib/ai/action-types";
-
-/**
- * Minimal typing for the (non-standard, Chrome/Edge/Safari-only) Web Speech
- * API — there's no official DOM lib type for it. Deliberately narrow: only
- * the handful of members this component actually touches.
- */
-type SpeechRecognitionResultLike = { isFinal: boolean; 0: { transcript: string } };
-type SpeechRecognitionEventLike = { resultIndex: number; results: { length: number; [i: number]: SpeechRecognitionResultLike } };
-type SpeechRecognitionErrorEventLike = { error: string };
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  start(): void;
-  stop(): void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
-  onend: (() => void) | null;
-}
-declare global {
-  interface Window {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  }
-}
-
-type Exchange = {
-  /** Stable identity for React's list key — exchanges are prepended (newest first), so an array index would silently shift onto a different exchange every time a new one arrives, carrying over that DOM node's local state (e.g. a ProposedActionCard's confirm/cancel status) onto unrelated content. */
-  id: string;
-  question: string;
-  /** Grows as text_delta events arrive; empty string is a valid in-progress state, distinct from null (no text at all, e.g. an error before generation started). */
-  answer: string | null;
-  status: "streaming" | "done" | "error";
-  error: string | null;
-  references: EntityReference[];
-  toolsUsed: string[];
-  proposedAction: ProposedAction | null;
-};
 
 const ENTITY_PATHS: Record<EntityReference["type"], string> = {
   client: "/clients",
@@ -65,178 +27,29 @@ function humanizeToolName(name: string): string {
   return name.replace(/^get_/, "").replace(/_/g, " ");
 }
 
+/**
+ * The conversation view. All state lives in the app-wide JarvisProvider, so
+ * this renders the same continuing session wherever it is mounted (Command
+ * Center, the full advisor page, or the persistent drawer) and survives page
+ * navigation. Typed and spoken input take exactly the same path.
+ */
 export function AskAdvisor({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const jarvis = useJarvis();
   const [question, setQuestion] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<Exchange[]>([]);
-  const [listening, setListening] = useState(false);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
-  // Deliberately takes plain text and doesn't care where it came from — a
-  // typed question, a suggested-question chip, or (later) a speech-to-text
-  // transcript all call this the same way, into the same conversation and
-  // the same /api/ai-advisor endpoint. Voice input should plug in here
-  // rather than growing a separate intelligence path.
-  async function submit(q: string) {
-    const trimmed = q.trim();
-    if (!trimmed || loading) return;
-    setLoading(true);
+  const { exchanges, loading, listening, interim, voiceError, voiceSupported, speechOutputSupported, muted, conversationMode } = jarvis;
+
+  function submit(q: string) {
+    if (!q.trim() || loading) return;
     setQuestion("");
-
-    // Chronological order for the model, and only successful turns — a
-    // failed exchange has no real answer to replay as conversation context.
-    const conversationHistory = history
-      .filter((h) => h.answer !== null)
-      .slice(0, 6)
-      .reverse()
-      .map((h) => ({ question: h.question, answer: h.answer as string }));
-
-    const id = crypto.randomUUID();
-    setHistory((prev) => [
-      { id, question: trimmed, answer: "", status: "streaming", error: null, references: [], toolsUsed: [], proposedAction: null },
-      ...prev,
-    ]);
-
-    function patch(update: Partial<Exchange>) {
-      setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, ...update } : h)));
-    }
-
-    try {
-      const res = await fetch("/api/ai-advisor", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: trimmed, path: pathname, history: conversationHistory }),
-      });
-
-      if (!res.ok) {
-        let message = "Something went wrong.";
-        try {
-          const json = (await res.json()) as { error?: string };
-          message = json.error ?? message;
-        } catch {
-          // Non-JSON error body — fall back to the generic message above.
-        }
-        patch({ status: "error", error: message, answer: null });
-        return;
-      }
-      if (!res.body) {
-        patch({ status: "error", error: "The advisor didn't return a response stream.", answer: null });
-        return;
-      }
-
-      // Hand-parsed SSE: the response is a sequence of `event: <name>\ndata:
-      // <json>\n\n` frames — `delta` frames append streamed text as it's
-      // generated, and exactly one terminal `done` or `error` frame closes
-      // out the exchange with the full structured result (references, tools
-      // used, any proposed action).
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let settled = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let boundary: number;
-        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-          const frame = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
-          const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
-          if (!eventLine || !dataLine) continue;
-          const eventName = eventLine.slice(6).trim();
-          const data = JSON.parse(dataLine.slice(5).trim());
-
-          if (eventName === "delta") {
-            setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, answer: (h.answer ?? "") + data.text } : h)));
-          } else if (eventName === "done") {
-            settled = true;
-            patch({
-              status: "done",
-              answer: data.answer ?? "",
-              references: data.references ?? [],
-              toolsUsed: data.toolsUsed ?? [],
-              proposedAction: data.proposedAction ?? null,
-            });
-          } else if (eventName === "error") {
-            settled = true;
-            patch({ status: "error", error: data.error ?? "Something went wrong.", answer: null });
-          }
-        }
-      }
-      if (!settled) {
-        patch({ status: "error", error: "The advisor's response stream ended unexpectedly.", answer: null });
-      }
-    } catch {
-      patch({ status: "error", error: "Couldn't reach the advisor. Check your connection and try again.", answer: null });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Voice is just an alternate way to fill the same input and call the same
-  // submit() — there is no separate "voice brain." Speech-to-text happens
-  // entirely client-side via the browser; nothing about the transcript is
-  // treated as an implicit confirmation of anything — a proposed action
-  // still requires an explicit tap on its own Confirm button, whether the
-  // question that produced it was typed or spoken.
-  function startListening() {
-    if (loading || listening) return;
-    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) {
-      setVoiceError("Voice input isn't supported in this browser — try Chrome, Edge, or Safari, or type your question instead.");
-      return;
-    }
-    setVoiceError(null);
-    const recognition = new SpeechRecognitionCtor();
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      let interim = "";
-      let final = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) final += result[0].transcript;
-        else interim += result[0].transcript;
-      }
-      if (final.trim()) {
-        setQuestion("");
-        setListening(false);
-        submit(final.trim());
-      } else {
-        setQuestion(interim);
-      }
-    };
-    recognition.onerror = (event) => {
-      setListening(false);
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        setVoiceError("Microphone access was blocked — allow microphone permission in your browser to use voice input.");
-      } else if (event.error === "no-speech") {
-        setVoiceError("Didn't catch that — try again.");
-      } else if (event.error !== "aborted") {
-        setVoiceError("Voice input hit an error — try again or type your question.");
-      }
-    };
-    recognition.onend = () => setListening(false);
-
-    recognitionRef.current = recognition;
-    setListening(true);
-    recognition.start();
-  }
-
-  function stopListening() {
-    recognitionRef.current?.stop();
-    setListening(false);
+    void jarvis.submit(q);
   }
 
   const contextualQuestions = getContextualQuestions(pathname);
   const questionsToShow = compact ? contextualQuestions.slice(0, 4) : contextualQuestions;
   const contextLabel = getPageContextLabel(pathname);
+  const first = exchanges[0];
 
   return (
     <div className="flex flex-col gap-4">
@@ -257,37 +70,51 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
             : "border-[var(--color-border-strong)] focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_20px_-8px_var(--color-accent-glow)]"
         }`}
       >
-        <Sparkles
-          className={`ml-2 h-4 w-4 shrink-0 text-[var(--color-accent)] transition-opacity ${loading ? "animate-pulse" : "opacity-60 group-focus-within:opacity-100"}`}
-        />
+        <Sparkles className={`ml-2 h-4 w-4 shrink-0 text-[var(--color-accent)] transition-opacity ${loading ? "animate-pulse" : "opacity-60 group-focus-within:opacity-100"}`} />
         <input
-          value={question}
+          value={listening ? interim : question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder={listening ? "Listening..." : "Ask Jarvis about today's business..."}
+          placeholder={listening ? "Listening..." : "Ask Jarvis, or tap the mic and speak..."}
           aria-label="Ask Jarvis a question"
           disabled={loading || listening}
-          className="flex-1 bg-transparent py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60"
         />
         <Button
           type="button"
           variant={listening ? "danger" : "secondary"}
           aria-label={listening ? "Stop listening" : "Ask Jarvis by voice"}
           disabled={loading}
-          onClick={listening ? stopListening : startListening}
+          onClick={listening ? jarvis.stopListening : jarvis.startListening}
           className="rounded-xl px-2.5"
         >
           {listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
-        <Button
-          type="submit"
-          disabled={loading || listening || !question.trim()}
-          aria-label="Ask"
-          className="rounded-xl px-2.5 sm:px-3"
-        >
+        <Button type="submit" disabled={loading || listening || !question.trim()} aria-label="Ask" className="rounded-xl px-2.5 sm:px-3">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           <span className="hidden sm:inline">Ask</span>
         </Button>
       </form>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+        {speechOutputSupported ? (
+          <button type="button" onClick={jarvis.toggleMute} className="flex items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={muted}>
+            {muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+            {muted ? "Spoken replies muted" : "Spoken replies on (for voice questions)"}
+          </button>
+        ) : null}
+        {voiceSupported ? (
+          <button type="button" onClick={jarvis.toggleConversationMode} className="flex items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={conversationMode}>
+            <Mic className="h-3 w-3" />
+            Hands-free: {conversationMode ? "on — listens again after each reply" : "off"}
+          </button>
+        ) : null}
+        {exchanges.length > 0 ? (
+          <button type="button" onClick={jarvis.clear} className="flex items-center gap-1 hover:text-[var(--color-text-primary)]">
+            <Trash2 className="h-3 w-3" />
+            Clear conversation
+          </button>
+        ) : null}
+      </div>
 
       {listening ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
@@ -306,14 +133,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         </p>
       ) : null}
 
-      {/* Only shown before the first token arrives (i.e. while Jarvis is
-          still calling tools) — once text starts streaming into the answer
-          bubble below, that growing text *is* the loading state, so this
-          bounce indicator steps aside rather than running alongside real
-          content. This is genuine progress, not a fake typing effect: the
-          dots show while nothing has been generated yet, and disappear the
-          instant real tokens start arriving. */}
-      {loading && history[0]?.status === "streaming" && !history[0]?.answer ? (
+      {loading && first?.status === "streaming" && !first?.answer ? (
         <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
           <span className="flex gap-0.5">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)] [animation-delay:-0.3s]" />
@@ -338,71 +158,68 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         ))}
       </div>
 
-      {history.length > 0 ? (
+      {exchanges.length > 0 ? (
         <div className="space-y-3">
-          {history.map((exchange) => (
-            <div
-              key={exchange.id}
-              className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] shadow-sm"
-            >
-              <p className="border-b border-[var(--color-border)]/60 bg-[var(--color-surface-1)]/40 px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
+          {exchanges.map((exchange) => (
+            <div key={exchange.id} className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] shadow-sm">
+              <p className="flex items-center gap-1.5 border-b border-[var(--color-border)]/60 bg-[var(--color-surface-1)]/40 px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
+                {exchange.viaVoice ? <Mic className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" aria-label="Spoken" /> : null}
                 {exchange.question}
               </p>
               <div className="p-3">
-              {exchange.status !== "error" ? (
-                <>
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)]">
-                      <Sparkles className={`h-3 w-3 text-[var(--color-accent)] ${exchange.status === "streaming" ? "animate-pulse" : ""}`} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <MarkdownMessage text={exchange.answer ?? ""} />
-                      {exchange.status === "streaming" && exchange.answer ? (
-                        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[var(--color-accent)] align-middle" />
-                      ) : null}
+                {exchange.status !== "error" ? (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)]">
+                        <Sparkles className={`h-3 w-3 text-[var(--color-accent)] ${exchange.status === "streaming" ? "animate-pulse" : ""}`} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <MarkdownMessage text={exchange.answer ?? ""} />
+                        {exchange.status === "streaming" && exchange.answer ? (
+                          <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[var(--color-accent)] align-middle" />
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                  {exchange.references.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {exchange.references.map((ref) => (
-                        <Link
-                          key={`${ref.type}:${ref.id}`}
-                          href={`${ENTITY_PATHS[ref.type]}/${ref.id}`}
-                          className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2 py-0.5 text-xs text-[var(--color-accent)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]"
-                        >
-                          {ref.label}
-                        </Link>
-                      ))}
-                    </div>
-                  ) : null}
-                  {exchange.toolsUsed.length > 0 ? (
-                    <p className="mt-2 flex items-center gap-1 text-[11px] text-[var(--color-text-muted)]">
-                      <Wrench className="h-3 w-3 shrink-0" />
-                      Checked: {Array.from(new Set(exchange.toolsUsed.map(humanizeToolName))).join(", ")}
+                    {exchange.references.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {exchange.references.map((ref) => (
+                          <Link
+                            key={`${ref.type}:${ref.id}`}
+                            href={`${ENTITY_PATHS[ref.type]}/${ref.id}`}
+                            className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2 py-0.5 text-xs text-[var(--color-accent)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]"
+                          >
+                            {ref.label}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                    {exchange.toolsUsed.length > 0 ? (
+                      <p className="mt-2 flex items-center gap-1 text-[11px] text-[var(--color-text-muted)]">
+                        <Wrench className="h-3 w-3 shrink-0" />
+                        Checked: {Array.from(new Set(exchange.toolsUsed.map(humanizeToolName))).join(", ")}
+                      </p>
+                    ) : null}
+                    {exchange.proposedAction ? (
+                      <ProposedActionCard
+                        key={exchange.proposedAction.id}
+                        action={exchange.proposedAction}
+                        onExecutingChange={jarvis.setActionExecuting}
+                        onSettled={jarvis.noteActionSettled}
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="flex items-start gap-1.5 text-sm text-[var(--color-warning)]">
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {exchange.error}
                     </p>
-                  ) : null}
-                  {exchange.proposedAction ? (
-                    <ProposedActionCard
-                      key={exchange.proposedAction.id}
-                      action={exchange.proposedAction}
-                      onSettled={(outcome) => {
-                        // A confirmed write can change exactly the record the
-                        // current page is showing (e.g. this job's own
-                        // date/status/crew) — refresh the server-rendered
-                        // data so it's not left displaying the pre-change
-                        // state until the owner manually reloads. A cancel
-                        // touched nothing, so there's nothing to refresh.
-                        if (outcome === "confirmed") router.refresh();
-                      }}
-                    />
-                  ) : null}
-                </>
-              ) : (
-                <p className="flex items-start gap-1.5 text-sm text-[var(--color-warning)]">
-                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  {exchange.error}
-                </p>
-              )}
+                    <Button type="button" variant="secondary" onClick={() => jarvis.retry(exchange.id)} disabled={loading}>
+                      <RotateCw className="h-3.5 w-3.5" />
+                      Try again
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           ))}

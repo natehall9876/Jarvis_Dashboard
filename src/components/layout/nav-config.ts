@@ -42,6 +42,8 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const BRAND = {
   name: "Jarvis",
+  /** Single-owner private app: used only to greet the owner by name. */
+  ownerFirstName: "Nate",
   subtitle: "WeedEater Lawn Care",
   icon: LayoutDashboard,
 };

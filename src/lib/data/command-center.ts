@@ -62,6 +62,8 @@ export type TodaysMission = {
   expectedRevenue: number;
   budgetedHours: number;
   crewWorking: { id: string; name: string }[];
+  /** Assigned employee count per job ID (jobs with no assignment are absent or 0). */
+  crewCountByJob: Record<string, number>;
   routesRunning: string[];
   scheduleChanges: JobWithRelations[];
   quotesNeedingFollowUp: QuoteWithItems[];
@@ -93,11 +95,14 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
 
     const jobIds = todaysJobs.map((j) => j.id);
     const { data: jobEmployees } = jobIds.length
-      ? await supabase.from("job_employees").select("employee:employees(id, first_name, last_name)").in("job_id", jobIds)
+      ? await supabase.from("job_employees").select("job_id, employee:employees(id, first_name, last_name)").in("job_id", jobIds)
       : { data: [] };
 
     const crewMap = new Map<string, { id: string; name: string }>();
+    const crewCountByJob: Record<string, number> = {};
     for (const je of jobEmployees ?? []) {
+      const jobId = (je as unknown as { job_id: string }).job_id;
+      crewCountByJob[jobId] = (crewCountByJob[jobId] ?? 0) + 1;
       const employee = (je as unknown as { employee: { id: string; first_name: string; last_name: string | null } | null })
         .employee;
       if (employee) {
@@ -145,6 +150,7 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
       expectedRevenue,
       budgetedHours,
       crewWorking: Array.from(crewMap.values()),
+      crewCountByJob,
       routesRunning,
       scheduleChanges,
       quotesNeedingFollowUp,

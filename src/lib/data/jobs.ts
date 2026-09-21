@@ -221,3 +221,21 @@ export async function getWorkloadSummary(from: string, to: string): Promise<Data
     };
   });
 }
+
+/** Assigned employee names per job ID, for compact schedule cards. Jobs with no assignment are simply absent. */
+export async function getCrewNamesByJob(jobIds: string[]): Promise<Record<string, string[]>> {
+  if (jobIds.length === 0) return {};
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase.from("job_employees").select("job_id, employee:employees(first_name, last_name)").in("job_id", jobIds);
+    const out: Record<string, string[]> = {};
+    for (const row of (data ?? []) as unknown as { job_id: string; employee: { first_name: string; last_name: string | null } | null }[]) {
+      if (!row.employee) continue;
+      const name = [row.employee.first_name, row.employee.last_name].filter(Boolean).join(" ");
+      (out[row.job_id] ??= []).push(name);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}

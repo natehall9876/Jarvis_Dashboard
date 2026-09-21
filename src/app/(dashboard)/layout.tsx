@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { JarvisDrawer } from "@/components/jarvis/jarvis-drawer";
+import { JarvisProvider } from "@/components/jarvis/jarvis-provider";
+import { VoiceDock } from "@/components/jarvis/voice-dock";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -13,6 +14,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     // (A real bug was found and fixed here: the original min-h-screen flex-
     // row layout let the sidebar scroll away with a long page once content
     // exceeded one viewport — confirmed in the browser before this fix.)
+    // JarvisProvider sits at the layout level, which Next.js keeps mounted across
+    // client-side navigation — that is what makes the conversation, microphone
+    // and speech output persist while moving between pages.
+    <JarvisProvider>
     <div className="min-h-screen w-full lg:pl-60">
       <Sidebar />
       <div className="flex min-h-screen flex-col">
@@ -24,7 +29,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             (desktop, no tab bar there). */}
         <main className="flex-1 overflow-x-hidden px-4 pt-6 pb-36 lg:px-8 lg:pt-8 lg:pb-24">{children}</main>
       </div>
-      <JarvisDrawer />
+      <VoiceDock />
     </div>
+    </JarvisProvider>
   );
 }

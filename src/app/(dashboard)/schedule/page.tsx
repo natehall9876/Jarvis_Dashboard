@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { JobForm } from "@/components/jobs/job-form";
 import { formatCurrency, formatHours, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
-import { getJobs } from "@/lib/data/jobs";
+import { getJobs, getCrewNamesByJob } from "@/lib/data/jobs";
+import { summarizeJobs } from "@/lib/jarvis/briefing";
+import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
 import { todayInZone } from "@/lib/integrations/homeworks-dates";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
 import { createJob } from "@/lib/actions/jobs";
@@ -62,12 +64,13 @@ function addDays(date: Date, days: number): Date {
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; date?: string; new?: string; error?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; new?: string; error?: string; status?: string }>;
 }) {
   const params = await searchParams;
   const view: ViewMode = params.view === "week" ? "week" : "day";
   const anchor = parseDateParam(params.date);
   const isNew = params.new;
+  const statusFilter = (VALID_JOB_STATUSES as readonly string[]).includes(params.status ?? "") ? (params.status as string) : null;
 
   const rangeStart = view === "day" ? anchor : startOfWeek(anchor);
   const rangeEnd = view === "day" ? anchor : addDays(rangeStart, 6);
@@ -80,9 +83,11 @@ export default async function SchedulePage({
     isNew ? getEmployeeOptions() : Promise.resolve({ data: [] }),
   ]);
 
+  const crewByJob = await getCrewNamesByJob((jobs ?? []).map((j) => j.id));
   const jobsByDate = new Map<string, JobWithRelations[]>();
   for (const job of jobs ?? []) {
     if (!job.scheduled_date) continue;
+    if (statusFilter && job.status !== statusFilter) continue;
     const list = jobsByDate.get(job.scheduled_date) ?? [];
     list.push(job);
     jobsByDate.set(job.scheduled_date, list);
@@ -90,9 +95,10 @@ export default async function SchedulePage({
 
   const days = view === "week" ? Array.from({ length: 7 }, (_, i) => addDays(rangeStart, i)) : [anchor];
   const step = view === "week" ? 7 : 1;
-  const prevHref = `/schedule?view=${view}&date=${toISODate(addDays(anchor, -step))}`;
-  const nextHref = `/schedule?view=${view}&date=${toISODate(addDays(anchor, step))}`;
-  const todayHref = `/schedule?view=${view}`;
+  const filterQs = statusFilter ? `&status=${statusFilter}` : "";
+  const prevHref = `/schedule?view=${view}&date=${toISODate(addDays(anchor, -step))}${filterQs}`;
+  const nextHref = `/schedule?view=${view}&date=${toISODate(addDays(anchor, step))}${filterQs}`;
+  const todayHref = `/schedule?view=${view}${filterQs}`;
   const newJobBase = `/schedule?view=${view}&date=${params.date ?? toISODate(anchor)}`;
 
   return (
@@ -125,6 +131,15 @@ export default async function SchedulePage({
         }
       />
 
+      <DaySummaryAndFilters
+        view={view}
+        anchorStr={toISODate(anchor)}
+        active={statusFilter}
+        summary={summarizeJobs(
+          (jobs ?? []).map((j) => ({ status: j.status, price: j.price, budgeted_hours: j.budgeted_hours, scheduled_start_time: j.scheduled_start_time, crewCount: crewByJob[j.id]?.length ?? 0 })),
+        )}
+      />
+
       <DataStateGate error={error} isEmpty={false}>
         {/* No page-level empty state: each day already renders its own
             "Nothing scheduled" card, which keeps the date header in view
@@ -143,7 +158,10 @@ export default async function SchedulePage({
                     {day.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </h3>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--color-text-muted)]">{dayJobs.length} jobs</span>
+                    <span className="tabular text-xs text-[var(--color-text-muted)]">
+                      {dayJobs.length} job{dayJobs.length === 1 ? "" : "s"}
+                      {dayJobs.length > 0 ? ` · ${formatCurrency(summarizeJobs(dayJobs.map((j) => ({ status: j.status, price: j.price, budgeted_hours: j.budgeted_hours, scheduled_start_time: j.scheduled_start_time, crewCount: crewByJob[j.id]?.length ?? 0 }))).scheduledRevenue)}` : ""}
+                    </span>
                     <Link href={`/schedule?view=${view}&date=${dateStr}&new=1`} className="text-[var(--color-text-muted)] hover:text-[var(--color-accent)]" aria-label="Add job">
                       <Plus className="h-3.5 w-3.5" />
                     </Link>
@@ -155,30 +173,39 @@ export default async function SchedulePage({
                       <CardBody className="py-4 text-center text-xs text-[var(--color-text-muted)]">Nothing scheduled</CardBody>
                     </Card>
                   ) : (
-                    dayJobs.map((job) => (
-                      <Link key={job.id} href={`/jobs/${job.id}`}>
-                        <Card className="transition-colors hover:border-[var(--color-accent)]">
-                          <CardBody className="space-y-1.5 py-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-medium text-[var(--color-text-muted)]">
-                                {formatTimeString(job.scheduled_start_time)}
-                              </span>
-                              <StatusBadge status={job.status} />
-                            </div>
-                            <div className="truncate text-sm font-medium text-[var(--color-text-primary)]">
-                              {clientDisplayName(job.property?.client)}
-                            </div>
-                            <div className="truncate text-xs text-[var(--color-text-secondary)]">
-                              {propertyAddress(job.property)} · {job.service?.name ?? "—"}
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-                              <span>{formatCurrency(job.price)}</span>
-                              <span>{formatHours(job.budgeted_hours)} budgeted</span>
-                            </div>
-                          </CardBody>
-                        </Card>
-                      </Link>
-                    ))
+                    dayJobs.map((job) => {
+                      const crew = crewByJob[job.id] ?? [];
+                      const hasHours = job.budgeted_hours != null && job.budgeted_hours > 0;
+                      return (
+                        <Link key={job.id} href={`/jobs/${job.id}`} className="block">
+                          <Card className="transition-colors hover:border-[var(--color-accent)]">
+                            <CardBody className="space-y-1.5 px-3.5 py-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className={`min-w-0 truncate text-sm font-semibold ${job.service?.name ? "text-[var(--color-text-primary)]" : "italic text-[var(--color-text-muted)]"}`}>
+                                  {job.service?.name ?? "Service not set"}
+                                </span>
+                                <StatusBadge status={job.status} />
+                              </div>
+                              <div className="truncate text-sm text-[var(--color-text-secondary)]">{clientDisplayName(job.property?.client)}</div>
+                              <div className="truncate text-xs text-[var(--color-text-muted)]">{propertyAddress(job.property)}</div>
+                              <div className="tabular flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-xs">
+                                <span className={job.scheduled_start_time ? "font-medium text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"}>
+                                  {job.scheduled_start_time ? formatTimeString(job.scheduled_start_time) : "Unscheduled time"}
+                                </span>
+                                <span className="text-[var(--color-accent)]">{formatCurrency(job.price)}</span>
+                                <span className={hasHours ? "text-[var(--color-text-secondary)]" : "text-[var(--color-text-muted)]"}>
+                                  {hasHours ? formatHours(job.budgeted_hours) : "No budgeted hours"}
+                                </span>
+                                <span className={crew.length ? "text-[var(--color-text-secondary)]" : "text-[var(--color-text-muted)]"}>
+                                  {crew.length ? crew.join(", ") : "Unassigned"}
+                                </span>
+                                {job.stop_order != null ? <span className="text-[var(--color-text-muted)]">Stop #{job.stop_order}</span> : null}
+                              </div>
+                            </CardBody>
+                          </Card>
+                        </Link>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -219,5 +246,52 @@ function ViewToggle({ current, target, date }: { current: ViewMode; target: View
     >
       {target}
     </Link>
+  );
+}
+
+function DaySummaryAndFilters({
+  view,
+  anchorStr,
+  active,
+  summary,
+}: {
+  view: ViewMode;
+  anchorStr: string;
+  active: string | null;
+  summary: ReturnType<typeof summarizeJobs>;
+}) {
+  const base = `/schedule?view=${view}&date=${anchorStr}`;
+  const chip = (label: string, status: string | null) => (
+    <Link
+      key={label}
+      href={status ? `${base}&status=${status}` : base}
+      className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize ${
+        active === status ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]" : "border-[var(--color-border-strong)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+  return (
+    <div className="space-y-3">
+      <dl className="tabular grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {[
+          [view === "week" ? "Jobs this week" : "Jobs", String(summary.jobs), "text-[var(--color-text-primary)]"],
+          ["Scheduled revenue", formatCurrency(summary.scheduledRevenue), "text-[var(--color-accent)]"],
+          ["Known labor", summary.missingHours === summary.jobs && summary.jobs > 0 ? "None recorded" : `${summary.budgetedHours.toFixed(1)} hr`, summary.missingHours ? "text-[var(--color-warning)]" : "text-[var(--color-text-primary)]"],
+          ["No set time", String(summary.unscheduledTime), "text-[var(--color-text-secondary)]"],
+          ["Unassigned", String(summary.unassigned), summary.unassigned ? "text-[var(--color-warning)]" : "text-[var(--color-text-primary)]"],
+        ].map(([label, value, tone]) => (
+          <div key={label} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)]/90 px-3 py-2">
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">{label}</dt>
+            <dd className={`text-base font-semibold ${tone}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+        {chip("All", null)}
+        {VALID_JOB_STATUSES.map((st) => chip(st.replace("_", " "), st))}
+      </div>
+    </div>
   );
 }

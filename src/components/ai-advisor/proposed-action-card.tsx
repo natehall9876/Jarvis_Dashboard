@@ -27,12 +27,22 @@ function formatValue(value: unknown): string {
 
 type CardState = { kind: "pending" } | { kind: "confirming" } | { kind: "done"; message: string } | { kind: "error"; message: string; retryable: boolean };
 
-export function ProposedActionCard({ action, onSettled }: { action: ProposedAction; onSettled?: (outcome: "confirmed" | "cancelled") => void }) {
+export function ProposedActionCard({
+  action,
+  onSettled,
+  onExecutingChange,
+}: {
+  action: ProposedAction;
+  onSettled?: (outcome: "confirmed" | "cancelled") => void;
+  /** True only while the confirmed write request is actually in flight. */
+  onExecutingChange?: (executing: boolean) => void;
+}) {
   const [state, setState] = useState<CardState>({ kind: "pending" });
 
   async function confirm() {
     if (state.kind === "confirming" || state.kind === "done") return;
     setState({ kind: "confirming" });
+    onExecutingChange?.(true);
     try {
       const res = await fetch("/api/ai-advisor/execute-action", {
         method: "POST",
@@ -49,6 +59,8 @@ export function ProposedActionCard({ action, onSettled }: { action: ProposedActi
       }
     } catch {
       setState({ kind: "error", message: "Couldn't reach the server. Check your connection and try again.", retryable: true });
+    } finally {
+      onExecutingChange?.(false);
     }
   }
 

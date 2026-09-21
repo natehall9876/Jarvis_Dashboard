@@ -76,7 +76,14 @@ html {
 }
 
 body {
-  background: var(--color-surface-0);
+  /* Cinematic depth: a cool midnight-navy bloom top-right and a faint WeedEater
+     green bloom top-left over near-black charcoal. Fixed, static CSS (no
+     animation, no JS) so it costs nothing on phones. */
+  background:
+    radial-gradient(1100px 620px at 88% -8%, rgba(38, 64, 120, 0.22), transparent 62%),
+    radial-gradient(900px 520px at -6% -4%, rgba(114, 242, 56, 0.05), transparent 60%),
+    var(--color-surface-0);
+  background-attachment: fixed;
   color: var(--color-text-primary);
   font-family: var(--font-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -117,6 +124,17 @@ body {
   z-index: -1;
   background: radial-gradient(600px circle at 15% 0%, var(--color-accent-glow), transparent 60%);
   pointer-events: none;
+}
+
+/* Numbers in dashboards read better aligned. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none;
+  }
 }
 
 @keyframes fade-in {
