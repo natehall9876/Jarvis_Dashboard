@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { JobForm } from "@/components/jobs/job-form";
 import { formatCurrency, formatHours, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getJobs } from "@/lib/data/jobs";
+import { todayInZone } from "@/lib/integrations/homeworks-dates";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
 import { createJob } from "@/lib/actions/jobs";
 import type { JobWithRelations } from "@/types/domain";
@@ -30,9 +31,10 @@ function parseDateParam(value: string | undefined): Date {
     const parsed = new Date(Number(year), Number(month) - 1, Number(day));
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now;
+  // "Today" is the business-local (America/New_York) calendar day, never the
+  // server's UTC day — after 8 PM Eastern UTC is already tomorrow.
+  const [year, month, day] = todayInZone().split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function toISODate(date: Date): string {
@@ -132,7 +134,7 @@ export default async function SchedulePage({
           {days.map((day) => {
             const dateStr = toISODate(day);
             const dayJobs = jobsByDate.get(dateStr) ?? [];
-            const isToday = dateStr === toISODate(new Date());
+            const isToday = dateStr === todayInZone();
             return (
               <div key={dateStr} className={view === "week" ? "min-w-[220px]" : ""}>
                 <div className="mb-2 flex items-center justify-between">

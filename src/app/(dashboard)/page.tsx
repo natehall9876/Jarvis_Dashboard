@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/ui/page-header";
+import { addDaysISO, todayInZone } from "@/lib/integrations/homeworks-dates";
 import { TodaysMission } from "@/components/command-center/todays-mission";
 import { UpcomingWork } from "@/components/command-center/upcoming-work";
 import { BusinessPulse } from "@/components/command-center/business-pulse";
@@ -9,14 +10,11 @@ import { getWorkloadSummary } from "@/lib/data/jobs";
 
 export const dynamic = "force-dynamic";
 
-function toISODate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 export default async function CommandCenterPage() {
-  const today = new Date();
-  const tomorrow = toISODate(new Date(today.getTime() + 86_400_000));
-  const weekOut = toISODate(new Date(today.getTime() + 7 * 86_400_000));
+  // Business-local (America/New_York) days — the UTC date is already "tomorrow" after 8 PM Eastern.
+  const today = todayInZone();
+  const tomorrow = addDaysISO(today, 1);
+  const weekOut = addDaysISO(today, 7);
 
   const [mission, pulse, upcoming] = await Promise.all([getTodaysMission(), getBusinessPulse(), getWorkloadSummary(tomorrow, weekOut)]);
 

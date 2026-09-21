@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getUpcomingJobs, type HomeworksUpcomingJob } from "@/lib/integrations/homeworks-api";
+import { getEventsInRange, type EventFetchMeta, type HomeworksUpcomingJob } from "@/lib/integrations/homeworks-api";
+import { rangeForDays, type DateRange } from "@/lib/integrations/homeworks-dates";
 import { syncHomeworksEntity } from "@/lib/integrations/homeworks-sync";
 import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
 
@@ -30,9 +31,33 @@ export type JobPreviewRow = {
   action: "would_create" | "would_update" | "blocked_property_not_synced";
 };
 
+export type JobFetchStats = {
+  range: DateRange;
+  /** Distinct events Homeworks returned for the range, every status. */
+  eventsRetrieved: number;
+  pages: number;
+  pageSize: number;
+  rawRows: number;
+  duplicatesDropped: number;
+  /** Retrieved but not synced: not OPEN (completed/skipped/cancelled/waitlisted). */
+  excludedNotOpen: number;
+};
+
+function statsFrom(meta: EventFetchMeta, retrieved: number, excludedNotOpen: number): JobFetchStats {
+  return { range: meta.range, eventsRetrieved: retrieved, pages: meta.pages, pageSize: meta.pageSize, rawRows: meta.rawCount, duplicatesDropped: meta.duplicates, excludedNotOpen };
+}
+
+async function loadOpenEvents(range: DateRange | undefined): Promise<{ ok: true; jobs: HomeworksUpcomingJob[]; stats: JobFetchStats } | { ok: false; message: string }> {
+  const fetched = await getEventsInRange(range ?? rangeForDays(7));
+  if (!fetched.ok) return { ok: false, message: fetched.message };
+  const open = fetched.data.events.filter((e) => e.status === "OPEN" && !e.isDeleted);
+  return { ok: true, jobs: open, stats: statsFrom(fetched.data.meta, fetched.data.events.length, fetched.data.events.length - open.length) };
+}
+
 export type JobPreviewResult =
   | {
       ok: true;
+      stats: JobFetchStats;
       totalUpcomingJobs: number;
       wouldCreate: number;
       wouldUpdate: number;
@@ -49,8 +74,8 @@ export type JobPreviewResult =
  * whose property hasn't synced yet is reported as blocked, not silently
  * skipped or guessed at — sync customers/properties first if you see this.
  */
-export async function previewHomeworksJobSync(): Promise<JobPreviewResult> {
-  const jobsResult = await getUpcomingJobs(7);
+export async function previewHomeworksJobSync(range?: DateRange): Promise<JobPreviewResult> {
+  const jobsResult = await loadOpenEvents(range);
   if (!jobsResult.ok) return { ok: false, message: jobsResult.message };
 
   const supabase = await createSupabaseServerClient();
@@ -64,7 +89,7 @@ export async function previewHomeworksJobSync(): Promise<JobPreviewResult> {
   const syncedPropertyIds = new Set((properties ?? []).map((p) => p.homeworks_id as string));
   const existingJobIds = new Set((existingJobs ?? []).map((j) => j.homeworks_id as string));
 
-  const rows: JobPreviewRow[] = jobsResult.data.jobs.map((job) => {
+  const rows: JobPreviewRow[] = jobsResult.jobs.map((job) => {
     const base = { homeworksId: job.id, title: job.title, customerName: job.customer?.fullName ?? "(unknown)", startDate: job.startDate };
     if (!job.property || !syncedPropertyIds.has(job.property.id)) {
       return { ...base, action: "blocked_property_not_synced" as const };
@@ -74,7 +99,8 @@ export async function previewHomeworksJobSync(): Promise<JobPreviewResult> {
 
   return {
     ok: true,
-    totalUpcomingJobs: jobsResult.data.jobs.length,
+    stats: jobsResult.stats,
+    totalUpcomingJobs: jobsResult.jobs.length,
     wouldCreate: rows.filter((r) => r.action === "would_create").length,
     wouldUpdate: rows.filter((r) => r.action === "would_update").length,
     blockedNoProperty: rows.filter((r) => r.action === "blocked_property_not_synced").length,
@@ -85,7 +111,7 @@ export async function previewHomeworksJobSync(): Promise<JobPreviewResult> {
 export type JobImportResultRow = { homeworksId: string; title: string; outcome: "created" | "updated" | "blocked" | "error"; detail?: string };
 
 export type JobImportResult =
-  | { ok: true; created: number; updated: number; blocked: number; errors: number; rows: JobImportResultRow[] }
+  | { ok: true; stats: JobFetchStats; created: number; updated: number; blocked: number; errors: number; rows: JobImportResultRow[] }
   | { ok: false; message: string };
 
 /**
@@ -94,8 +120,8 @@ export type JobImportResult =
  * property-synced check as the preview server-side, so a stale preview
  * can never cause a write for a property that isn't actually linked.
  */
-export async function confirmHomeworksJobImport(): Promise<JobImportResult> {
-  const jobsResult = await getUpcomingJobs(7);
+export async function confirmHomeworksJobImport(range?: DateRange): Promise<JobImportResult> {
+  const jobsResult = await loadOpenEvents(range);
   if (!jobsResult.ok) return { ok: false, message: jobsResult.message };
 
   const supabase = await createSupabaseServerClient();
@@ -117,7 +143,7 @@ export async function confirmHomeworksJobImport(): Promise<JobImportResult> {
   const preExistingJobIds = new Set((preExistingJobs ?? []).map((j) => j.homeworks_id as string));
 
   const rows: JobImportResultRow[] = [];
-  for (const job of jobsResult.data.jobs) {
+  for (const job of jobsResult.jobs) {
     if (!job.property || !syncedPropertyIds.has(job.property.id)) {
       rows.push({ homeworksId: job.id, title: job.title, outcome: "blocked", detail: "Property not yet synced — import customers/properties first." });
       continue;
@@ -150,6 +176,7 @@ export async function confirmHomeworksJobImport(): Promise<JobImportResult> {
 
   return {
     ok: true,
+    stats: jobsResult.stats,
     created: rows.filter((r) => r.outcome === "created").length,
     updated: rows.filter((r) => r.outcome === "updated").length,
     blocked: rows.filter((r) => r.outcome === "blocked").length,

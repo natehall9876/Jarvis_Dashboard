@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { addDaysISO, todayInZone } from "@/lib/integrations/homeworks-dates";
 import { withDataResult } from "@/lib/data/shared";
 import { getOverdueInvoices } from "@/lib/data/invoices";
 import { getEquipment } from "@/lib/data/equipment";
@@ -25,10 +26,6 @@ export type AttentionReport = {
 const QUOTE_FOLLOW_UP_AFTER_DAYS = 3;
 const WORKLOAD_LOOKAHEAD_DAYS = 6;
 
-function toISODate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * Deterministic, rules-based scan for things a real operator would want
  * flagged — the same "not an LLM call" philosophy as Command Center's
@@ -41,8 +38,8 @@ function toISODate(date: Date): string {
 export async function getAttentionItems(): Promise<DataResult<AttentionReport>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
-    const today = toISODate(new Date());
-    const lookaheadEnd = toISODate(new Date(Date.now() + WORKLOAD_LOOKAHEAD_DAYS * 86_400_000));
+    const today = todayInZone();
+    const lookaheadEnd = addDaysISO(today, WORKLOAD_LOOKAHEAD_DAYS);
 
     const [overdueResult, equipmentResult, quotesResp, unfinishedResp, workloadResult] = await Promise.all([
       getOverdueInvoices(20),

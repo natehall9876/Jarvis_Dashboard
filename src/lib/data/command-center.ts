@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { todayInZone } from "@/lib/integrations/homeworks-dates";
 import { withDataResult } from "@/lib/data/shared";
 import { getOverdueInvoices } from "@/lib/data/invoices";
 import { getEquipment } from "@/lib/data/equipment";
@@ -74,7 +75,7 @@ const FOLLOW_UP_AFTER_DAYS = 3;
 export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
-    const today = toISODate(new Date());
+    const today = todayInZone();
 
     const { data: jobs, error: jobsError } = await supabase
       .from("jobs")
@@ -240,7 +241,7 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
     const supabase = await createSupabaseServerClient();
 
     const now = new Date();
-    const today = toISODate(now);
+    const today = todayInZone(now);
     const weekStartStr = toISODate(startOfWeek(now));
     const monthStartStr = toISODate(startOfMonth(now));
 

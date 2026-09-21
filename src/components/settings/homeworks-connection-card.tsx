@@ -9,6 +9,8 @@ import { verifyHomeworksConnection, disconnectHomeworksAction, type VerifyResult
 import { previewHomeworksSync, type SyncPreviewResult } from "@/lib/actions/homeworks-sync-preview";
 import { confirmHomeworksImport, type ImportResult } from "@/lib/actions/homeworks-import";
 import { HomeworksLinkPanel } from "@/components/settings/homeworks-link-panel";
+import { HomeworksReconcilePanel } from "@/components/settings/homeworks-reconcile-panel";
+import { addDaysISO, rangeForDays, todayInZone, validateRange, type DateRange } from "@/lib/integrations/homeworks-dates";
 import { previewHomeworksJobSync, confirmHomeworksJobImport, type JobPreviewResult, type JobImportResult } from "@/lib/actions/homeworks-job-sync";
 
 /**
@@ -44,6 +46,14 @@ export function HomeworksConnectionCard({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [jobPreview, setJobPreview] = useState<JobPreviewResult | null>(null);
   const [jobImportResult, setJobImportResult] = useState<JobImportResult | null>(null);
+  const [rangeMode, setRangeMode] = useState<"7" | "14" | "30" | "custom">("7");
+  const [customFrom, setCustomFrom] = useState(() => todayInZone());
+  const [customTo, setCustomTo] = useState(() => addDaysISO(todayInZone(), 7));
+
+  function currentRange(): DateRange {
+    return rangeMode === "custom" ? { from: customFrom, to: customTo } : rangeForDays(Number(rangeMode));
+  }
+  const rangeCheck = validateRange(currentRange());
   const [pending, startTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
   const [importPending, startImportTransition] = useTransition();
@@ -86,7 +96,7 @@ export function HomeworksConnectionCard({
     setJobPreview(null);
     setJobImportResult(null);
     startJobPreviewTransition(async () => {
-      setJobPreview(await previewHomeworksJobSync());
+      setJobPreview(await previewHomeworksJobSync(currentRange()));
     });
   }
 
@@ -99,7 +109,7 @@ export function HomeworksConnectionCard({
     if (!confirmed) return;
     setJobImportResult(null);
     startJobImportTransition(async () => {
-      const res = await confirmHomeworksJobImport();
+      const res = await confirmHomeworksJobImport(currentRange());
       setJobImportResult(res);
       if (res.ok) router.refresh();
     });
@@ -308,13 +318,39 @@ export function HomeworksConnectionCard({
           />
         ) : null}
 
+        {connected ? <HomeworksReconcilePanel /> : null}
+
         {connected ? (
           <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
-            <p className="text-xs font-medium text-[var(--color-text-primary)]">Scheduled jobs (next 7 days)</p>
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">Scheduled jobs</p>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              {(["7", "14", "30", "custom"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setRangeMode(m);
+                    setJobPreview(null);
+                    setJobImportResult(null);
+                  }}
+                  className={`rounded-md border px-2 py-1 ${rangeMode === m ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]" : "border-[var(--color-border-strong)] text-[var(--color-text-secondary)]"}`}
+                >
+                  {m === "custom" ? "Custom" : `Next ${m} days`}
+                </button>
+              ))}
+              {rangeMode === "custom" ? (
+                <>
+                  <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} aria-label="Start date" className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-[var(--color-text-primary)]" />
+                  <span className="text-[var(--color-text-muted)]">to</span>
+                  <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} aria-label="End date" className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-[var(--color-text-primary)]" />
+                </>
+              ) : null}
+            </div>
+            {!rangeCheck.ok ? <p className="text-[11px] text-[var(--color-critical)]">{rangeCheck.message}</p> : null}
             <p className="text-[11px] text-[var(--color-text-muted)]">
               Jobs can only sync for a property that&apos;s already been imported above — sync customers/properties first.
             </p>
-            <Button type="button" variant="secondary" onClick={runJobPreview} disabled={jobPreviewPending}>
+            <Button type="button" variant="secondary" onClick={runJobPreview} disabled={jobPreviewPending || !rangeCheck.ok}>
               {jobPreviewPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Preview job sync (read-only)
             </Button>
@@ -328,7 +364,10 @@ export function HomeworksConnectionCard({
             {jobPreview && jobPreview.ok ? (
               <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-2">
                 <p className="text-xs text-[var(--color-text-secondary)]">
-                  {jobPreview.totalUpcomingJobs} real job{jobPreview.totalUpcomingJobs === 1 ? "" : "s"} found in the next 7 days.
+                  {jobPreview.stats.eventsRetrieved} Homeworks event{jobPreview.stats.eventsRetrieved === 1 ? "" : "s"} retrieved for {jobPreview.stats.range.from} to{" "}
+                  {jobPreview.stats.range.to} (America/New_York, inclusive) in {jobPreview.stats.pages} page{jobPreview.stats.pages === 1 ? "" : "s"} of up to{" "}
+                  {jobPreview.stats.pageSize}; {jobPreview.stats.duplicatesDropped} duplicate{jobPreview.stats.duplicatesDropped === 1 ? "" : "s"} dropped;{" "}
+                  {jobPreview.stats.excludedNotOpen} not OPEN (not synced); {jobPreview.totalUpcomingJobs} scheduled job{jobPreview.totalUpcomingJobs === 1 ? "" : "s"} considered.
                 </p>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="rounded-md bg-[var(--color-surface-2)] p-2">

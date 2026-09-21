@@ -1,8 +1,10 @@
 import { getValidAccessToken } from "@/lib/integrations/homeworks-connection";
 import { HOMEWORKS_GRAPHQL_ENDPOINT } from "@/lib/integrations/homeworks-oauth";
 import { normalizeCustomer, normalizeJob } from "@/lib/integrations/homeworks-normalize";
+import { fetchAllPages, type PageFetch } from "@/lib/integrations/homeworks-paging";
+import { rangeForDays, validateRange } from "@/lib/integrations/homeworks-dates";
 
-type GraphQLResult<T> = { ok: true; data: T } | { ok: false; message: string };
+type GraphQLResult<T> = { ok: true; data: T } | { ok: false; message: string; retryable?: boolean };
 
 async function queryHomeworks<T>(query: string, variables?: Record<string, unknown>): Promise<GraphQLResult<T>> {
   const token = await getValidAccessToken();
@@ -19,12 +21,13 @@ async function queryHomeworks<T>(query: string, variables?: Record<string, unkno
       body: JSON.stringify({ query, variables }),
     });
   } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach the Homeworks API." };
+    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach the Homeworks API.", retryable: true };
   }
 
   if (!response.ok) {
     const text = await response.text();
-    return { ok: false, message: `Homeworks API returned ${response.status}: ${text.slice(0, 400)}` };
+    const retryable = response.status === 429 || response.status >= 500;
+    return { ok: false, message: `Homeworks API returned ${response.status}: ${text.slice(0, 400)}`, retryable };
   }
 
   const json = (await response.json()) as { data?: T; errors?: { message: string }[] };
@@ -141,56 +144,118 @@ export type HomeworksUpcomingJob = {
   recurringEventId: string | null;
   customer: { id: string; fullName: string } | null;
   property: { id: string; name: string; address: { street1: string; city: string | null; state: string | null } | null } | null;
+  /** Present on events fetched by getEventsInRange / getEventsByIds. */
+  isDeleted?: boolean;
+  endDate?: string | null;
 };
 
 /**
- * This exact query shape was empirically run against the live API this
- * session (not just read from the schema), through two real, caught
- * errors: `orderBy: [{ startDate: ASC }]` was rejected ("does not exist in
- * SortOrder enum, did you mean asc or desc") — lowercase fixed it. Then,
- * as a parameterized query (variables, not inline literals),
- * `$from`/`$to` typed as `LocalDate!` were rejected too ("used in position
- * expecting type Date") — `Event.startDate` is a `LocalDate`, but
- * `DateFilter.gte`/`lte` expect the separate `Date` scalar. Both fixed and
- * re-verified with real results before this was written into the app.
- * `status: { equals: OPEN }` matches the live playbook's own definition of
- * "scheduled/active" jobs (CLOSED = complete, SKIPPED/CANCELLED/WAITLISTED
- * are excluded).
+ * Read-only. `days` counts from TODAY IN THE BUSINESS TIMEZONE (America/New_York),
+ * inclusive of both ends, fetched with real pagination. Returns only OPEN
+ * (scheduled) events; use getEventsInRange for every status.
  */
-const UPCOMING_JOBS_QUERY = `
-  query UpcomingJobs($from: Date!, $to: Date!) {
+export async function getUpcomingJobs(days = 7): Promise<GraphQLResult<{ jobs: HomeworksUpcomingJob[]; meta: EventFetchMeta }>> {
+  const result = await getEventsInRange(rangeForDays(days));
+  if (!result.ok) return result;
+  return { ok: true, data: { jobs: result.data.events.filter((e) => e.status === "OPEN"), meta: result.data.meta } };
+}
+
+const EVENT_RANGE_FIELDS = `
+  id title status isDeleted startDate endDate hasTime startTime total recurringEventId
+  customer { id fullName }
+  property { id name address { street1 city state } }
+`;
+
+const EVENTS_IN_RANGE_QUERY = `
+  query EventsInRange($from: Date!, $to: Date!, $take: SafeInt!, $skip: SafeInt!) {
     events(
-      where: { status: { equals: OPEN }, startDate: { gte: $from, lte: $to }, isDeleted: false }
-      orderBy: [{ startDate: asc }]
-    ) {
-      id
-      title
-      status
-      startDate
-      hasTime
-      startTime
-      total
-      recurringEventId
-      customer { id fullName }
-      property { id name address { street1 city state } }
-    }
+      where: { startDate: { gte: $from, lte: $to }, isDeleted: false }
+      orderBy: [{ startDate: asc }, { id: asc }]
+      take: $take
+      skip: $skip
+    ) { ${EVENT_RANGE_FIELDS} }
   }
 `;
 
-function toISODate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+// Multi-day events that started before the range but are still running into it.
+const EVENTS_SPANNING_QUERY = `
+  query EventsSpanning($from: Date!, $take: SafeInt!, $skip: SafeInt!) {
+    events(
+      where: { startDate: { lt: $from }, endDate: { gte: $from }, isDeleted: false }
+      orderBy: [{ startDate: asc }, { id: asc }]
+      take: $take
+      skip: $skip
+    ) { ${EVENT_RANGE_FIELDS} }
+  }
+`;
+
+const EVENTS_BY_IDS_QUERY = `
+  query EventsByIds($ids: [SafeInt!]!, $take: SafeInt!) {
+    events(where: { id: { in: $ids } }, take: $take) { ${EVENT_RANGE_FIELDS} }
+  }
+`;
+
+export type EventFetchMeta = {
+  pageSize: number;
+  pages: number;
+  /** Rows returned by the API across all pages, before de-duplication. */
+  rawCount: number;
+  duplicates: number;
+  range: { from: string; to: string };
+};
+
+export type EventsInRange = { events: HomeworksUpcomingJob[]; meta: EventFetchMeta };
+
+/**
+ * Every event (all statuses, soft-deleted excluded) whose start date falls in
+ * the inclusive [from, to] calendar range, plus multi-day events still running
+ * into it. Pages with take/skip until a short page, de-duplicates by canonical
+ * event ID, retries 429/5xx, and REFUSES to return a partial list as complete.
+ * Dates are business-local calendar dates (see homeworks-dates.ts) — no UTC math.
+ */
+export async function getEventsInRange(range: { from: string; to: string }): Promise<GraphQLResult<EventsInRange>> {
+  const validation = validateRange(range);
+  if (!validation.ok) return { ok: false, message: validation.message };
+
+  const page = (query: string, vars: Record<string, unknown>): PageFetch<HomeworksUpcomingJob> => async (skip, take) => {
+    const result = await queryHomeworks<{ events: HomeworksUpcomingJob[] }>(query, { ...vars, take, skip });
+    if (!result.ok) return { ok: false, message: result.message, retryable: result.retryable };
+    return { ok: true, items: result.data.events.map(normalizeJob) };
+  };
+
+  const main = await fetchAllPages(page(EVENTS_IN_RANGE_QUERY, { from: range.from, to: range.to }), { pageSize: 200 });
+  if (!main.ok) return { ok: false, message: `${main.message} (${main.partial.items.length} events fetched before the failure — none will be used.)` };
+  const spanning = await fetchAllPages(page(EVENTS_SPANNING_QUERY, { from: range.from }), { pageSize: 200 });
+  if (!spanning.ok) return { ok: false, message: `${spanning.message} (multi-day events query.)` };
+
+  const byId = new Map<string, HomeworksUpcomingJob>();
+  for (const e of [...main.items, ...spanning.items]) byId.set(e.id, e);
+  return {
+    ok: true,
+    data: {
+      events: [...byId.values()],
+      meta: {
+        pageSize: main.pageSize,
+        pages: main.pages + spanning.pages,
+        rawCount: main.rawCount + spanning.rawCount,
+        duplicates: main.duplicates + spanning.duplicates + (main.items.length + spanning.items.length - byId.size),
+        range,
+      },
+    },
+  };
 }
 
-/** Read-only. Defaults to today through 7 days out, matching the Command Center's own "next 7 days" convention elsewhere in the app. */
-export async function getUpcomingJobs(days = 7): Promise<GraphQLResult<{ jobs: HomeworksUpcomingJob[] }>> {
-  const today = new Date();
-  const to = new Date(today.getTime() + days * 86_400_000);
-  const result = await queryHomeworks<{ events: HomeworksUpcomingJob[] }>(UPCOMING_JOBS_QUERY, {
-    from: toISODate(today),
-    to: toISODate(to),
-  });
-  if (!result.ok) return result;
-  return { ok: true, data: { jobs: result.data.events.map(normalizeJob) } };
+/** Looks up specific events by canonical ID regardless of date/status (deleted ones included via isDeleted in the row). */
+export async function getEventsByIds(ids: string[]): Promise<GraphQLResult<{ events: HomeworksUpcomingJob[] }>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const found: HomeworksUpcomingJob[] = [];
+  for (let i = 0; i < unique.length; i += 200) {
+    const chunk = unique.slice(i, i + 200).map(Number).filter((n) => Number.isSafeInteger(n));
+    const result = await queryHomeworks<{ events: HomeworksUpcomingJob[] }>(EVENTS_BY_IDS_QUERY, { ids: chunk, take: chunk.length });
+    if (!result.ok) return result;
+    found.push(...result.data.events.map(normalizeJob));
+  }
+  return { ok: true, data: { events: found } };
 }
 
 const WHO_AM_I_QUERY = `
