@@ -25,6 +25,10 @@ export type HwPropertyInput = {
 
 export type HwCustomerInput = {
   id: string;
+  /** typeof the id as the API returned it (Homeworks sends numbers) — diagnostic only. */
+  rawIdType?: string;
+  /** Homeworks' human-facing Customer.number — never the canonical ID. */
+  number?: string;
   fullName: string;
   firstName: string;
   lastName: string;
@@ -55,6 +59,15 @@ export type JarvisPropertyInput = {
   zip: string | null;
   homeworks_id: string | null;
 };
+
+/**
+ * Homeworks IDs arrive as JSON numbers; Jarvis stores homeworks_id as text.
+ * Every ID comparison in this module goes through here so 1994294 and
+ * "1994294" are the same ID (the exact mismatch found in the live data).
+ */
+export function idOf(value: unknown): string {
+  return value === null || value === undefined ? "" : String(value).trim();
+}
 
 /** Final 10 digits of a valid US number: 10 digits, or 11 starting with 1. Anything else is not comparable. */
 export function normalizePhone10(input: string | null | undefined): string | null {
@@ -166,8 +179,29 @@ export type PropertyPlanRow = {
   untouched: FieldDiff[];
 };
 
+export type IdClassification = "same_id" | "verified_legacy_mapping" | "likely_wrong_stored_type" | "unresolved_conflict" | "no_stored_id";
+
+export type IdDiagnosticRow = {
+  hwName: string;
+  phoneLast4: string | null;
+  clientId: string;
+  clientName: string;
+  matchedBy: "id" | "phone";
+  storedId: string | null;
+  liveId: string;
+  liveIdRawType: string;
+  customerNumber: string | null;
+  livePropertyIds: string[];
+  jarvisProperties: { id: string; homeworksId: string | null }[];
+  classification: IdClassification;
+  explanation: string;
+};
+
+export type IdConflict = { storedId: string; liveId: string; classification: IdClassification; explanation: string };
+
 export type CustomerPlanRow = {
   hwId: string;
+  idConflict?: IdConflict;
   hwName: string;
   status: CustomerLinkStatus;
   reason: string;
@@ -182,6 +216,7 @@ export type CustomerPlanRow = {
 
 export type LinkPlan = {
   customers: CustomerPlanRow[];
+  idDiagnostics: IdDiagnosticRow[];
   counts: {
     safeCustomerLinks: number;
     safePropertyLinks: number;
@@ -204,6 +239,32 @@ function propertyLabel(p: { street: string | null; city: string | null; property
 
 function hwName(c: HwCustomerInput): string {
   return c.fullName || `${c.firstName} ${c.lastName}`.trim() || "(no name)";
+}
+
+/**
+ * Explains a stored Jarvis homeworks_id that is NOT the live canonical ID.
+ * Only ever classifies — the caller never overwrites a conflicting non-blank
+ * ID on the strength of this (or of a phone match).
+ */
+export function classifyStoredId(stored: string, hw: HwCustomerInput, all: HwCustomerInput[]): { classification: IdClassification; explanation: string } {
+  const live = idOf(hw.id);
+  if (!stored) return { classification: "no_stored_id", explanation: "Jarvis has no Homeworks ID stored for this client." };
+  if (stored === live) return { classification: "same_id", explanation: "Stored ID equals the live canonical customer ID (compared as text; the API sends it as a number)." };
+  const number = idOf(hw.number);
+  if (number && stored === number) {
+    return { classification: "verified_legacy_mapping", explanation: "Stored ID equals this customer's Homeworks customer number (Customer.number), not its canonical ID." };
+  }
+  if (hw.properties.some((p) => idOf(p.id) === stored)) {
+    return { classification: "likely_wrong_stored_type", explanation: "Stored ID equals one of this customer's own property IDs — a property ID was saved as the customer ID." };
+  }
+  const other = all.find((c) => c !== hw && idOf(c.id) === stored);
+  if (other) {
+    return { classification: "unresolved_conflict", explanation: `Stored ID is the canonical ID of a DIFFERENT Homeworks customer (${hwName(other)}).` };
+  }
+  if (all.some((c) => c.properties.some((p) => idOf(p.id) === stored))) {
+    return { classification: "unresolved_conflict", explanation: "Stored ID equals a property ID that belongs to a different Homeworks customer." };
+  }
+  return { classification: "unresolved_conflict", explanation: "Stored ID matches no live customer ID, customer number, or property ID." };
 }
 
 function planClientFills(client: JarvisClientInput, hw: HwCustomerInput): { fills: FieldFill[]; untouched: FieldDiff[] } {
@@ -254,9 +315,9 @@ function planProperties(
   const owned = allProperties.filter((p) => p.client_id === client.id);
   const rows: PropertyPlanRow[] = hwCustomer.properties.map((hp) => {
     const label = [hp.address?.street1, hp.address?.city].filter((x) => !blank(x)).join(", ") || hp.name || "(no address)";
-    const base = { hwId: hp.id, label, fills: [] as FieldFill[], untouched: [] as FieldDiff[] };
+    const base = { hwId: idOf(hp.id), label, fills: [] as FieldFill[], untouched: [] as FieldDiff[] };
 
-    const linkedAnywhere = allProperties.find((p) => p.homeworks_id === hp.id);
+    const linkedAnywhere = allProperties.find((p) => !blank(p.homeworks_id) && idOf(p.homeworks_id) === idOf(hp.id));
     if (linkedAnywhere) {
       if (linkedAnywhere.client_id !== client.id) {
         return {
@@ -322,7 +383,7 @@ function planProperties(
 
 export function planLinks(hwCustomers: HwCustomerInput[], clients: JarvisClientInput[], properties: JarvisPropertyInput[]): LinkPlan {
   const clientByHwId = new Map<string, JarvisClientInput>();
-  for (const c of clients) if (!blank(c.homeworks_id)) clientByHwId.set(c.homeworks_id as string, c);
+  for (const c of clients) if (!blank(c.homeworks_id)) clientByHwId.set(idOf(c.homeworks_id), c);
 
   // Demo/seed clients are never a link target.
   const phoneIndex = new Map<string, JarvisClientInput[]>();
@@ -333,11 +394,35 @@ export function planLinks(hwCustomers: HwCustomerInput[], clients: JarvisClientI
     phoneIndex.set(p, [...(phoneIndex.get(p) ?? []), c]);
   }
 
-  let rows: CustomerPlanRow[] = hwCustomers.map((hw) => {
-    const base = { hwId: hw.id, hwName: hwName(hw), fills: [] as FieldFill[], untouched: [] as FieldDiff[], dataSourceChange: null, properties: [] as PropertyPlanRow[] };
+  const diagnostics: IdDiagnosticRow[] = [];
+  const diagnose = (hw: HwCustomerInput, client: JarvisClientInput, matchedBy: "id" | "phone") => {
+    const stored = blank(client.homeworks_id) ? null : idOf(client.homeworks_id);
+    const { classification, explanation } = classifyStoredId(stored ?? "", hw, hwCustomers);
+    const digits = normalizePhone10(client.phone) ?? normalizePhone10(hw.phone) ?? normalizePhone10(hw.cell);
+    diagnostics.push({
+      hwName: hwName(hw),
+      phoneLast4: digits ? digits.slice(-4) : null,
+      clientId: client.id,
+      clientName: clientName(client),
+      matchedBy,
+      storedId: stored,
+      liveId: idOf(hw.id),
+      liveIdRawType: hw.rawIdType ?? typeof hw.id,
+      customerNumber: blank(hw.number) ? null : idOf(hw.number),
+      livePropertyIds: hw.properties.map((p) => idOf(p.id)),
+      jarvisProperties: properties.filter((p) => p.client_id === client.id).map((p) => ({ id: p.id, homeworksId: blank(p.homeworks_id) ? null : idOf(p.homeworks_id) })),
+      classification,
+      explanation,
+    });
+    return { classification, explanation };
+  };
 
-    const linked = clientByHwId.get(hw.id);
+  let rows: CustomerPlanRow[] = hwCustomers.map((hw) => {
+    const base = { hwId: idOf(hw.id), hwName: hwName(hw), fills: [] as FieldFill[], untouched: [] as FieldDiff[], dataSourceChange: null, properties: [] as PropertyPlanRow[] };
+
+    const linked = clientByHwId.get(idOf(hw.id));
     if (linked) {
+      diagnose(hw, linked, "id");
       return {
         ...base,
         status: "already_linked" as const,
@@ -371,13 +456,17 @@ export function planLinks(hwCustomers: HwCustomerInput[], clients: JarvisClientI
     const client = [...matched.values()][0];
     const clientInfo = { id: client.id, name: clientName(client), phone: client.phone, homeworksId: client.homeworks_id, dataSource: client.data_source };
     const matchedPhone = phones.find((p) => normalizePhone10(client.phone) === p) ?? phones[0];
+    const { classification, explanation } = diagnose(hw, client, "phone");
     if (!blank(client.homeworks_id)) {
+      // An exact phone match is NOT permission to overwrite a conflicting non-blank ID.
+      const storedId = idOf(client.homeworks_id);
       return {
         ...base,
         status: "manual_review" as const,
-        reason: `The matching Jarvis client is already linked to a different Homeworks customer (${client.homeworks_id}).`,
+        reason: `Jarvis stores Homeworks ID "${storedId}"; the live Homeworks customer ID is "${idOf(hw.id)}". ${explanation}`,
         matchedPhone,
         client: clientInfo,
+        idConflict: { storedId, liveId: idOf(hw.id), classification, explanation },
       };
     }
 
@@ -409,7 +498,7 @@ export function planLinks(hwCustomers: HwCustomerInput[], clients: JarvisClientI
   rows = rows.map((r) => {
     if (r.status !== "safe_link" || !r.client) return r;
     const client = byId.get(r.client.id);
-    const hw = hwCustomers.find((h) => h.id === r.hwId);
+    const hw = hwCustomers.find((h) => idOf(h.id) === r.hwId);
     if (!client || !hw) return r;
     return { ...r, properties: planProperties(hw, client, properties) };
   });
@@ -417,6 +506,7 @@ export function planLinks(hwCustomers: HwCustomerInput[], clients: JarvisClientI
   const props = rows.flatMap((r) => r.properties);
   return {
     customers: rows,
+    idDiagnostics: diagnostics,
     counts: {
       safeCustomerLinks: rows.filter((r) => r.status === "safe_link").length,
       safePropertyLinks: props.filter((p) => p.status === "safe_link").length,
@@ -432,14 +522,14 @@ export function planLinks(hwCustomers: HwCustomerInput[], clients: JarvisClientI
 
 /** The exact column set written to an existing client on a confirmed link. Only blank fields are filled; homeworks_id is set. */
 export function clientLinkUpdate(row: CustomerPlanRow): Record<string, string> {
-  const update: Record<string, string> = { homeworks_id: row.hwId };
+  const update: Record<string, string> = { homeworks_id: idOf(row.hwId) };
   for (const f of row.fills) update[f.field] = f.value;
   if (row.dataSourceChange) update.data_source = row.dataSourceChange.to;
   return update;
 }
 
 export function propertyLinkUpdate(row: PropertyPlanRow): Record<string, string> {
-  const update: Record<string, string> = { homeworks_id: row.hwId };
+  const update: Record<string, string> = { homeworks_id: idOf(row.hwId) };
   for (const f of row.fills) update[f.field] = f.value;
   return update;
 }

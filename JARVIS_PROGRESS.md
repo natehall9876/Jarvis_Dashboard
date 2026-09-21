@@ -11,6 +11,28 @@ cryptographically confirm this exact commit is what's serving traffic (the
 app exposes no build SHA), only that a healthy deployment exists; Vercel
 has auto-deployed every push in this project reliably so far.
 
+## Root cause found (2026-09-21): Homeworks IDs are numbers, Jarvis stores text
+
+Live Homeworks GraphQL returns `Customer.id`, `Property.id`, and `Event.id`
+(`SafeInt!`) as JSON **numbers** (verified against the live API: e.g. Nick
+Hall = `1994294`). The adapter's TS types said `string`, and Jarvis stores
+`homeworks_id` as text (`"1994294"`, written by the Zapier webhook from its
+customer-ID field). Every `===` / `Map` / `Set` comparison therefore never
+matched. This one bug explains all of: the import preview's "possible
+duplicate (phone)" for every customer, the linking preview's "already linked to
+a different customer" for all 25, and every job showing "property not synced".
+The stored IDs were correct all along — they equal the live canonical IDs.
+
+Fix: IDs are normalized to strings at the adapter boundary
+(`homeworks-normalize.ts`) and again inside `planLinks`. No stored ID was
+changed. The linking preview also has a read-only "Identifier diagnostic" that
+classifies every matched customer (same ID / verified legacy mapping / likely
+wrong stored type / unresolved conflict) and never overwrites a conflicting
+non-blank ID. Correction to the earlier entry below: removing the
+`if (c.homeworks_id) continue` guard was still correct, but the "25 created"
+import result was really 25 upserts onto existing rows (the number/string
+mismatch made every row look new), not 25 new rows.
+
 ## This session: found the real import-duplicate bug, built jobs sync, balance/duplicate visibility
 
 **Root cause of the 25-created/0-skipped import** (the owner's main

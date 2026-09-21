@@ -9,7 +9,54 @@ import {
   type LinkConfirmResult,
   type LinkPreviewResult,
 } from "@/lib/actions/homeworks-link";
-import type { CustomerPlanRow, FieldDiff, FieldFill, PropertyPlanRow } from "@/lib/integrations/homeworks-linking";
+import type { CustomerPlanRow, FieldDiff, FieldFill, IdClassification, IdDiagnosticRow, PropertyPlanRow } from "@/lib/integrations/homeworks-linking";
+
+const CLASSIFICATION_LABEL: Record<IdClassification, { label: string; tone: string }> = {
+  same_id: { label: "Same ID", tone: "text-[var(--color-accent)]" },
+  verified_legacy_mapping: { label: "Verified legacy mapping", tone: "text-[var(--color-info)]" },
+  likely_wrong_stored_type: { label: "Likely wrong stored type", tone: "text-[var(--color-warning)]" },
+  unresolved_conflict: { label: "Unresolved conflict", tone: "text-[var(--color-critical)]" },
+  no_stored_id: { label: "No stored ID (unlinked)", tone: "text-[var(--color-text-secondary)]" },
+};
+
+function IdentifierDiagnostic({ rows }: { rows: IdDiagnosticRow[] }) {
+  if (rows.length === 0) return null;
+  const tally = rows.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.classification]: (acc[r.classification] ?? 0) + 1 }), {});
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer text-[var(--color-text-secondary)]">
+        Identifier diagnostic (read-only) — {rows.length} matched customer{rows.length === 1 ? "" : "s"}:{" "}
+        {Object.entries(tally)
+          .map(([k, n]) => `${n} ${CLASSIFICATION_LABEL[k as IdClassification].label.toLowerCase()}`)
+          .join(", ")}
+      </summary>
+      <ul className="mt-1 max-h-96 space-y-2 overflow-y-auto">
+        {rows.map((r) => (
+          <li key={r.clientId + r.liveId} className="rounded-md border border-[var(--color-border)] p-2 text-[11px] text-[var(--color-text-muted)]">
+            <div>
+              <span className="text-[var(--color-text-primary)]">{r.hwName}</span> &rarr; <span className="text-[var(--color-text-primary)]">{r.clientName}</span>
+              {r.phoneLast4 ? ` (phone ending ${r.phoneLast4})` : ""} · matched by {r.matchedBy}
+            </div>
+            <div>
+              Jarvis client <code>{r.clientId}</code>
+            </div>
+            <div>
+              Stored Jarvis ID: <code>{r.storedId ?? "(none)"}</code> · Live canonical customer ID: <code>{r.liveId}</code> (API sent a {r.liveIdRawType}) · Customer number:{" "}
+              <code>{r.customerNumber ?? "(none)"}</code>
+            </div>
+            <div>
+              Live property IDs: <code>{r.livePropertyIds.join(", ") || "(none)"}</code> · Jarvis property IDs saved:{" "}
+              <code>{r.jarvisProperties.map((p) => p.homeworksId ?? "(none)").join(", ") || "(no properties)"}</code>
+            </div>
+            <div className={CLASSIFICATION_LABEL[r.classification].tone}>
+              {CLASSIFICATION_LABEL[r.classification].label} — <span className="text-[var(--color-text-muted)]">{r.explanation}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function Changes({ fills, untouched, extra }: { fills: FieldFill[]; untouched: FieldDiff[]; extra: string[] }) {
   return (
@@ -215,6 +262,7 @@ export function HomeworksLinkPanel({ onLinked }: { onLinked: () => void }) {
             <p className="text-xs text-[var(--color-text-muted)]">No safe links to confirm right now.</p>
           )}
 
+          <IdentifierDiagnostic rows={p.plan.idDiagnostics} />
           <HeldList
             title="Ambiguous matches — not linked"
             tone="text-[var(--color-warning)]"

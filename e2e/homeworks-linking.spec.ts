@@ -198,3 +198,109 @@ test.describe("idempotency", () => {
     expect(props).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: the real identifier shapes found in the live Homeworks payload
+// (Customer.id / Property.id / Event.id are JSON NUMBERS) vs the Jarvis
+// clients.homeworks_id TEXT values written by the Zapier webhook.
+// ---------------------------------------------------------------------------
+import { idString, normalizeCustomer, normalizeJob } from "../src/lib/integrations/homeworks-normalize";
+import type { HomeworksCustomerSample, HomeworksUpcomingJob } from "../src/lib/integrations/homeworks-api";
+
+const asWire = <T>(v: unknown) => v as T; // the API really returns numbers where the TS types say string
+
+const liveCustomers = [
+  { id: 1994294, number: "2", fullName: "Nick Hall", firstName: "Nick", lastName: "Hall", email: "", phone: "4016017264", cell: "4016017264", properties: [] },
+  { id: 1994377, number: "", fullName: "Alicia Rathbun", firstName: "Alicia", lastName: "Rathbun", email: "", phone: "", cell: "401-632-7677", properties: [{ id: 1866486, name: "", address: { street1: "1 Test Rd", city: "Smithfield", state: "RI", zip: "02917" } }] },
+  { id: 1994378, number: "", fullName: "Ron Gengron", firstName: "Ron", lastName: "Gengron", email: "", phone: "", cell: "401-744-8163", properties: [{ id: 1866487, name: "", address: null }, { id: 2714344, name: "", address: null }] },
+  { id: 1994379, number: "", fullName: "Ronnie", firstName: "Ronnie", lastName: "", email: "", phone: "", cell: "401-559-7346", properties: [{ id: 1866488, name: "", address: null }] },
+  { id: 1994381, number: "", fullName: "Rob Elliot", firstName: "Rob", lastName: "Elliot", email: "", phone: "", cell: "401-215-3422", properties: [{ id: 1866490, name: "", address: null }] },
+].map((c) => normalizeCustomer(asWire<HomeworksCustomerSample>(c)));
+
+const storedClients: JarvisClientInput[] = [
+  { id: "u-nick", first_name: "Nick", last_name: "Hall", company_name: null, email: null, phone: "(401) 601-7264", homeworks_id: "1994294", data_source: "homeworks_sync" },
+  { id: "u-alicia", first_name: "Alicia", last_name: "Rathbun", company_name: null, email: null, phone: "401-632-7677", homeworks_id: "1994377", data_source: "homeworks_sync" },
+  { id: "u-ron", first_name: "Ron", last_name: "Gengron", company_name: null, email: null, phone: "4017448163", homeworks_id: "1994378", data_source: "homeworks_sync" },
+  { id: "u-ronnie", first_name: "Ronnie", last_name: null, company_name: null, email: null, phone: "401-559-7346", homeworks_id: "1994379", data_source: "homeworks_sync" },
+  { id: "u-rob", first_name: "Rob", last_name: "Elliot", company_name: null, email: null, phone: "401-215-3422", homeworks_id: "1994381", data_source: "homeworks_sync" },
+];
+
+test.describe("real identifier shapes (numeric Homeworks IDs vs text Jarvis IDs)", () => {
+  test("the adapter turns numeric API IDs into strings and records the raw type", () => {
+    expect(idString(1994294)).toBe("1994294");
+    expect(liveCustomers[0].id).toBe("1994294");
+    expect(liveCustomers[0].rawIdType).toBe("number");
+    expect(liveCustomers[2].properties.map((p) => p.id)).toEqual(["1866487", "2714344"]);
+  });
+
+  test("the unnormalized numeric ID is exactly what broke strict comparison", () => {
+    expect(new Set(["1994294"]).has(1994294 as unknown as string)).toBe(false);
+    expect(new Set(["1994294"]).has(idString(1994294))).toBe(true);
+  });
+
+  test("all five real customers are recognized as already linked, not manual review", () => {
+    const plan = planLinks(liveCustomers, storedClients, []);
+    expect(plan.customers.map((c) => c.status)).toEqual(Array(5).fill("already_linked"));
+    expect(plan.customers.filter((c) => c.status === "manual_review")).toHaveLength(0);
+    expect(plan.counts.safeCustomerLinks).toBe(0);
+    expect(plan.idDiagnostics.map((d) => d.classification)).toEqual(Array(5).fill("same_id"));
+    expect(plan.idDiagnostics[0]).toMatchObject({ storedId: "1994294", liveId: "1994294", liveIdRawType: "number", customerNumber: "2", phoneLast4: "7264" });
+  });
+
+  test("planLinks is safe even if a raw numeric ID slips through un-normalized", () => {
+    const raw = asWire<HwCustomerInput[]>([{ ...liveCustomers[0], id: 1994294 }]);
+    expect(planLinks(raw, storedClients, []).customers[0].status).toBe("already_linked");
+  });
+
+  test("numeric live property IDs match text-stored Zapier property IDs", () => {
+    const props: JarvisPropertyInput[] = [
+      { id: "p-a", client_id: "u-alicia", property_name: null, street: "1 Test Road", city: "Smithfield", state: "RI", zip: "02917", homeworks_id: "1866486" },
+    ];
+    const plan = planLinks(liveCustomers, storedClients, props);
+    const alicia = plan.customers.find((c) => c.hwName === "Alicia Rathbun")!;
+    expect(alicia.properties[0].status).toBe("already_linked");
+  });
+
+  test("upcoming-job property IDs are strings, so the 'property synced' Set lookup works", () => {
+    const job = normalizeJob(
+      asWire<HomeworksUpcomingJob>({ id: 555, title: "Mow", status: "OPEN", startDate: "2026-09-21", hasTime: false, startTime: null, total: "40", recurringEventId: 77, customer: { id: 1994377, fullName: "Alicia Rathbun" }, property: { id: 1866486, name: "", address: null } }),
+    );
+    expect(job.property?.id).toBe("1866486");
+    expect(job.recurringEventId).toBe("77");
+    expect(new Set(["1866486"]).has(job.property!.id)).toBe(true);
+  });
+
+  test("a genuinely different stored ID is never overwritten: manual review shows both IDs and why", () => {
+    const conflicting = storedClients.map((c) => (c.id === "u-nick" ? { ...c, homeworks_id: "9999999" } : c));
+    const row = planLinks(liveCustomers, conflicting, []).customers[0];
+    expect(row.status).toBe("manual_review");
+    expect(row.reason).toContain("9999999");
+    expect(row.reason).toContain("1994294");
+    expect(row.idConflict).toMatchObject({ storedId: "9999999", liveId: "1994294", classification: "unresolved_conflict" });
+    expect(row.fills).toEqual([]);
+  });
+
+  test("classifies a stored customer NUMBER as a legacy mapping, but still does not overwrite it", () => {
+    const legacy = storedClients.map((c) => (c.id === "u-nick" ? { ...c, homeworks_id: "2" } : c));
+    const plan = planLinks(liveCustomers, legacy, []);
+    expect(plan.customers[0].status).toBe("manual_review");
+    expect(plan.customers[0].idConflict?.classification).toBe("verified_legacy_mapping");
+  });
+
+  test("classifies a stored PROPERTY ID as the wrong stored type, but still does not overwrite it", () => {
+    const wrong = storedClients.map((c) => (c.id === "u-alicia" ? { ...c, homeworks_id: "1866486" } : c));
+    const plan = planLinks(liveCustomers, wrong, []);
+    const alicia = plan.customers.find((c) => c.hwName === "Alicia Rathbun")!;
+    expect(alicia.status).toBe("manual_review");
+    expect(alicia.idConflict?.classification).toBe("likely_wrong_stored_type");
+  });
+
+  test("a stored ID that is another Homeworks customer's canonical ID is an unresolved conflict", () => {
+    const swapped = storedClients.map((c) => (c.id === "u-ron" ? { ...c, homeworks_id: "1994379" } : c));
+    const plan = planLinks(liveCustomers, swapped, []);
+    const ron = plan.customers.find((c) => c.hwName === "Ron Gengron")!;
+    expect(ron.status).toBe("manual_review");
+    expect(ron.idConflict?.classification).toBe("unresolved_conflict");
+    expect(ron.idConflict?.explanation).toContain("Ronnie");
+  });
+});

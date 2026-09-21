@@ -1,5 +1,6 @@
 import { getValidAccessToken } from "@/lib/integrations/homeworks-connection";
 import { HOMEWORKS_GRAPHQL_ENDPOINT } from "@/lib/integrations/homeworks-oauth";
+import { normalizeCustomer, normalizeJob } from "@/lib/integrations/homeworks-normalize";
 
 type GraphQLResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
@@ -42,7 +43,17 @@ async function queryHomeworks<T>(query: string, variables?: Record<string, unkno
  * verbatim.
  */
 export type HomeworksCustomerSample = {
+  /**
+   * Always a string in this app. Homeworks' GraphQL returns Customer.id
+   * (SafeInt!) as a JSON NUMBER; Jarvis stores homeworks_id as text. Comparing
+   * the two with === / Map / Set silently never matches, so every ID is
+   * normalized with String() at the adapter boundary (see normalizeCustomer).
+   */
   id: string;
+  /** typeof the id exactly as the API returned it, before normalization — diagnostic only. */
+  rawIdType?: string;
+  /** Homeworks' human-facing customer number (Customer.number) — not the canonical ID. */
+  number?: string;
   fullName: string;
   firstName: string;
   lastName: string;
@@ -58,6 +69,7 @@ const CUSTOMERS_QUERY = `
   query FetchCustomers($take: SafeInt, $skip: SafeInt) {
     customers(take: $take, skip: $skip, where: { isDeleted: false }) {
       id
+      number
       fullName
       firstName
       lastName
@@ -77,7 +89,9 @@ const CUSTOMERS_QUERY = `
 
 /** Read-only. Never writes anything. Used to verify the connection actually works and to preview real data before any sync is built. */
 export async function getSampleCustomers(take = 5): Promise<GraphQLResult<{ customers: HomeworksCustomerSample[] }>> {
-  return queryHomeworks<{ customers: HomeworksCustomerSample[] }>(CUSTOMERS_QUERY, { take });
+  const result = await queryHomeworks<{ customers: HomeworksCustomerSample[] }>(CUSTOMERS_QUERY, { take });
+  if (!result.ok) return result;
+  return { ok: true, data: { customers: result.data.customers.map(normalizeCustomer) } };
 }
 
 /**
@@ -106,7 +120,7 @@ export async function getAllCustomers(): Promise<GraphQLResult<{ customers: Home
       skip: page * pageSize,
     });
     if (!result.ok) return result;
-    all.push(...result.data.customers);
+    all.push(...result.data.customers.map(normalizeCustomer));
     page++;
     if (result.data.customers.length < pageSize) {
       return { ok: true, data: { customers: all, pageCount: page, hitCap: false } };
@@ -176,7 +190,7 @@ export async function getUpcomingJobs(days = 7): Promise<GraphQLResult<{ jobs: H
     to: toISODate(to),
   });
   if (!result.ok) return result;
-  return { ok: true, data: { jobs: result.data.events } };
+  return { ok: true, data: { jobs: result.data.events.map(normalizeJob) } };
 }
 
 const WHO_AM_I_QUERY = `
