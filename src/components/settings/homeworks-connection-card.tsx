@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { verifyHomeworksConnection, disconnectHomeworksAction, type VerifyResult } from "@/lib/actions/homeworks-oauth";
 import { previewHomeworksSync, type SyncPreviewResult } from "@/lib/actions/homeworks-sync-preview";
 import { confirmHomeworksImport, type ImportResult } from "@/lib/actions/homeworks-import";
+import { HomeworksLinkPanel } from "@/components/settings/homeworks-link-panel";
 import { previewHomeworksJobSync, confirmHomeworksJobImport, type JobPreviewResult, type JobImportResult } from "@/lib/actions/homeworks-job-sync";
 
 /**
@@ -70,7 +71,7 @@ export function HomeworksConnectionCard({
     if (!preview || !preview.ok) return;
     const confirmed = window.confirm(
       `Import ${preview.wouldCreate} new customer(s) and update ${preview.wouldUpdate} existing one(s) from Homeworks?\n\n` +
-        `${preview.possibleDuplicates} possible duplicate(s) will be skipped, not merged.\n\nThis writes real records to your database.`,
+        `${preview.possibleDuplicates} unlinked match(es) will be skipped (use "Link existing records" instead).\n\nThis writes real records to your database.`,
     );
     if (!confirmed) return;
     setImportResult(null);
@@ -233,12 +234,12 @@ export function HomeworksConnectionCard({
               </div>
               <div className="rounded-md bg-[var(--color-surface-2)] p-2">
                 <div className="text-lg font-semibold text-[var(--color-warning)]">{preview.possibleDuplicates}</div>
-                <div className="text-[var(--color-text-muted)]">possible duplicates</div>
+                <div className="text-[var(--color-text-muted)]">unlinked matches</div>
               </div>
             </div>
             <p className="text-[11px] text-[var(--color-text-muted)]">
               Nothing has been written yet — everything above is a preview. Confirming below writes the create/update rows only;
-              possible duplicates are always skipped, never auto-merged.
+              unlinked matches (same phone/email as an existing client with no Homeworks ID) are skipped here — use &quot;Link existing records&quot; below.
             </p>
             <details className="text-xs">
               <summary className="cursor-pointer text-[var(--color-text-secondary)]">Show all {preview.rows.length} records</summary>
@@ -255,7 +256,7 @@ export function HomeworksConnectionCard({
                             : "text-[var(--color-warning)]"
                       }
                     >
-                      {r.action === "would_create" ? "create" : r.action === "would_update" ? "update" : `possible dup (${r.matchedOn})`}
+                      {r.action === "would_create" ? "create" : r.action === "would_update" ? "update" : `unlinked match (${r.matchedOn}) — link below`}
                     </span>
                   </li>
                 ))}
@@ -295,6 +296,16 @@ export function HomeworksConnectionCard({
               </ul>
             ) : null}
           </div>
+        ) : null}
+
+        {connected ? (
+          <HomeworksLinkPanel
+            onLinked={() => {
+              runPreview();
+              runJobPreview();
+              router.refresh();
+            }}
+          />
         ) : null}
 
         {connected ? (

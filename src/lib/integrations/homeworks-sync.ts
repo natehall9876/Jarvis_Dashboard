@@ -145,6 +145,16 @@ export async function dryRunHomeworksEntity(
   return { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type, action: existing ? "update" : "create" };
 }
 
+/** Drops undefined/null/blank values so they are omitted from an upsert instead of overwriting existing data with null. */
+export function presentFields<T extends Record<string, string | null | undefined>>(fields: T): Partial<Record<keyof T, string>> {
+  const out: Partial<Record<keyof T, string>> = {};
+  for (const key of Object.keys(fields) as (keyof T)[]) {
+    const v = fields[key];
+    if (typeof v === "string" && v.trim() !== "") out[key] = v;
+  }
+  return out;
+}
+
 export async function syncHomeworksEntity(
   supabase: SupabaseClient<Database>,
   payload: HomeworksSyncPayload,
@@ -157,11 +167,17 @@ export async function syncHomeworksEntity(
           .upsert(
             {
               homeworks_id: payload.homeworks_id,
-              first_name: payload.first_name ?? null,
-              last_name: payload.last_name ?? null,
-              company_name: payload.company_name ?? null,
-              email: payload.email ?? null,
-              phone: payload.phone ?? null,
+              // Only fields Homeworks actually supplied are included: an
+              // omitted column is left untouched by the upsert on an
+              // existing row, so a blank Homeworks value can never wipe a
+              // real Jarvis value.
+              ...presentFields({
+                first_name: payload.first_name,
+                last_name: payload.last_name,
+                company_name: payload.company_name,
+                email: payload.email,
+                phone: payload.phone,
+              }),
               // Arrived through a real Homeworks sync path (Zapier webhook,
               // admin import, or the direct API) — genuinely sourced, never
               // 'demo'. Doesn't overwrite an existing row's data_source with
@@ -191,11 +207,13 @@ export async function syncHomeworksEntity(
             {
               homeworks_id: payload.homeworks_id,
               client_id: client.id,
-              street: payload.street ?? null,
-              city: payload.city ?? null,
-              state: payload.state ?? null,
-              zip: payload.zip ?? null,
-              property_name: payload.property_name ?? null,
+              ...presentFields({
+                street: payload.street,
+                city: payload.city,
+                state: payload.state,
+                zip: payload.zip,
+                property_name: payload.property_name,
+              }),
               active: true,
             },
             { onConflict: "homeworks_id" },
@@ -261,7 +279,9 @@ export async function syncHomeworksEntity(
               scheduled_start_time: payload.scheduled_start_time ?? null,
               price: typeof payload.price === "number" ? payload.price : null,
               status: payload.status ?? "scheduled",
-              notes: payload.notes ?? null,
+              // Omitted (not nulled) when absent, so re-syncing never wipes
+              // notes the owner added in Jarvis.
+              ...presentFields({ notes: payload.notes }),
             },
             { onConflict: "homeworks_id" },
           )
