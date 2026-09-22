@@ -22,7 +22,14 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
+        // min-h-11 (44px) only below the sm breakpoint: a touch target
+        // guideline, not a mouse one — desktop's existing tighter density
+        // (many of these sit in toolbars/table rows reviewed and working
+        // today) is intentionally left untouched. Found via the mobile
+        // review: Edit (34px), the job-status select, and Upload were all
+        // under 44px; this is the shared root cause, fixed once here
+        // instead of per call site.
+        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:min-h-0",
         variantClasses[variant],
         className,
       )}

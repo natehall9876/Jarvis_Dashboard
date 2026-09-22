@@ -2,8 +2,12 @@ import type { ReactNode, SelectHTMLAttributes, InputHTMLAttributes, TextareaHTML
 import { TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// min-h-11 (44px) only below sm: same reasoning as button.tsx — a touch
+// target minimum on phones, no change to desktop's existing density. Mobile
+// forms are already single-column, so a taller field just adds a little
+// vertical space; it never causes horizontal wrapping/overflow.
 export const inputClass =
-  "w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] transition-colors focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]/30 disabled:opacity-50";
+  "w-full min-h-11 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] transition-colors focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]/30 disabled:opacity-50 sm:min-h-0";
 
 export function Field({
   label,

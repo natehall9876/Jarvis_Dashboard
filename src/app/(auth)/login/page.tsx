@@ -1,5 +1,6 @@
 import { LayoutDashboard, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/form-fields";
 import { signIn } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export default async function LoginPage({
               type="email"
               autoComplete="email"
               required
-              className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+              className={inputClass}
               placeholder="you@weedeater.com"
             />
           </div>
@@ -57,7 +58,7 @@ export default async function LoginPage({
               type="password"
               autoComplete="current-password"
               required
-              className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+              className={inputClass}
               placeholder="••••••••"
             />
           </div>

@@ -47,7 +47,14 @@ export default async function CommandCenterPage() {
         <CommandHero briefing={briefing} dataError={mission.error} />
       </div>
 
-      <div className="grid animate-fade-in gap-6 lg:grid-cols-3">
+      {/* Explicit grid-cols-1 matters here, not just cosmetic: Tailwind's
+          `grid` utility alone sets display:grid with no grid-template-columns,
+          so a single implicit mobile column sizes to its content's
+          max-content width (auto) instead of the container's available
+          width — found live at 375px width: it forced ~506px wide, pushing
+          the whole page into horizontal scroll. `grid-cols-1` (repeat(1,
+          minmax(0,1fr))) is what actually clamps it. */}
+      <div className="grid animate-fade-in grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <TodaysMission data={mission.data} error={mission.error} />
         </div>

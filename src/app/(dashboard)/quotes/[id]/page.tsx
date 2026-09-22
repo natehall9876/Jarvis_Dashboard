@@ -137,7 +137,7 @@ export default async function QuoteDetailPage({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardBody>
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Created</div>

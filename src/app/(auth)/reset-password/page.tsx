@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutDashboard, Loader2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/form-fields";
+import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
@@ -163,7 +165,7 @@ function ResetPasswordForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={status === "submitting"}
-                className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+                className={cn(inputClass, "disabled:opacity-60")}
                 placeholder="At least 8 characters"
               />
             </div>
@@ -181,7 +183,7 @@ function ResetPasswordForm() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={status === "submitting"}
-                className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-60"
+                className={cn(inputClass, "disabled:opacity-60")}
                 placeholder="Re-enter the same password"
               />
             </div>

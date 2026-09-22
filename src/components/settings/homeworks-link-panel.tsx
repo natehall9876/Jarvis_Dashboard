@@ -60,7 +60,7 @@ function IdentifierDiagnostic({ rows }: { rows: IdDiagnosticRow[] }) {
 
 function Changes({ fills, untouched, extra }: { fills: FieldFill[]; untouched: FieldDiff[]; extra: string[] }) {
   return (
-    <div className="mt-1 grid gap-1 text-[11px] sm:grid-cols-2">
+    <div className="mt-1 grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
       <div>
         <div className="font-medium text-[var(--color-text-secondary)]">Will change</div>
         <ul className="text-[var(--color-text-muted)]">

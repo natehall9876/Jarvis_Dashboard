@@ -123,7 +123,7 @@ export function TodaysMission({
                 </div>
               ) : null}
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <MissionList
                   title="Schedule Changes"
                   icon={<Ban className="h-3.5 w-3.5" />}

@@ -85,7 +85,7 @@ export default async function SettingsPage({
         urlMessage={gcalStatus === "connected" || gcalStatus === "error" ? { status: gcalStatus, message: gcalMessage } : null}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.filter((card) => card.key !== "quickbooks" && card.key !== "googleCalendar").map((card) => {
           const meta = statusMeta[card.status];
           return (

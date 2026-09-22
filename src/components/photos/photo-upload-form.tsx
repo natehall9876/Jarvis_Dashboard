@@ -85,9 +85,9 @@ export function PhotoUploadForm({ jobId, propertyId, clientId }: { jobId?: strin
           name="caption"
           placeholder="Caption (optional)"
           disabled={working}
-          className="h-10 min-w-0 flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2.5 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="h-11 min-w-0 flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2.5 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none sm:h-10"
         />
-        <Button type="submit" variant="secondary" disabled={working || !fileName} className="h-10 shrink-0">
+        <Button type="submit" variant="secondary" disabled={working || !fileName} className="h-11 shrink-0 sm:h-10">
           {working ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Upload"}
         </Button>
         {working ? <p className="w-full text-xs text-[var(--color-text-secondary)]">{status.step}</p> : null}
