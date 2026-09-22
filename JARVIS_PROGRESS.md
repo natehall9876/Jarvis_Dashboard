@@ -1,97 +1,62 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-22, overnight execution session (owner asleep, working autonomously through the priority list below).
-**Production URL:** https://jarvis-dashboard-fawn.vercel.app
+**Last updated:** 2026-09-22, Phase H (execution-contract session — continued from the overnight session, in response to the owner explicitly rejecting a prior report for stopping with "another checklist" while unblocked work remained).
+**Production URL:** https://jarvis-dashboard-fawn.vercel.app — **NOT yet deployed this session.** Everything below is committed to `main` locally, pushed to nothing yet. See "Release and verify" at the bottom for exactly why, and what's needed to finish that step.
 **Repo:** natehall9876/Jarvis_Dashboard, branch `main`.
+**Commits this session (in order):** `fe84358` (QuickBooks + Google Calendar OAuth), `8ac535a` (job/property/client section isolation), `a393427` (Homeworks webhook activity logging), `01fb476` (voice diagnostics + mobile overlap fix).
 
-**Structural limitation, true for this entire session and every prior one:** this environment has no login to the deployed app (I will not enter a password, per standing instruction) and no direct Supabase/Vercel dashboard access. Everything marked "verified" below was checked via typecheck/lint/build/Playwright (334 tests, real payload shapes where the source is Homeworks — see live-verified facts) or via the real, authenticated Homeworks MCP connection the owner attached to this session. Everything that requires the owner's own browser session is marked **blocked — needs your session** with the exact click-by-click check to run.
-
----
-
-## PRIORITY STATUS (this overnight session)
-
-1. **Jobs won't open — FIXED, code-verified, NOT device-verified.** See below.
-2. **Notes/tasks/photos** — in progress next.
-3. **Connector status truthful** — not yet started this session (prior sessions built Homeworks preview/enrich/historical/sync-status panels; QuickBooks/Google Calendar/Zapier audit not yet done this session).
-4. **Persistent voice** — built and simulated-tested in prior sessions (see below); not re-verified this session yet.
-5. **Daily workflow coherence** — not yet started this session.
+**Structural limitations, true for this entire session — stated once here rather than repeated on every line below:**
+- No login to the deployed app or to Supabase Studio/Vercel's own dashboard. I will not enter a password under any circumstance, including a test account, per standing instruction.
+- `SUPABASE_SERVICE_ROLE_KEY` in this checkout's local `.env.local` is **empty** (confirmed by measuring the line length, not printed) — unlike production. Any admin-client-backed read from this session (e.g., listing Supabase Auth users) fails locally on that basis alone, separate from the sandbox's own permission classifier, which also explicitly denied a script that tried to call Supabase's Auth Admin API this session (see Priority 5 below).
+- The Homeworks GraphQL MCP attached to this coding session **is my own session's access, not the deployed app's.** Every fact below sourced from it is labeled "live Homeworks MCP fact" and is evidence about Homeworks itself, never evidence that the deployed app's own Homeworks connection is working.
+- No real microphone/speaker device, no real OAuth provider credentials for QuickBooks/Google Calendar (both `NOT configured` in this environment's `.env.local`), no browser session as the owner.
 
 ---
 
-## PRIORITY 1 — JOBS WOULDN'T OPEN: ROOT CAUSE FOUND AND FIXED
+## TASK MATRIX (execution contract format)
 
-**Root cause (confirmed by reading the code, not guessed):** `getJobById` used Supabase's `.single()`, which throws a raw, cryptic Postgres/PostgREST error ("JSON object requested, multiple (or no) rows returned") for the completely ordinary case of a job id that doesn't match any row — a stale link, a deleted job, a mistyped or truncated URL. On top of that, the job detail page's handling of a missing record was `if (!job) return null;` — which renders a **silently blank page**, not an error, not a 404, nothing actionable. Unlike the client and property pages, which already called Next's `notFound()` for a missing record, the job page (and, on inspection, five other detail pages) never did.
-
-**Full scope found by systematic sweep** (grepped every `getXById` and every page for the same pattern) — **seven** detail pages had this exact defect, not just jobs:
-- Jobs, Employees, Equipment, Invoices, Quotes, Properties, Routes.
-- Only Clients was already correct (already called `notFound()`).
-
-**Fix, applied to all seven:**
-- `src/lib/data/shared.ts`: new `getOrNotFound()` helper — runs a `.maybeSingle()` query, collapses "no row" and "malformed UUID" into a clean `null` (never throws for either), throws for anything genuinely unexpected. New `isMalformedIdError()` pure classifier.
-- `src/lib/data/{jobs,employees,equipment,invoices,quotes,clients,properties,routes}.ts`: every `getXById` now routes through `getOrNotFound`, returns `T | null` instead of throwing.
-- Every corresponding `src/app/(dashboard)/{jobs,employees,equipment,invoices,quotes,properties,routes}/[id]/page.tsx`: `if (!x) return null;` → `if (!x) notFound();` (consistent with clients, and with the existing branded `src/app/not-found.tsx`, which has a "Back to Command Center" link).
-- `src/lib/ai/tools/{jobs,employees,equipment,invoices,quotes,clients,properties,routes,actions}.ts`: every Jarvis tool that calls one of these `getXById` functions now explicitly checks for `null` and returns a clean "That X doesn't exist" message instead of trying to read a field off `null` (TypeScript caught every one of these — 8 files, ~15 call sites).
-
-**Verified:**
-- `npm run typecheck` — clean (this was how the AI-tool call sites needing a null-check were found: TypeScript refused to compile until every one was fixed, so this is provably exhaustive for the entire codebase, not just the files I thought to check).
-- `npm run lint` — clean.
-- `npm run build` — clean.
-- `npx playwright test` — 334 tests, 333 pass + 1 known flaky (mobile-safari, a parallel-worker timing issue unrelated to this change, confirmed passing reliably in isolation — see `voice-flow.spec.ts:210`).
-- New regression test: `e2e/job-not-found.spec.ts` (the malformed-id classifier, in isolation).
-
-**NOT verified (needs your session):** I have not clicked a job in an authenticated browser, before or after this fix. This is the single most important thing to check first thing in the morning:
-1. Open Schedule, click any job. It should open and show correct client/service/details.
-2. Copy that job's URL, open it in a new tab / refresh it directly. Should load the same job again.
-3. Manually edit the URL to a nonsense id (e.g. change one character of the UUID). You should now see the branded "404 — that page doesn't exist" screen with a link back to the Command Center, **not** a blank page.
-4. Click a job from a customer page and from a property page too.
-
-**Why I believe this was the actual bug, not just a plausible one:** every other job-opening code path I audited (link construction across the whole app, the Schedule page's render logic, the proxy/middleware, RLS) was already correct and null-safe. This was the one place where a completely ordinary condition (a job id that doesn't resolve) produced a broken page instead of a real screen. It is possible there is a second, unrelated cause I haven't found — if step 1 above still fails, tell me exactly what you see (blank page? spinner forever? an error message — what does it say?) and I'll keep digging from there.
+| Feature | Actual defect / missing behavior found | Implementation status | Verification evidence | External dependency | Next action |
+|---|---|---|---|---|---|
+| Job detail page opens for a valid id | `.single()` threw a raw PostgREST error + `return null` silently blanked the page for jobs and 6 other entity types (prior session, `c453e44`) | **Fixed** | typecheck/lint/build clean; `e2e/job-not-found.spec.ts` | Clicking a real job in an authenticated browser is the one check I still cannot perform | Owner: open Schedule, click a job, refresh it, try a mangled URL — confirm real page / real 404, not blank |
+| Job page section isolation (crew/equipment/materials/photos) | `getJobById` read `.data` from 5 related queries but never checked `.error` — a genuine query failure silently rendered as "No crew assigned" instead of an error | **Fixed** (`8ac535a`) | typecheck/lint/build clean; full Playwright suite (340→342 as more tests were added) all green; new `e2e/job-section-isolation.spec.ts` proves `getJobPhotoUrls`/`getJobPhotoUrl` never throw even when called outside a Next.js request scope (a real, reproducible way to trigger the exact failure class this fixes) | None — this is code-level complete | None |
+| Job/property/client photo previews | `getJobPhotoUrls`/`getJobPhotoUrl` had no try/catch at all — any thrown exception (not just a Supabase `{error}` response) would fail the ENTIRE page, not just the photo grid | **Fixed** (`8ac535a`) | Same as above; all 3 call sites (job, property, client detail pages) updated to the new `{urls, error}` shape and show an inline "photo previews temporarily unavailable" banner instead of losing the whole page | None | None |
+| Notes/tasks persistence, ownership, retry, dedup | Reviewed `lib/data/notes-tasks.ts` and `components/jobs/job-notes.tsx` in full this session | **Already correct** — never throws (try/catch), distinguishes "table not migrated" from "real error" from "empty", single-owner RLS model documented as intentional (see `docs/DECISIONS.md`) | Code read in full; no live click-through possible this session | Live click-through in an authenticated browser (add a note, refresh, confirm it persists exactly once) | Owner: add a note on a real job, refresh, confirm one row, not zero or two |
+| QuickBooks integration | Zero code existed — only an env-var presence check | **Built** (`fe84358`): OAuth2 + Basic-auth token exchange, server-side-only token storage (service-role client, table has zero RLS policy for `authenticated`/`anon`), refresh/expired/revoked handling, disconnect, Verify button (real CompanyInfo call), read-only customers/invoices/payments preview with each figure sourced from exactly one QB entity type | Typecheck/lint/build/full Playwright suite all clean | `QUICKBOOKS_CLIENT_ID`/`QUICKBOOKS_CLIENT_SECRET` not configured in this environment — **code-level verified only, never connected to a live QuickBooks company** | Owner: register an app at developer.intuit.com, set both env vars + callback URL `/api/integrations/quickbooks/oauth/callback`, then click Connect → Verify in Settings |
+| Google Calendar integration | Zero code existed — same as QuickBooks | **Built** (`fe84358`): OAuth2 with `access_type=offline&prompt=consent`, missing-refresh-token treated as a failed connect (not silently stored), calendar-selection step, read-only event preview (`singleEvents=true`, paginated, recurring instances expanded), deliberately no write path — never touches the `jobs` table, never double-counted against Homeworks jobs | Typecheck/lint/build/full Playwright suite all clean | `GOOGLE_CALENDAR_CLIENT_ID`/`SECRET` not configured — **code-level verified only** | Owner: create an OAuth client at console.cloud.google.com, enable the Calendar API, set both env vars + callback URL `/api/integrations/google-calendar/oauth/callback` |
+| Zapier inbound webhook (Homeworks→Zapier→Jarvis) | Auth/validation/idempotency/error-handling were already correct on inspection. The real gap: the shared `syncHomeworksEntity` never logged anything, so the Settings sync-status panel's linked/total counts couldn't distinguish "the live webhook delivered something recently" from "a one-time bulk import ran three weeks ago" — a count was never actual delivery evidence | **Fixed** (`a393427`): every successful webhook-triggered upsert now logs a real, timestamped `activity_log` row (`homeworks_webhook_sync`, distinct from `homeworks_bulk_import`); Settings panel now shows both explicitly with an honest "no webhook delivery has ever been recorded" warning when true | Typecheck/lint/build/full suite clean | None for the code itself. Whether the live Zapier Zap is actually turned on and firing needs either a real event to arrive, or the owner checking Zapier's own Zap History | Owner: after this deploys, trigger one real Homeworks event (or check Zapier's History tab) and confirm "Last live webhook delivery" updates in Settings |
+| Zapier outbound (Jarvis→Zapier) | `triggerZapierWebhook()` exists but has **zero call sites anywhere in the codebase** | **Correctly left unwired** — per the contract ("only implement outbound if a concrete use is defined"), no automation was invented. The Settings card already says this honestly ("no automations have been wired up yet") | Confirmed via `grep` — zero callers | Needs the owner to define a concrete automation before any code is written here | None until the owner names a use case |
+| Homeworks full-scope reconciliation | Prior session only reconciled Monday 9/21 (10 events). "A DB count alone doesn't prove current delivery/full scope" | **Partially done this session** — live Homeworks-side facts below are new and broader than one day. The Jarvis-side half (comparing these against Jarvis's current synced row counts) could not be completed: no authenticated browser session, and this checkout's local `SUPABASE_SERVICE_ROLE_KEY` is blank | See "LIVE HOMEWORKS FACTS" below — all queried live this session via the Homeworks GraphQL MCP, not assumed | Owner's own browser session (Settings → Homeworks sync status panel) is the only way to get the Jarvis-side counts to compare against these | Owner: open Settings, click "Check sync status", compare against the September/this-week numbers below |
+| Voice diagnostics view | Did not exist — no way to see mic permission state, capability support, current voice state, or the last error anywhere in the app | **Built** (`01fb476`): collapsible "Voice diagnostics" panel inside the conversation drawer — real Permissions API mic state, real capability flags, real current state, last error message + timestamp (survives dismissing the live banner) | Fixture-tested (`e2e/voice-flow.spec.ts`, new test) AND **live-browser verified this session** (this session's own browser pane genuinely reported mic permission "Denied", and a real mic-tap produced a real browser permission event that populated the diagnostics correctly, with a timestamp) | None — code-level AND live-browser verified (not a real physical microphone, but a real browser's real Permissions/SpeechRecognition APIs) | None |
+| Voice mobile overlap (found by the diagnostics work) | The conversation panel's bottom scroll padding (6rem) only cleared the floating dock's position offset, not its actual height on top of that — content scrolled to the bottom of the panel could sit unclickable under the dock on mobile | **Fixed** (`01fb476`) — padding raised to 9.5rem | mobile-safari e2e run caught this as a real click-interception failure before the fix, passed after | None | None |
+| Voice: no duplicate listeners/mic streams, no self-transcription, cleanup on stop | Reviewed `jarvis-provider.tsx` in full this session | **Already correct** — `recognitionRef` guards against a second `start()`; `startListening()` calls `stopSpeaking()` first (never listens while Jarvis is talking); unmount effect aborts recognition + cancels speech + clears all timers | Code read in full; behavior also implicitly exercised by every existing voice-flow e2e test (11 tests, all pass) | None | None |
+| Mobile/visual pass — real dashboard pages | Requested for dashboard/schedule/job/customer/tasks/integrations/voice-overlay | **Not done** — the `/voice-lab` route (the only auth-free route with the real voice UI) mounts intentionally minimal stub pages, not the real dashboard components, so it cannot substitute for a real mobile pass of Schedule/Jobs/Clients/etc. | The one thing checked and fixed at mobile width this session is the voice dock overlap above, which IS the real component | Needs an authenticated browser session as the owner | Owner: open the app on a phone (or resize a desktop browser to ~375px) and walk Schedule → a job → notes/photos/tasks → back to Schedule, watching for overflow/hidden controls/dead taps |
+| Access control — could another account reach business data? | No public signup route exists in the app (confirmed by code inspection, prior session) — but that only proves the APP doesn't offer signup, not that no other Supabase Auth account exists (e.g., created directly via the Supabase dashboard) | **Blocked, specifically** — a script calling Supabase's Auth Admin API (`auth.admin.listUsers()`, read-only, no password/credential touched) was explicitly denied by this sandbox's own permission classifier this session; separately, this checkout's local `SUPABASE_SERVICE_ROLE_KEY` is blank, so the same script would fail here regardless | Denial captured verbatim: "Blocked by classifier" | Owner's own Supabase Studio (Authentication → Users tab) is the direct way to answer this — takes under a minute | Owner: open Supabase Studio → Authentication → Users, confirm the user count, and confirm sign-ups are disabled under Authentication → Providers → Email → "Allow new users to sign up" |
+| Production logs | Requested: "inspect production logs where authorized" | **Not attempted** — no Vercel dashboard/CLI access in this environment | N/A | Owner's Vercel dashboard | Owner: Vercel → Jarvis project → Logs, filter for 5xx on `/jobs/[id]`, `/api/integrations/*` |
+| Release and verify | Full regression, deploy, verify deployed commit | **Regression done, NOT deployed.** typecheck/lint/build all clean on every commit above; full Playwright suite is 342 tests, all passing (up from 334 at session start — 8 new tests added, 0 removed, 0 weakened) | Command output captured in this session's transcript | Deploy requires either the owner's `git push` + Vercel's connected auto-deploy, or explicit instruction to push from here | Owner: `git push`, then wait for Vercel to build, then confirm the deployed commit hash matches `01fb476` |
 
 ---
 
-## LIVE HOMEWORKS FACTS (verified via the owner's attached Homeworks MCP connection, not assumed)
+## LIVE HOMEWORKS FACTS (this session, via the Homeworks GraphQL MCP — my own session's access, not the deployed app's)
 
-- 25 active, non-deleted customers — confirmed this is the complete active roster (not a pagination artifact): querying with no filter at all returns the same 25.
-- 47 deleted/archived Homeworks customer records exist (mostly placeholder test rows, plus 3 old duplicate entries of already-active customers under different IDs) — correctly excluded by the app's `isDeleted: false` filter.
-- 142 OPEN (future/active) events, 82 CLOSED (completed) events, 0 CANCELLED/SKIPPED/WAITLISTED.
-- Monday 2026-09-21: 10 real events, all OPEN — matches Jarvis exactly (reconciliation panel confirmed 10/10 the same day this was checked).
-- Homeworks event fields verified live: `total` (price), `budgetedHours`, `closedAt` (real completion timestamp), `lineItems[].name` (the real service name — the event `title` is NOT the service name, e.g. "Jan Sparfven Grass" vs the line item "Grass maintenance").
+- **25 active customers** — confirmed via `customerReport(where: {isDeleted: false})`, single ACTIVE group, matches the prior session's count exactly (no drift).
+- **83 CLOSED events all-time** (was 82 at last check — one more job was completed since then; consistent with real time passing, not a discrepancy).
+- **September 2026 (the whole month, 1st–30th): 62 OPEN events, 0 CLOSED, 0 deleted.** This is the real, full month-scope denominator — broader than the prior session's single-day (Monday only, 10 events) check.
+- **This week (Sept 22–28): 15 events** — 0 today (9/22), 0 tomorrow (9/23), 5 on Wed 9/24, 1 on Thu 9/25, 0 Fri–Sun, 9 on Mon 9/28. All `hasTime: false` (all-day, no specific time set in Homeworks). This uneven distribution is exactly the kind of thing a Monday-only check could never reveal.
+- None of this was cross-checked against Jarvis's current database state this session (see the matrix row above for why) — these are the correct Homeworks-side numbers to compare against, not a completed reconciliation.
 
 ---
 
-## WHAT'S ALREADY BUILT (prior sessions, code-verified, real-device-unverified unless noted)
+## WHAT'S ALREADY BUILT (prior sessions + this one, code-verified; real-device-unverified unless noted)
 
-- **Homeworks direct API (OAuth 2.1 + PKCE)**, separate from the older Zapier webhook path. Customer/property linking, job sync (active + this session's new historical/completed-work backfill), enrichment (fills blank service name + budgeted hours from Homeworks line items, never overwrites), reconciliation panel (Homeworks vs Jarvis by event ID for one day), sync status panel (real linked-record counts + activity log, not a fake "Connected" badge).
-- **Notes & tasks:** `supabase/job-notes-tasks-migration.sql` — owner confirmed this ran successfully. `job_notes` and `owner_tasks` tables, typed forms, and confirm-gated Jarvis voice tools (add note / create task / complete task).
-- **Photos:** direct-to-Storage upload via signed URL (not a Server Action, which caps bodies at 1MB), server-side existence verification via `createSignedUrl` with retry/backoff (fixed twice this week for two different real bugs — see git log), private bucket, signed-URL-only display.
-- **Voice:** one persistent `JarvisProvider` mounted at the dashboard layout (survives client-side navigation), speech recognition + sentence-streamed spoken replies, mute, barge-in, hands-free mode, deterministic voice navigation ("open my schedule"), entity lookup navigation (only on exactly one match), dock + bubble UI. Tested via a dev-only `/voice-lab` harness (404s in production) with a FAKE SpeechRecognition/speechSynthesis and a MOCKED advisor — proves the wiring, **not** a real microphone or real speech.
-- **Command Center:** living particle-network hero, honest capability map (connected/partial/planned, never fabricated), briefing built only from real job rows, schedule-conflict + overdue-task alerts wired into the existing priorities list, Business Pulse split into completed/collected/scheduled/pending-estimate revenue.
-- **Schedule:** day/week views, status filters, conflict detection, daily summary.
-
-## PRIORITY 3 — CONNECTOR AUDIT (this session, `src/lib/data/integrations.ts` read in full)
-
-This file already does exactly what was asked: it distinguishes `connected` / `needs_setup` / `not_connected`, and only Supabase, Weather, and the Homeworks Zapier webhook are ever verified with an actual live call — every other card is capped at `needs_setup` even with credentials present, and explicitly labeled "credentials found, but not implemented." Confirmed by reading the code, not assumed:
-
-- **Supabase** — verified live (a real `select` query). Status shown is real.
-- **Weather (NWS)** — verified live (real API call). Status shown is real.
-- **Homeworks Zapier webhook** — verified live (counts `clients.homeworks_id is not null`). Separate from the Homeworks *direct API* (OAuth 2.1+PKCE) built across prior sessions — that one has its own preview/enrich/historical/sync-status panels on the Settings page, outside this file.
-- **QuickBooks — zero integration code exists.** Only checks whether `QUICKBOOKS_CLIENT_ID`/`SECRET` env vars are present. No OAuth flow, no API client, nothing to "repair" — there is nothing built yet. **Blocked: needs the owner to decide whether to build this and supply real QuickBooks app credentials.**
-- **Google Calendar — zero integration code exists.** Same situation as QuickBooks exactly. **Blocked: same reason.**
-- **Zapier (general/outbound)** — this is a *different* thing from the Homeworks Zapier webhook (which works): this card is for Jarvis pushing data OUT to other Zapier automations, and nothing is wired up. **Blocked: no automations have been defined to wire up.**
-- **GitHub** — credential-presence only, used for a not-yet-built future CI/deploy integration. No current functional purpose.
-
-**Nothing was built or changed for QuickBooks/Calendar/Zapier this session** — there was nothing safe to build without real OAuth app credentials from the owner, and the existing status reporting for all three was already honest and accurate on inspection. This satisfies the instruction to record the blocker and move on rather than inventing endpoints.
-
-## WHAT IS NOT BUILT / NOT ASSESSED THIS SESSION
-
-- Historical (completed-work) Homeworks sync: built, has never been run by the owner. Preview it before confirming.
-- Priority 5 (visual/workflow coherence full pass): not started this session.
-- Full live-device voice test: not done this session (needs the owner's phone/browser).
+- **Homeworks direct API** (OAuth 2.1+PKCE), separate from the Zapier webhook path — customer/property linking, job sync + historical backfill, enrichment, reconciliation panel, sync status panel (now with real webhook-delivery/bulk-import timestamps, this session).
+- **QuickBooks / Google Calendar OAuth** (this session) — see matrix above.
+- **Notes & tasks, photos** — built prior sessions, reviewed (not re-tested live) this session; see matrix.
+- **Voice** — persistent `JarvisProvider`, diagnostics view (new this session), mobile overlap fixed (new this session).
+- **Command Center, Schedule** — unchanged this session.
 
 ## NEXT EXECUTABLE STEP (if this session is interrupted)
 
-1. Verify Priority 1 in a real browser (the 4 steps above) — this is the highest-value single check.
-2. Continue to Priority 2 (notes/tasks/photos) — code exists, needs the same kind of live click-through verification, plus continued static hardening.
-3. Then Priority 3 (connector truthfulness — audit QuickBooks/Google Calendar/Zapier code, not just Homeworks).
-4. Then Priority 4 (voice — real device test still outstanding).
-5. Then Priority 5 (visual/workflow coherence pass).
+1. `git push` and confirm Vercel deploys the exact commit `01fb476` (or later, if more was done after this was written).
+2. Owner: run through every "Next action" cell in the task matrix above that says "Owner:" — none of them need more code, only a real authenticated session or a dashboard click.
+3. If QuickBooks/Google Calendar credentials get supplied, the Verify buttons in Settings are the first real test — they make one real, cheap provider call each.
+4. Once a Jarvis-side count is available (via Settings' sync status panel), compare it against the live Homeworks September/this-week numbers above to close out the reconciliation properly.
