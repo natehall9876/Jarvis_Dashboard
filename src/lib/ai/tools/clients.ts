@@ -45,6 +45,7 @@ export const clientTools: ToolSpec[] = [
     execute: async (input) => {
       const result = await getClientById(String(input.client_id));
       return unwrap(result, (detail) => {
+        if (!detail) return { data: { error: "That client doesn't exist — it may have been deleted, or the id may be wrong." } };
         const completedJobs = detail.jobs.filter((j) => j.status === "completed");
         return {
         data: {

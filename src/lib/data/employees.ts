@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import { hoursForTimeEntry } from "@/lib/calculations";
 import type { DataResult, Employee, EmployeeWithStats } from "@/types/domain";
 
@@ -61,12 +61,10 @@ export async function getEmployees(): Promise<DataResult<EmployeeWithStats[]>> {
   });
 }
 
-export async function getEmployeeById(id: string): Promise<DataResult<Employee>> {
+export async function getEmployeeById(id: string): Promise<DataResult<Employee | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.from("employees").select("*").eq("id", id).single();
-    if (error) throw error;
-    return data;
+    return getOrNotFound<Employee>(supabase.from("employees").select("*").eq("id", id).maybeSingle());
   });
 }
 

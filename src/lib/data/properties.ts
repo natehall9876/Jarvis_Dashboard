@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import type {
   DataResult,
   Invoice,
@@ -43,16 +43,14 @@ export type PropertyDetail = {
   photos: JobPhoto[];
 };
 
-export async function getPropertyById(id: string): Promise<DataResult<PropertyDetail>> {
+export async function getPropertyById(id: string): Promise<DataResult<PropertyDetail | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const { data: property, error } = await supabase
-      .from("properties")
-      .select("*, client:clients(id, first_name, last_name, company_name)")
-      .eq("id", id)
-      .single();
-    if (error) throw error;
+    const property = await getOrNotFound(
+      supabase.from("properties").select("*, client:clients(id, first_name, last_name, company_name)").eq("id", id).maybeSingle(),
+    );
+    if (!property) return null;
 
     const propertyRow = property as unknown as PropertyWithClient;
 

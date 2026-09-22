@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Pencil, Archive, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -34,7 +35,7 @@ export default async function RouteDetailPage({
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
-  if (!route) return null;
+  if (!route) notFound();
 
   const revenue = routeEstimatedRevenue(route);
   const hours = routeEstimatedHours(route);

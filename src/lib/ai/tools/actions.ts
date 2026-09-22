@@ -71,6 +71,7 @@ export const actionTools: ToolSpec[] = [
       const jobId = String(input.job_id);
       const result = await getJobById(jobId);
       return unwrap(result, (job) => {
+        if (!job) return { data: { error: "That job doesn't exist — it may have been deleted, or the id may be wrong." } };
         const newDate = String(input.new_date);
         const newTime = typeof input.new_time === "string" ? input.new_time : job.scheduled_start_time;
         const title = `Reschedule ${clientDisplayName(job.property?.client)} — ${job.service?.name ?? "Job"}`;
@@ -112,6 +113,7 @@ export const actionTools: ToolSpec[] = [
       }
       const result = await getJobById(jobId);
       return unwrap(result, (job) => {
+        if (!job) return { data: { error: "That job doesn't exist — it may have been deleted, or the id may be wrong." } };
         const title = `Mark ${clientDisplayName(job.property?.client)} — ${job.service?.name ?? "Job"} as ${newStatus.replace(/_/g, " ")}`;
         const warnings: string[] = [];
         if (job.status === "completed" && newStatus !== "completed") warnings.push("This reverts a job that's already marked completed.");
@@ -151,6 +153,8 @@ export const actionTools: ToolSpec[] = [
       const [jobResult, employeeResult] = await Promise.all([getJobById(jobId), getEmployeeById(employeeId)]);
       if (jobResult.error !== null) return { data: { error: jobResult.error } };
       if (employeeResult.error !== null) return { data: { error: employeeResult.error } };
+      if (!jobResult.data) return { data: { error: "That job doesn't exist — it may have been deleted, or the id may be wrong." } };
+      if (!employeeResult.data) return { data: { error: "That employee doesn't exist — they may have been deleted, or the id may be wrong." } };
       const job = jobResult.data;
       const employee = employeeResult.data;
 
@@ -205,6 +209,7 @@ export const actionTools: ToolSpec[] = [
       const propertyId = String(input.property_id);
       const result = await getPropertyById(propertyId);
       return unwrap(result, (detail) => {
+        if (!detail) return { data: { error: "That property doesn't exist — it may have been deleted, or the id may be wrong." } };
         const isCompletedLog = input.is_completed_log === "true" || input.is_completed_log === true;
         const price = typeof input.price === "string" ? Number(input.price) : typeof input.price === "number" ? input.price : null;
         const budgetedHours =

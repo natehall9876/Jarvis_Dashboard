@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Pencil, Archive } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export default async function PropertyDetailPage({
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
-  if (!data) return null;
+  if (!data) notFound();
 
   const { property, client, route, agreements, jobs, quotes, invoices, photos } = data;
   const photoUrls = await getJobPhotoUrls(photos.map((p) => p.storage_path));

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Pencil, Archive } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -30,7 +31,7 @@ export default async function EmployeeDetailPage({
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
-  if (!employee) return null;
+  if (!employee) notFound();
 
   const updateEmployeeWithId = updateEmployee.bind(null, id);
   const archiveEmployeeWithId = archiveEmployee.bind(null, id);

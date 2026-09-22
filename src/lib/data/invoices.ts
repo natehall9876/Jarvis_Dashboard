@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import { daysOverdue } from "@/lib/format";
 import { invoiceDisplayStatus } from "@/lib/calculations";
 import type { DataResult, Invoice, InvoiceItem, InvoiceWithClient, Payment } from "@/types/domain";
@@ -49,16 +49,12 @@ export type InvoiceDetail = InvoiceWithClient & {
   payments: Payment[];
 };
 
-export async function getInvoiceById(id: string): Promise<DataResult<InvoiceDetail>> {
+export async function getInvoiceById(id: string): Promise<DataResult<InvoiceDetail | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const { data: invoice, error } = await supabase
-      .from("invoices")
-      .select(INVOICE_SELECT)
-      .eq("id", id)
-      .single();
-    if (error) throw error;
+    const invoice = await getOrNotFound(supabase.from("invoices").select(INVOICE_SELECT).eq("id", id).maybeSingle());
+    if (!invoice) return null;
 
     const [{ data: items }, { data: payments }] = await Promise.all([
       supabase.from("invoice_items").select("*").eq("invoice_id", id).order("created_at"),

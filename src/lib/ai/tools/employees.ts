@@ -36,6 +36,7 @@ export const employeeTools: ToolSpec[] = [
       const id = String(input.employee_id);
       const [employeeResult, jobsResult] = await Promise.all([getEmployeeById(id), getEmployeeRecentJobs(id)]);
       if (employeeResult.error !== null) return { data: { error: employeeResult.error } };
+      if (!employeeResult.data) return { data: { error: "That employee doesn't exist — they may have been deleted, or the id may be wrong." } };
       const employee = employeeResult.data;
       const jobs = jobsResult.data ?? [];
       return {

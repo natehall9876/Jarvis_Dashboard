@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import type { DataResult, QuoteWithItems } from "@/types/domain";
 
 const QUOTE_SELECT = `
@@ -20,15 +20,10 @@ export async function getQuotes(): Promise<DataResult<QuoteWithItems[]>> {
   });
 }
 
-export async function getQuoteById(id: string): Promise<DataResult<QuoteWithItems>> {
+export async function getQuoteById(id: string): Promise<DataResult<QuoteWithItems | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase
-      .from("quotes")
-      .select(QUOTE_SELECT)
-      .eq("id", id)
-      .single();
-    if (error) throw error;
-    return data as unknown as QuoteWithItems;
+    const data = await getOrNotFound(supabase.from("quotes").select(QUOTE_SELECT).eq("id", id).maybeSingle());
+    return data as unknown as QuoteWithItems | null;
   });
 }

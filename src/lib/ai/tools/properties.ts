@@ -40,7 +40,9 @@ export const propertyTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getPropertyById(String(input.property_id));
-      return unwrap(result, (detail) => ({
+      return unwrap(result, (detail) => {
+        if (!detail) return { data: { error: "That property doesn't exist — it may have been deleted, or the id may be wrong." } };
+        return {
         data: {
           id: detail.property.id,
           address: propertyAddress(detail.property),
@@ -80,7 +82,8 @@ export const propertyTools: ToolSpec[] = [
           ...(detail.client ? [{ type: "client" as const, id: detail.client.id, label: clientDisplayName(detail.client) }] : []),
           ...(detail.route ? [{ type: "route" as const, id: detail.route.id, label: detail.route.name }] : []),
         ],
-      }));
+        };
+      });
     },
   },
 ];

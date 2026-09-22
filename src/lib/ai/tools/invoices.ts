@@ -78,7 +78,9 @@ export const invoiceTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getInvoiceById(String(input.invoice_id));
-      return unwrap(result, (invoice) => ({
+      return unwrap(result, (invoice) => {
+        if (!invoice) return { data: { error: "That invoice doesn't exist — it may have been deleted, or the id may be wrong." } };
+        return {
         data: {
           id: invoice.id,
           invoice_number: invoice.invoice_number,
@@ -100,7 +102,8 @@ export const invoiceTools: ToolSpec[] = [
               { type: "client" as const, id: invoice.client.id, label: clientDisplayName(invoice.client) },
             ]
           : [{ type: "invoice" as const, id: invoice.id, label: `#${invoice.invoice_number}` }],
-      }));
+        };
+      });
     },
   },
 ];

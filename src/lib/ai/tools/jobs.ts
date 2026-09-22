@@ -81,7 +81,9 @@ export const jobTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getJobById(String(input.job_id));
-      return unwrap(result, (job) => ({
+      return unwrap(result, (job) => {
+        if (!job) return { data: { error: "That job doesn't exist — it may have been deleted, or the id may be wrong." } };
+        return {
         data: {
           id: job.id,
           client: clientDisplayName(job.property?.client),
@@ -108,7 +110,8 @@ export const jobTools: ToolSpec[] = [
           ...(job.property ? [{ type: "property" as const, id: job.property.id, label: propertyAddress(job.property) }] : []),
           ...job.crew.map((c) => ({ type: "employee" as const, id: c.id, label: [c.first_name, c.last_name].filter(Boolean).join(" ") })),
         ],
-      }));
+        };
+      });
     },
   },
 ];

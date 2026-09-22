@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Pencil, Plus, Send, Check, X as XIcon, ArrowRightLeft, Trash2, FileDown } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -47,7 +48,7 @@ export default async function QuoteDetailPage({
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
-  if (!quote) return null;
+  if (!quote) notFound();
 
   const required = [...quote.items].filter((i) => !i.is_optional);
   const optional = [...quote.items].filter((i) => i.is_optional);

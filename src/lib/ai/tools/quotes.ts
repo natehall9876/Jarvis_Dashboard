@@ -50,7 +50,9 @@ export const quoteTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getQuoteById(String(input.quote_id));
-      return unwrap(result, (quote) => ({
+      return unwrap(result, (quote) => {
+        if (!quote) return { data: { error: "That quote doesn't exist — it may have been deleted, or the id may be wrong." } };
+        return {
         data: {
           id: quote.id,
           quote_number: quote.quote_number,
@@ -78,7 +80,8 @@ export const quoteTools: ToolSpec[] = [
               { type: "client" as const, id: quote.client.id, label: clientDisplayName(quote.client) },
             ]
           : [{ type: "quote" as const, id: quote.id, label: quote.quote_number ?? "Quote" }],
-      }));
+        };
+      });
     },
   },
 ];

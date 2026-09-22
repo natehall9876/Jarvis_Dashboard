@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import type { DataResult, Equipment, EquipmentMaintenance } from "@/types/domain";
 
 const MAINTENANCE_WARNING_DAYS = 14;
@@ -35,12 +35,12 @@ export type EquipmentDetail = EquipmentWithMaintenanceFlag & {
   maintenance_history: EquipmentMaintenance[];
 };
 
-export async function getEquipmentById(id: string): Promise<DataResult<EquipmentDetail>> {
+export async function getEquipmentById(id: string): Promise<DataResult<EquipmentDetail | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const { data: item, error } = await supabase.from("equipment").select("*").eq("id", id).single();
-    if (error) throw error;
+    const item = await getOrNotFound<Equipment>(supabase.from("equipment").select("*").eq("id", id).maybeSingle());
+    if (!item) return null;
 
     const { data: history } = await supabase
       .from("equipment_maintenance")

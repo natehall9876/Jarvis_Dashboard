@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Pencil, Plus, Send, DollarSign, Ban, Trash2, X as XIcon } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -47,7 +48,7 @@ export default async function InvoiceDetailPage({
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
-  if (!invoice) return null;
+  if (!invoice) notFound();
 
   const updateInvoiceWithId = updateInvoice.bind(null, id);
   const deleteDraftInvoiceWithId = deleteDraftInvoice.bind(null, id);

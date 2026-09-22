@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -42,7 +43,7 @@ export default async function JobDetailPage({
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
-  if (!job) return null;
+  if (!job) notFound();
 
   const photoUrls = await getJobPhotoUrls(job.photos.map((p) => p.storage_path));
   const rate = jobProductionRate(job);

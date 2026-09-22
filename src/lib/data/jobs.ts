@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import { clientDisplayName, propertyAddress } from "@/lib/format";
 import type {
   DataResult,
@@ -58,16 +58,12 @@ export type JobDetail = JobWithRelations & {
   photos: JobPhoto[];
 };
 
-export async function getJobById(id: string): Promise<DataResult<JobDetail>> {
+export async function getJobById(id: string): Promise<DataResult<JobDetail | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const { data: job, error } = await supabase
-      .from("jobs")
-      .select(JOB_RELATIONS_SELECT)
-      .eq("id", id)
-      .single();
-    if (error) throw error;
+    const job = await getOrNotFound(supabase.from("jobs").select(JOB_RELATIONS_SELECT).eq("id", id).maybeSingle());
+    if (!job) return null;
 
     const [{ data: jobEmployees }, { data: timeEntries }, { data: equipment }, { data: materials }, { data: photos }] =
       await Promise.all([

@@ -35,7 +35,9 @@ export const routeTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getRouteById(String(input.route_id));
-      return unwrap(result, (route) => ({
+      return unwrap(result, (route) => {
+        if (!route) return { data: { error: "That route doesn't exist — it may have been deleted, or the id may be wrong." } };
+        return {
         data: {
           id: route.id,
           name: route.name,
@@ -55,7 +57,8 @@ export const routeTools: ToolSpec[] = [
           { type: "route" as const, id: route.id, label: route.name },
           ...route.stops.flatMap((s) => (s.property ? [{ type: "property" as const, id: s.property.id, label: propertyAddress(s.property) }] : [])),
         ],
-      }));
+        };
+      });
     },
   },
 ];

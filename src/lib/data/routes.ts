@@ -69,12 +69,14 @@ export async function getRoutes(): Promise<DataResult<RouteWithStops[]>> {
   });
 }
 
-export async function getRouteById(id: string): Promise<DataResult<RouteWithStops>> {
+export async function getRouteById(id: string): Promise<DataResult<RouteWithStops | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
     const [route] = await loadRouteWithStops(supabase, { column: "id", value: id });
-    if (!route) throw new Error("Route not found.");
-    return route;
+    // A missing route (stale link, deleted route) is an ordinary "not
+    // found," not a server error — matches every other detail page's
+    // getXById, which return null rather than throwing for this case.
+    return route ?? null;
   });
 }
 

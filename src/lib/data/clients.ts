@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { withDataResult } from "@/lib/data/shared";
+import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import type {
   Client,
   ClientWithBalance,
@@ -86,16 +86,12 @@ export type ClientDetail = {
   balance_verified: boolean;
 };
 
-export async function getClientById(id: string): Promise<DataResult<ClientDetail>> {
+export async function getClientById(id: string): Promise<DataResult<ClientDetail | null>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const { data: client, error } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("id", id)
-      .single();
-    if (error) throw error;
+    const client = await getOrNotFound<Client>(supabase.from("clients").select("*").eq("id", id).maybeSingle());
+    if (!client) return null;
 
     const { data: properties } = await supabase
       .from("properties")

@@ -34,7 +34,9 @@ export const equipmentTools: ToolSpec[] = [
     },
     execute: async (input) => {
       const result = await getEquipmentById(String(input.equipment_id));
-      return unwrap(result, (item) => ({
+      return unwrap(result, (item) => {
+        if (!item) return { data: { error: "That equipment doesn't exist — it may have been deleted, or the id may be wrong." } };
+        return {
         data: {
           id: item.id,
           name: item.name,
@@ -57,7 +59,8 @@ export const equipmentTools: ToolSpec[] = [
           })),
         },
         references: [{ type: "equipment" as const, id: item.id, label: item.name }],
-      }));
+        };
+      });
     },
   },
 ];
