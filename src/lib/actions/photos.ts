@@ -58,22 +58,39 @@ export async function finalizeJobPhotoUpload(input: PhotoRequest & { path: strin
   }
 
   // Verify against what Storage actually holds, not what the browser claims.
-  // Retried with backoff: Storage's list() can briefly lag behind a just-completed
-  // upload (eventual consistency), and a single failed check here previously meant
-  // a real, successfully-uploaded photo was reported as failed and its row never
-  // created — the object was fine, the verification just ran too early.
+  //
+  // A direct single-object lookup (createSignedUrl) rather than a folder
+  // listing filtered by `search` — a prior version used list(folder,
+  // {search: fileName}), which depends on how the storage backend's search
+  // filter matches, and on a naive read didn't obviously guarantee an exact
+  // match. createSignedUrl targets the exact path and fails outright if the
+  // object isn't there, which is the more direct existence proof. Retried
+  // with backoff either way, since Storage can briefly lag behind a
+  // just-completed upload (eventual consistency) — a real, successfully-
+  // uploaded photo must not be reported as failed just because this check
+  // ran a moment too early.
   const folder = user.id;
   const fileName = input.path.slice(folder.length + 1);
-  let object: { name: string; metadata: unknown } | undefined;
-  let listError: { message: string } | null = null;
-  for (let attempt = 0; attempt < 4 && !object; attempt++) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
-    const { data: listed, error } = await supabase.storage.from(JOB_PHOTOS_BUCKET).list(folder, { search: fileName, limit: 5 });
-    listError = error;
-    object = listed?.find((o) => o.name === fileName);
+  let exists = false;
+  let lastError: string | null = null;
+  for (let attempt = 0; attempt < 5 && !exists; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    const { error } = await supabase.storage.from(JOB_PHOTOS_BUCKET).createSignedUrl(input.path, 60);
+    if (!error) exists = true;
+    else lastError = error.message;
   }
-  if (listError || !object) return { ok: false, message: "The upload didn't reach storage in time — please try again." };
-  const realSize = Number((object.metadata as { size?: number } | null)?.size ?? input.size);
+  if (!exists) {
+    return { ok: false, message: `The upload didn't reach storage in time — please try again.${lastError ? ` (${lastError})` : ""}` };
+  }
+
+  // Best-effort size lookup for the oversized-file defense below — a client
+  // that bypasses the browser's own size check could otherwise upload past
+  // the limit directly against the signed URL. If this can't be read (e.g.
+  // metadata not yet populated), fall back to what the client reported
+  // rather than failing an upload we've already confirmed exists.
+  const { data: listed } = await supabase.storage.from(JOB_PHOTOS_BUCKET).list(folder, { search: fileName, limit: 5 });
+  const object = listed?.find((o) => o.name === fileName);
+  const realSize = Number((object?.metadata as { size?: number } | null)?.size ?? input.size);
   if (realSize > MAX_PHOTO_BYTES) {
     await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([input.path]);
     return { ok: false, message: "That file is too large (15 MB max)." };
