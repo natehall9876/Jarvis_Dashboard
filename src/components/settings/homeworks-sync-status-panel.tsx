@@ -67,6 +67,12 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
           </div>
           <div className="grid grid-cols-1 gap-1 text-[var(--color-text-secondary)] sm:grid-cols-3">
             <div>
+              Last live webhook delivery: <span className="text-[var(--color-text-primary)]">{when(s.lastWebhookDeliveryAt)}</span>
+            </div>
+            <div>
+              Last bulk import: <span className="text-[var(--color-text-primary)]">{when(s.lastBulkImportAt)}</span>
+            </div>
+            <div>
               Last customer/property link: <span className="text-[var(--color-text-primary)]">{when(s.lastLinkedAt)}</span>
             </div>
             <div>
@@ -76,6 +82,12 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
               Last history backfill: <span className="text-[var(--color-text-primary)]">{when(s.lastHistoricalSyncAt)}</span>
             </div>
           </div>
+          {!s.lastWebhookDeliveryAt ? (
+            <p className="flex items-start gap-1.5 text-[var(--color-warning)]">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              No live webhook delivery has ever been recorded. If the Zapier Zap is supposed to be running, check its History tab in Zapier directly — a linked/total count above being non-zero only means SOME sync path (webhook, bulk import, or manual link) has run at some point, not that the live webhook specifically is delivering right now.
+            </p>
+          ) : null}
           {s.recentActivity.length > 0 ? (
             <details>
               <summary className="cursor-pointer text-[var(--color-text-muted)]">Recent sync activity ({s.recentActivity.length})</summary>

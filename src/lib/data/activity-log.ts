@@ -1,6 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DataResult } from "@/types/domain";
-import type { ActivitySource, Json } from "@/types/database.types";
+import type { ActivitySource, Database, Json } from "@/types/database.types";
 
 export type ActivityEntityType = "job" | "client" | "property" | "invoice" | "quote" | "equipment";
 
@@ -26,16 +27,29 @@ export type ActivityEvent = {
  * job's own notes field) keep doing that separately — this is additive, not
  * a replacement for whatever already works.
  */
-export async function logActivity(event: {
-  entityType: ActivityEntityType;
-  entityId: string;
-  eventType: string;
-  summary: string;
-  detail?: Json;
-  source: ActivitySource;
-}): Promise<void> {
+export async function logActivity(
+  event: {
+    entityType: ActivityEntityType;
+    entityId: string;
+    eventType: string;
+    summary: string;
+    detail?: Json;
+    source: ActivitySource;
+  },
+  /**
+   * Callers with an authenticated Supabase Auth session (Server Actions,
+   * Route Handlers reached through the browser) can omit this — a normal
+   * cookie-based client is created and RLS's `to authenticated` policy
+   * covers it. A server-to-server caller with NO session (the Homeworks
+   * webhook, which authenticates via a shared secret instead) has nothing
+   * for that RLS policy to authorize, so it must pass its own already-
+   * constructed admin client instead — same pattern as every other
+   * documented service-role use in this project (lib/supabase/admin.ts).
+   */
+  client?: SupabaseClient<Database>,
+): Promise<void> {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = client ?? (await createSupabaseServerClient());
     await supabase.from("activity_log").insert({
       entity_type: event.entityType,
       entity_id: event.entityId,

@@ -111,7 +111,7 @@ export async function POST(request: Request) {
   // racing. For 500 records this is a few seconds, not a bottleneck.
   const results: Array<{ homeworks_id: string; entity_type: string } & ({ ok: true; id: string } | { ok: false; error: string })> = [];
   for (const record of validRecords) {
-    const result = await syncHomeworksEntity(supabase, record);
+    const result = await syncHomeworksEntity(supabase, record, "bulk_import");
     results.push(
       result.ok
         ? { homeworks_id: record.homeworks_id, entity_type: record.entity_type, ok: true, id: result.id }

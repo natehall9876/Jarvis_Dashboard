@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { extractErrorMessage } from "@/lib/data/shared";
+import { logActivity, type ActivityEntityType } from "@/lib/data/activity-log";
 
 /**
  * Shared upsert logic for one Homeworks record, used by both the live
@@ -155,9 +156,49 @@ export function presentFields<T extends Record<string, string | null | undefined
   return out;
 }
 
+const ENTITY_TYPE_MAP: Record<HomeworksSyncPayload["entity_type"], ActivityEntityType> = {
+  customer: "client",
+  property: "property",
+  invoice: "invoice",
+  job: "job",
+};
+
+/**
+ * The only place a webhook-delivered (or bulk-imported) sync becomes
+ * visible as anything other than a raw row count — see the doc comment on
+ * HomeworksSyncStatus.lastWebhookDeliveryAt for why a count alone was found
+ * not to be evidence of current delivery. Logs through the SAME client the
+ * caller already used for the upsert (an admin/service-role client in both
+ * the live-webhook and bulk-import routes, since neither has a Supabase
+ * Auth session for RLS to authorize against) rather than logActivity's
+ * default authenticated-session client, which would silently fail here.
+ */
+async function logSync(
+  supabase: SupabaseClient<Database>,
+  payload: HomeworksSyncPayload,
+  id: string,
+  origin: "webhook" | "bulk_import",
+): Promise<void> {
+  await logActivity(
+    {
+      entityType: ENTITY_TYPE_MAP[payload.entity_type],
+      entityId: id,
+      eventType: origin === "webhook" ? "homeworks_webhook_sync" : "homeworks_bulk_import",
+      summary:
+        origin === "webhook"
+          ? `${payload.entity_type} synced from a live Homeworks webhook (Zapier)`
+          : `${payload.entity_type} synced via bulk import`,
+      detail: { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type },
+      source: "system",
+    },
+    supabase,
+  );
+}
+
 export async function syncHomeworksEntity(
   supabase: SupabaseClient<Database>,
   payload: HomeworksSyncPayload,
+  origin: "webhook" | "bulk_import" = "webhook",
 ): Promise<HomeworksSyncResult> {
   try {
     switch (payload.entity_type) {
@@ -189,6 +230,7 @@ export async function syncHomeworksEntity(
           .select("id")
           .single();
         if (error) throw error;
+        await logSync(supabase, payload, data.id, origin);
         return { ok: true, entity_type: "customer", id: data.id };
       }
       case "property": {
@@ -221,6 +263,7 @@ export async function syncHomeworksEntity(
           .select("id")
           .single();
         if (error) throw error;
+        await logSync(supabase, payload, data.id, origin);
         return { ok: true, entity_type: "property", id: data.id };
       }
       case "invoice": {
@@ -254,6 +297,7 @@ export async function syncHomeworksEntity(
           .select("id")
           .single();
         if (error) throw error;
+        await logSync(supabase, payload, data.id, origin);
         return { ok: true, entity_type: "invoice", id: data.id };
       }
       case "job": {
@@ -288,6 +332,7 @@ export async function syncHomeworksEntity(
           .select("id")
           .single();
         if (error) throw error;
+        await logSync(supabase, payload, data.id, origin);
         return { ok: true, entity_type: "job", id: data.id };
       }
     }
