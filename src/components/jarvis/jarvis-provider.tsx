@@ -66,6 +66,11 @@ type JarvisContextValue = {
   muted: boolean;
   conversationMode: boolean;
   voiceError: string | null;
+  /** Survives clearVoiceError() / a fresh submit() clearing the live banner — the diagnostics view's "last error" needs to outlive the dismissal. */
+  lastVoiceError: string | null;
+  lastVoiceErrorAt: string | null;
+  /** From the Permissions API where supported; "unknown" (not "denied") when the browser can't report it without an active request — Safari/Firefox don't support querying `microphone` this way. */
+  micPermission: "granted" | "denied" | "prompt" | "unknown";
   panelOpen: boolean;
   activeCapabilities: string[];
   /** The exchange currently shown in the dock's answer bubble (null when none). */
@@ -134,6 +139,9 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   const [conversationMode, setConversationMode] = useState(false);
   const conversationModeRef = useRef(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [lastVoiceError, setLastVoiceError] = useState<string | null>(null);
+  const [lastVoiceErrorAt, setLastVoiceErrorAt] = useState<string | null>(null);
+  const [micPermission, setMicPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown");
   const [panelOpen, setPanelOpen] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
@@ -143,6 +151,15 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   const [bubbleId, setBubbleId] = useState<string | null>(null);
   const dismissBubble = useCallback(() => setBubbleId(null), []);
   const clearVoiceError = useCallback(() => setVoiceError(null), []);
+  // Sets both the live (dismissable) banner and the diagnostics view's
+  // "last error" together, from the actual event that produced the error —
+  // not a derived useEffect watching voiceError, which would set state
+  // synchronously inside an effect on every render that changed it.
+  const reportVoiceError = useCallback((message: string) => {
+    setVoiceError(message);
+    setLastVoiceError(message);
+    setLastVoiceErrorAt(new Date().toISOString());
+  }, []);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speakQueueRef = useRef<string[]>([]);
@@ -188,6 +205,31 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       // Storage unavailable (private mode, quota) — the live session still works.
     }
   }, [exchanges]);
+
+  // Microphone permission state, where the browser can report it without an
+  // active getUserMedia/SpeechRecognition request. Chrome/Edge support
+  // querying the "microphone" permission name; Safari and Firefox don't
+  // (the query throws or the name is unsupported) — reported as "unknown"
+  // rather than guessed at, since "unknown" and "denied" call for different
+  // owner action (try the mic vs. fix a browser setting).
+  useEffect(() => {
+    let status: PermissionStatus | null = null;
+    const apply = (s: PermissionStatus) => setMicPermission(s.state as "granted" | "denied" | "prompt");
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: "microphone" as PermissionName })
+        .then((s) => {
+          if (!mountedRef.current) return;
+          status = s;
+          apply(s);
+          s.onchange = () => apply(s);
+        })
+        .catch(() => setMicPermission("unknown"));
+    }
+    return () => {
+      if (status) status.onchange = null;
+    };
+  }, []);
 
   // ------------------------------------------------------------------ speech output
   const unlockSpeech = useCallback(() => {
@@ -420,7 +462,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
     if (loadingRef.current || recognitionRef.current) return;
     const Ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Ctor) {
-      setVoiceError("Voice input isn't supported in this browser. Use Chrome, Edge, or Safari, or type instead.");
+      reportVoiceError("Voice input isn't supported in this browser. Use Chrome, Edge, or Safari, or type instead.");
       return;
     }
     stopSpeaking(); // barge-in: talking over Jarvis interrupts it
@@ -451,13 +493,13 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       setListening(false);
       setInterim("");
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        setVoiceError("Microphone access is blocked. Allow the microphone for this site in your browser settings.");
+        reportVoiceError("Microphone access is blocked. Allow the microphone for this site in your browser settings.");
       } else if (event.error === "no-speech") {
-        setVoiceError("Didn't catch that. Tap the mic and try again.");
+        reportVoiceError("Didn't catch that. Tap the mic and try again.");
       } else if (event.error === "network") {
-        setVoiceError("Speech recognition lost its network connection. Check your signal and try again.");
+        reportVoiceError("Speech recognition lost its network connection. Check your signal and try again.");
       } else if (event.error !== "aborted") {
-        setVoiceError("Voice input hit an error. Try again or type instead.");
+        reportVoiceError("Voice input hit an error. Try again or type instead.");
       }
     };
     recognition.onend = () => {
@@ -475,7 +517,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       recognitionRef.current = null;
       setListening(false);
     }
-  }, [stopSpeaking, submit]);
+  }, [stopSpeaking, submit, reportVoiceError]);
 
   useEffect(() => {
     startListeningRef.current = startListening;
@@ -547,6 +589,9 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       muted,
       conversationMode,
       voiceError,
+      lastVoiceError,
+      lastVoiceErrorAt,
+      micPermission,
       panelOpen,
       activeCapabilities,
       bubbleId,
@@ -576,6 +621,9 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       muted,
       conversationMode,
       voiceError,
+      lastVoiceError,
+      lastVoiceErrorAt,
+      micPermission,
       panelOpen,
       activeCapabilities,
       bubbleId,

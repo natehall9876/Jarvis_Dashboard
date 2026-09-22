@@ -8,6 +8,7 @@ import { AskAdvisor } from "@/components/ai-advisor/ask-advisor";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
 import { IntelligenceNetwork } from "@/components/jarvis/intelligence-network";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
+import { VoiceDiagnostics } from "@/components/jarvis/voice-diagnostics";
 
 const STATE_LABEL = {
   idle: "Ask Jarvis",
@@ -174,8 +175,21 @@ export function VoiceDock() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4" style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}>
+            {/*
+              The floating dock (role="Jarvis voice", z-[60], fixed to the
+              viewport bottom) sits ON TOP of this panel (z-50) at all widths.
+              On mobile the panel is full-width behind the same dock, so
+              scrolled-to-bottom content needs enough bottom padding to clear
+              the dock's own footprint (its `bottom` offset PLUS its height),
+              not just its offset — 6rem previously only cleared the offset,
+              so content added after AskAdvisor (like Voice Diagnostics) sat
+              partly under the dock: visible, but not clickable, on mobile.
+            */}
+            <div className="flex-1 overflow-y-auto px-5 py-4" style={{ paddingBottom: "calc(9.5rem + env(safe-area-inset-bottom))" }}>
               <AskAdvisor />
+              <div className="mt-4">
+                <VoiceDiagnostics />
+              </div>
             </div>
           </div>
         </div>

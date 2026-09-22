@@ -230,4 +230,36 @@ test.describe("voice flow (simulated microphone)", () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(vp.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
   });
+
+  test("voice diagnostics reports real capability flags and keeps the last error after it's dismissed", async ({ page }) => {
+    await setup(page, { answer: "x" });
+    await page.goto("/voice-lab");
+
+    // Baseline, with the conversation panel open (the floating error banner is
+    // deliberately suppressed while the panel is open — no point double-showing
+    // the same thing — so this checks capability flags only, before any error).
+    await page.getByRole("button", { name: "Open Jarvis conversation" }).click();
+    const diagnostics = page.getByTestId("voice-diagnostics");
+    await diagnostics.locator("summary").click();
+    // The fake SpeechRecognition/speechSynthesis from setup() are real globals
+    // by the time JarvisProvider's capability-detection effect runs, so these
+    // reflect the same detection logic a real browser's capabilities would.
+    await expect(diagnostics).toContainText("Voice input (speech-to-text)Supported in this browser");
+    await expect(diagnostics).toContainText("Spoken replies (text-to-speech)Supported in this browser");
+    await expect(diagnostics).toContainText("Last voice errorNone recorded this session");
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+
+    // With the panel closed, the same error now surfaces as the floating
+    // banner. Dismissing that banner must not erase the diagnostics record.
+    await mic(page).click();
+    await page.evaluate(() => (window as unknown as { __srError: (c: string) => void }).__srError("not-allowed"));
+    await expect(page.getByTestId("jarvis-voice-error")).toContainText("Microphone access is blocked");
+    await page.getByTestId("jarvis-voice-error").getByLabel("Dismiss").click();
+    await expect(page.getByTestId("jarvis-voice-error")).not.toBeVisible();
+
+    await page.getByRole("button", { name: "Open Jarvis conversation" }).click();
+    await diagnostics.locator("summary").click();
+    await expect(diagnostics).toContainText("Microphone access is blocked");
+    await expect(diagnostics).not.toContainText("None recorded this session");
+  });
 });
