@@ -27,6 +27,14 @@ jobs:
         run: npm ci
 
       - name: Typecheck
+        # `npm run typecheck` itself runs `next typegen` first (Next.js 16
+        # writes route/layout/page prop types like `LayoutProps<"/">` into
+        # .next/types/ — gitignored, generated on demand — and a fresh CI
+        # checkout has never run `next dev`/`next build` to produce them).
+        # Before this, `tsc --noEmit` alone failed here on every clean
+        # checkout with "Cannot find name 'LayoutProps'" even though it
+        # passed locally, where .next/types already existed on disk from a
+        # prior `next dev`/`next build` run.
         run: npm run typecheck
 
       - name: Lint
