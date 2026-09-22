@@ -102,6 +102,21 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
           ) : (
             <p className="text-[var(--color-text-muted)]">No sync activity recorded yet.</p>
           )}
+          {s.recentFailures.length > 0 ? (
+            <details>
+              <summary className="cursor-pointer text-[var(--color-warning)]">Recent sync failures ({s.recentFailures.length})</summary>
+              <ul className="mt-1 max-h-40 space-y-1.5 overflow-y-auto text-[var(--color-text-muted)]">
+                {s.recentFailures.map((f) => (
+                  <li key={f.id}>
+                    {when(f.createdAt)} — <span className="uppercase tracking-wide">{f.origin === "webhook" ? "webhook" : "bulk import"}</span>
+                    {f.entityType ? ` (${f.entityType}${f.homeworksId ? ` ${f.homeworksId}` : ""})` : ""}: {f.errorMessage}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : (
+            <p className="text-[var(--color-text-muted)]">No sync failures recorded.</p>
+          )}
         </div>
       ) : null}
     </div>

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { extractErrorMessage } from "@/lib/data/shared";
 import { logActivity, type ActivityEntityType } from "@/lib/data/activity-log";
+import { logSyncFailure } from "@/lib/integrations/homeworks-sync-failures";
 
 /**
  * Shared upsert logic for one Homeworks record, used by both the live
@@ -241,7 +242,9 @@ export async function syncHomeworksEntity(
           .maybeSingle();
         if (clientError) throw clientError;
         if (!client) {
-          return { ok: false, error: `No client found with homeworks_id "${payload.customer_homeworks_id}" — sync the customer first.` };
+          const message = `No client found with homeworks_id "${payload.customer_homeworks_id}" — sync the customer first.`;
+          await logSyncFailure(supabase, { origin, reason: "processing_failed", entityType: "property", homeworksId: payload.homeworks_id, errorMessage: message, detail: { customer_homeworks_id: payload.customer_homeworks_id } });
+          return { ok: false, error: message };
         }
         const { data, error } = await supabase
           .from("properties")
@@ -274,7 +277,9 @@ export async function syncHomeworksEntity(
           .maybeSingle();
         if (clientError) throw clientError;
         if (!client) {
-          return { ok: false, error: `No client found with homeworks_id "${payload.customer_homeworks_id}" — sync the customer first.` };
+          const message = `No client found with homeworks_id "${payload.customer_homeworks_id}" — sync the customer first.`;
+          await logSyncFailure(supabase, { origin, reason: "processing_failed", entityType: "invoice", homeworksId: payload.homeworks_id, errorMessage: message, detail: { customer_homeworks_id: payload.customer_homeworks_id } });
+          return { ok: false, error: message };
         }
         const total = typeof payload.total === "number" ? payload.total : 0;
         const { data, error } = await supabase
@@ -308,7 +313,9 @@ export async function syncHomeworksEntity(
           .maybeSingle();
         if (propertyError) throw propertyError;
         if (!property) {
-          return { ok: false, error: `No property found with homeworks_id "${payload.property_homeworks_id}" — sync the customer/property first.` };
+          const message = `No property found with homeworks_id "${payload.property_homeworks_id}" — sync the customer/property first.`;
+          await logSyncFailure(supabase, { origin, reason: "processing_failed", entityType: "job", homeworksId: payload.homeworks_id, errorMessage: message, detail: { property_homeworks_id: payload.property_homeworks_id } });
+          return { ok: false, error: message };
         }
         const { data, error } = await supabase
           .from("jobs")
@@ -339,6 +346,7 @@ export async function syncHomeworksEntity(
   } catch (err) {
     const message = extractErrorMessage(err);
     console.error("[homeworks-sync]", message, err);
+    await logSyncFailure(supabase, { origin, reason: "processing_failed", entityType: payload.entity_type, homeworksId: payload.homeworks_id, errorMessage: message });
     return { ok: false, error: message };
   }
 }

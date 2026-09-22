@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRecentSyncFailures, type RecentSyncFailure } from "@/lib/integrations/homeworks-sync-failures";
 
 /**
  * Derived sync status — no new table. "Linked" counts are computed by
@@ -35,6 +36,8 @@ export type HomeworksSyncStatus = {
   lastWebhookDeliveryAt: string | null;
   /** Same idea, for the bulk-import endpoint (event_type "homeworks_bulk_import"). */
   lastBulkImportAt: string | null;
+  /** Rejected/failed deliveries — a wrong secret, a malformed body, or a well-formed record whose parent isn't synced yet. See homeworks-sync-failures-migration.sql. */
+  recentFailures: RecentSyncFailure[];
 };
 
 export type SyncStatusResult = { ok: true; status: HomeworksSyncStatus } | { ok: false; message: string };
@@ -76,6 +79,7 @@ export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
     lastHistoricalSyncAt,
     lastWebhookDeliveryAt,
     lastBulkImportAt,
+    recentFailures,
   ] = await Promise.all([
     supabase.from("clients").select("id", { count: "exact", head: true }).not("homeworks_id", "is", null),
     supabase.from("clients").select("id", { count: "exact", head: true }),
@@ -89,6 +93,7 @@ export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
     lastEventOf(supabase, "historical_sync"),
     lastEventOf(supabase, "homeworks_webhook_sync"),
     lastEventOf(supabase, "homeworks_bulk_import"),
+    getRecentSyncFailures(supabase, 10),
   ]);
 
   const firstError = [clientsLinked, clientsTotal, propertiesLinked, propertiesTotal, jobsLinked, jobsTotal].find((r) => r.error)?.error;
@@ -111,6 +116,7 @@ export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
       lastHistoricalSyncAt,
       lastWebhookDeliveryAt,
       lastBulkImportAt,
+      recentFailures,
     },
   };
 }

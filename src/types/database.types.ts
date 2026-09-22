@@ -1185,6 +1185,31 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["google_calendar_oauth_connection"]["Insert"]>;
         Relationships: [];
       };
+      /** Requires supabase/homeworks-sync-failures-migration.sql — not live until that is run. */
+      homeworks_sync_failures: {
+        Row: {
+          id: string;
+          created_at: string;
+          origin: string;
+          reason: string;
+          entity_type: string | null;
+          homeworks_id: string | null;
+          error_message: string;
+          detail: Json | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          origin: string;
+          reason: string;
+          entity_type?: string | null;
+          homeworks_id?: string | null;
+          error_message: string;
+          detail?: Json | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["homeworks_sync_failures"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

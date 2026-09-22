@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { homeworksWebhookEnv } from "@/lib/env.server";
 import { isValidHomeworksSyncPayload, syncHomeworksEntity } from "@/lib/integrations/homeworks-sync";
+import { INVALID_PAYLOAD_MESSAGE, INVALID_SECRET_MESSAGE, logSyncFailure } from "@/lib/integrations/homeworks-sync-failures";
 
 /**
  * Receives events from a Zapier "Webhooks by Zapier" action, triggered by
@@ -29,28 +30,57 @@ import { isValidHomeworksSyncPayload, syncHomeworksEntity } from "@/lib/integrat
  * documented exception to this project's no-service-role-key rule — see
  * lib/supabase/admin.ts) since RLS's `to authenticated` policy has no
  * session here to authorize against.
+ *
+ * Every rejection path (wrong secret, malformed body, a well-formed record
+ * that fails to sync) is logged to homeworks_sync_failures — see that
+ * table's migration for why a failure can't be logged to activity_log
+ * instead (no real business record to attach it to). Logging is best-effort
+ * everywhere it isn't already required for the request to succeed: a wrong
+ * secret or a malformed body is rejected immediately regardless of whether
+ * the database happens to be reachable right now (matches the pre-existing
+ * behavior exactly — these checks never depended on the database before,
+ * and still don't) — only the actual sync step hard-requires a working
+ * admin client, same as always.
  */
+async function tryCreateAdminClient(): Promise<ReturnType<typeof createSupabaseAdminClient> | null> {
+  try {
+    return createSupabaseAdminClient();
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   if (!homeworksWebhookEnv.secret) {
     return NextResponse.json({ error: "Homeworks webhook is not configured (HOMEWORKS_WEBHOOK_SECRET missing)." }, { status: 503 });
   }
+
   const providedSecret = request.headers.get("x-homeworks-webhook-secret");
   if (providedSecret !== homeworksWebhookEnv.secret) {
-    return NextResponse.json({ error: "Invalid or missing webhook secret." }, { status: 401 });
+    // The provided value is never logged or echoed back — INVALID_SECRET_MESSAGE
+    // is a fixed constant, not built from the request. See its doc comment.
+    const logClient = await tryCreateAdminClient();
+    if (logClient) await logSyncFailure(logClient, { origin: "webhook", reason: "invalid_secret", errorMessage: INVALID_SECRET_MESSAGE });
+    return NextResponse.json({ error: INVALID_SECRET_MESSAGE }, { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
+    const logClient = await tryCreateAdminClient();
+    if (logClient) await logSyncFailure(logClient, { origin: "webhook", reason: "invalid_payload", errorMessage: "The request body was not valid JSON." });
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
   if (!isValidHomeworksSyncPayload(body)) {
-    return NextResponse.json(
-      { error: "Body must include entity_type ('customer'|'property'|'invoice'), homeworks_id, and customer_homeworks_id for property/invoice." },
-      { status: 400 },
-    );
+    // Only the shape of the bad payload is recorded (its top-level keys),
+    // not its full contents — enough to debug a Zap's field mapping without
+    // storing an unbounded arbitrary external payload.
+    const receivedKeys = typeof body === "object" && body !== null ? Object.keys(body) : [];
+    const logClient = await tryCreateAdminClient();
+    if (logClient) await logSyncFailure(logClient, { origin: "webhook", reason: "invalid_payload", errorMessage: INVALID_PAYLOAD_MESSAGE, detail: { receivedKeys } });
+    return NextResponse.json({ error: INVALID_PAYLOAD_MESSAGE }, { status: 400 });
   }
 
   let supabase: ReturnType<typeof createSupabaseAdminClient>;
