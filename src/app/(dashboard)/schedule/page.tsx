@@ -10,6 +10,7 @@ import { JobForm } from "@/components/jobs/job-form";
 import { formatCurrency, formatHours, formatTimeString, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getJobs, getCrewNamesByJob } from "@/lib/data/jobs";
 import { summarizeJobs } from "@/lib/jarvis/briefing";
+import { detectScheduleConflicts } from "@/lib/scheduling/conflicts";
 import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
 import { todayInZone } from "@/lib/integrations/homeworks-dates";
 import { getPropertyOptions, getServiceOptions, getRouteOptions, getEmployeeOptions } from "@/lib/data/options";
@@ -150,8 +151,17 @@ export default async function SchedulePage({
             const dateStr = toISODate(day);
             const dayJobs = jobsByDate.get(dateStr) ?? [];
             const isToday = dateStr === todayInZone();
+            const conflicts = detectScheduleConflicts(
+              dayJobs.map((j) => ({ id: j.id, label: j.service?.name ?? "Job", crew: crewByJob[j.id] ?? [], scheduledStartTime: j.scheduled_start_time, budgetedHours: j.budgeted_hours })),
+            );
             return (
               <div key={dateStr} className={view === "week" ? "min-w-[220px]" : ""}>
+                {conflicts.length > 0 ? (
+                  <p className="mb-2 rounded-md border border-[var(--color-critical)]/40 bg-[var(--color-critical-soft)] px-2.5 py-1.5 text-[11px] text-[var(--color-critical)]">
+                    {conflicts.length} scheduling conflict{conflicts.length === 1 ? "" : "s"}:{" "}
+                    {conflicts.map((c) => `${c.crewMember} double-booked ${c.jobA.start}–${c.jobA.end} & ${c.jobB.start}–${c.jobB.end}`).join("; ")}
+                  </p>
+                ) : null}
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className={`flex items-center gap-1.5 text-sm font-semibold ${isToday ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]"}`}>
                     {isToday ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" /> : null}

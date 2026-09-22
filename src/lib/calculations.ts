@@ -4,6 +4,20 @@
  * code and the reports pages.
  */
 
+/**
+ * The owner's target revenue per crew-hour — a planning benchmark, not a
+ * guaranteed or historical figure. Kept as one named constant so every
+ * "vs target" comparison in the app uses the same number; change it here to
+ * change it everywhere.
+ */
+export const DEFAULT_CREW_HOUR_TARGET = 130;
+
+/** How a real $/hr figure compares to the target, as a percent; null if either side is unknown. */
+export function targetGapPercent(actualPerHour: number | null, target: number = DEFAULT_CREW_HOUR_TARGET): number | null {
+  if (actualPerHour === null || target <= 0) return null;
+  return ((actualPerHour - target) / target) * 100;
+}
+
 /** Production rate = job revenue / actual production hours. */
 export function productionRate(revenue: number, actualHours: number | null | undefined): number | null {
   if (!actualHours || actualHours <= 0) return null;

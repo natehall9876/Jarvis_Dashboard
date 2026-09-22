@@ -6,6 +6,7 @@ import { getEquipment } from "@/lib/data/equipment";
 import { getDemoClientIds, getDemoPropertyIds } from "@/lib/data/data-source";
 import {
   averageTicket,
+  DEFAULT_CREW_HOUR_TARGET,
   grossProfit,
   laborCost as calcLaborCost,
   productionRate,
@@ -240,6 +241,8 @@ export type BusinessPulse = {
   averageTicketMonth: number | null;
   jobsCompletedMonth: number;
   quoteAcceptanceRatePct: number | null;
+  /** The configurable planning target used for the vs-target comparisons — see lib/calculations.ts. */
+  crewHourTarget: number;
 };
 
 export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
@@ -333,6 +336,7 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
       averageTicketMonth: averageTicket(revenueMonth, completedJobs.length),
       jobsCompletedMonth: completedJobs.length,
       quoteAcceptanceRatePct: quoteAcceptanceRate(acceptedQuotes.length, decidedQuotes.length),
+      crewHourTarget: DEFAULT_CREW_HOUR_TARGET,
     };
   });
 }

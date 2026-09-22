@@ -3,6 +3,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { targetGapPercent } from "@/lib/calculations";
 import type { BusinessPulse as BusinessPulseData } from "@/lib/data/command-center";
 
 export function BusinessPulse({
@@ -40,18 +41,25 @@ export function BusinessPulse({
               <StatTile
                 label="Field Production $/Hr"
                 value={data.productionDollarsPerHour !== null ? formatCurrency(data.productionDollarsPerHour, true) : "—"}
-                sublabel="Revenue ÷ on-site job hours"
+                sublabel={
+                  targetGapPercent(data.productionDollarsPerHour, data.crewHourTarget) !== null
+                    ? `${formatPercent(Math.abs(targetGapPercent(data.productionDollarsPerHour, data.crewHourTarget)!))} ${targetGapPercent(data.productionDollarsPerHour, data.crewHourTarget)! >= 0 ? "above" : "below"} the $${data.crewHourTarget}/hr target`
+                    : "Revenue ÷ on-site job hours"
+                }
+                tone={data.productionDollarsPerHour !== null && data.productionDollarsPerHour < data.crewHourTarget ? "warning" : "neutral"}
               />
               <StatTile
                 label="True Paid $/Hr"
                 value={data.truePaidDollarsPerHour !== null ? formatCurrency(data.truePaidDollarsPerHour, true) : "—"}
                 sublabel={`Revenue ÷ all ${data.totalPaidHoursMonth.toFixed(0)} paid crew hours`}
                 tone={
-                  data.productionDollarsPerHour !== null &&
-                  data.truePaidDollarsPerHour !== null &&
-                  data.truePaidDollarsPerHour < data.productionDollarsPerHour * 0.8
+                  data.truePaidDollarsPerHour !== null && data.truePaidDollarsPerHour < data.crewHourTarget
                     ? "warning"
-                    : "neutral"
+                    : data.productionDollarsPerHour !== null &&
+                        data.truePaidDollarsPerHour !== null &&
+                        data.truePaidDollarsPerHour < data.productionDollarsPerHour * 0.8
+                      ? "warning"
+                      : "neutral"
                 }
               />
               <StatTile label="Labor Cost (Mo.)" value={formatCurrency(data.laborCostMonth)} />
