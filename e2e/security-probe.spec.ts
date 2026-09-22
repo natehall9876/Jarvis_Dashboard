@@ -61,4 +61,28 @@ test.describe("security probes (unauthenticated)", () => {
     expect(res?.status()).toBeLessThan(500);
     await expect(page).toHaveURL(/\/login/);
   });
+
+  test("quickbooks oauth connect redirects an unauthenticated visitor to login, not Intuit", async ({ page }) => {
+    const res = await page.goto("/api/integrations/quickbooks/oauth/connect");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("quickbooks oauth callback redirects an unauthenticated visitor to login (never reaches token exchange)", async ({ page }) => {
+    const res = await page.goto("/api/integrations/quickbooks/oauth/callback?code=fake&state=fake&realmId=123");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("google calendar oauth connect redirects an unauthenticated visitor to login, not Google", async ({ page }) => {
+    const res = await page.goto("/api/integrations/google-calendar/oauth/connect");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("google calendar oauth callback redirects an unauthenticated visitor to login (never reaches token exchange)", async ({ page }) => {
+    const res = await page.goto("/api/integrations/google-calendar/oauth/callback?code=fake&state=fake");
+    expect(res?.status()).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/login/);
+  });
 });

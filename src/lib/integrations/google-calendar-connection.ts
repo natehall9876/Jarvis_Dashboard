@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { refreshAccessToken, revokeToken, type GoogleTokenResponse } from "@/lib/integrations/google-calendar-oauth";
+import { isExpiringWithin } from "@/lib/integrations/token-expiry";
 
 /** Same pattern as homeworks-connection.ts / quickbooks-connection.ts — read that file's doc comment for the full reasoning. */
 async function requireAuthenticatedUser(): Promise<{ ok: true; userId: string } | { ok: false }> {
@@ -77,7 +78,7 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
   if (error || !data) return { ok: false, reason: "not_connected", message: "Google Calendar isn't connected yet." };
 
   const safetyMarginMs = 2 * 60 * 1000;
-  if (Date.now() < new Date(data.access_token_expires_at).getTime() - safetyMarginMs) {
+  if (!isExpiringWithin(data.access_token_expires_at, safetyMarginMs)) {
     return { ok: true, accessToken: data.access_token };
   }
 

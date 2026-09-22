@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { exchangeCodeForToken } from "@/lib/integrations/quickbooks-oauth";
 import { saveConnection } from "@/lib/integrations/quickbooks-connection";
+import { validateOAuthCallback } from "@/lib/integrations/oauth-callback-validation";
 
 function redirectWithStatus(request: Request, status: "connected" | "error", message?: string): NextResponse {
   const url = new URL("/settings", request.url);
@@ -18,22 +19,19 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
   const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
   const realmId = url.searchParams.get("realmId");
-  const errorParam = url.searchParams.get("error");
-  if (errorParam) return redirectWithStatus(request, "error", `QuickBooks declined the connection: ${errorParam}`);
-  if (!code) return redirectWithStatus(request, "error", "No authorization code was returned.");
   if (!realmId) return redirectWithStatus(request, "error", "No QuickBooks company (realmId) was returned.");
 
-  const cookieStore = request.headers.get("cookie") ?? "";
-  const stateMatch = cookieStore.match(/qb_oauth_state=([^;]+)/);
-  const expectedState = stateMatch?.[1];
-  if (!expectedState) return redirectWithStatus(request, "error", "The connection attempt expired — try connecting again.");
-  if (state !== expectedState) return redirectWithStatus(request, "error", "State mismatch — the connection attempt may have been tampered with. Try again.");
+  const validation = validateOAuthCallback({
+    searchParams: url.searchParams,
+    cookieHeader: request.headers.get("cookie") ?? "",
+    providerLabel: "QuickBooks",
+    stateCookieName: "qb_oauth_state",
+  });
+  if (!validation.ok) return redirectWithStatus(request, "error", validation.message);
 
   const redirectUri = new URL("/api/integrations/quickbooks/oauth/callback", request.url).toString();
-  const result = await exchangeCodeForToken({ code, redirectUri });
+  const result = await exchangeCodeForToken({ code: validation.code, redirectUri });
   if (!result.ok) return redirectWithStatus(request, "error", result.message);
 
   const saveResult = await saveConnection(result.data, realmId, user.id);

@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { refreshAccessToken, revokeToken, type QuickBooksTokenResponse } from "@/lib/integrations/quickbooks-oauth";
+import { isExpiringWithin } from "@/lib/integrations/token-expiry";
 
 /**
  * Token storage for QuickBooks — same reasoning and same pattern as
@@ -82,10 +83,10 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
   if (error || !data) return { ok: false, reason: "not_connected", message: "QuickBooks isn't connected yet." };
 
   const safetyMarginMs = 2 * 60 * 1000;
-  if (Date.now() >= new Date(data.refresh_token_expires_at).getTime() - safetyMarginMs) {
+  if (isExpiringWithin(data.refresh_token_expires_at, safetyMarginMs)) {
     return { ok: false, reason: "reauth_required", message: "The QuickBooks connection expired (Intuit refresh tokens last about 100 days) — reconnect from Settings." };
   }
-  if (Date.now() < new Date(data.access_token_expires_at).getTime() - safetyMarginMs) {
+  if (!isExpiringWithin(data.access_token_expires_at, safetyMarginMs)) {
     return { ok: true, accessToken: data.access_token, realmId: data.realm_id };
   }
 

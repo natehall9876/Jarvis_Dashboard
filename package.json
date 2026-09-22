@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "verify:no-client-secrets": "node scripts/check-no-client-secrets.mjs",
     "start": "next start",
     "lint": "eslint",
     "typegen": "next typegen",

@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { refreshAccessToken, type TokenResponse } from "@/lib/integrations/homeworks-oauth";
+import { isExpiringWithin } from "@/lib/integrations/token-expiry";
 
 /**
  * homeworks_oauth_connection holds live bearer tokens for an external
@@ -128,9 +129,8 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
     .maybeSingle();
   if (error || !data) return { ok: false, reason: "not_connected", message: "Homeworks isn't connected yet." };
 
-  const expiresAt = new Date(data.expires_at).getTime();
   const safetyMarginMs = 2 * 60 * 1000;
-  if (Date.now() < expiresAt - safetyMarginMs) {
+  if (!isExpiringWithin(data.expires_at, safetyMarginMs)) {
     return { ok: true, accessToken: data.access_token };
   }
 
