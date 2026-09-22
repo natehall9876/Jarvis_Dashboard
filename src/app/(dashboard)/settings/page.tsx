@@ -4,8 +4,12 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { getIntegrationCards, type IntegrationStatus } from "@/lib/data/integrations";
 import { getConnectionStatus } from "@/lib/integrations/homeworks-connection";
-import { isHomeworksOAuthConfigured } from "@/lib/env";
+import { getConnectionStatus as getQuickBooksConnectionStatus } from "@/lib/integrations/quickbooks-connection";
+import { getConnectionStatus as getGoogleCalendarConnectionStatus } from "@/lib/integrations/google-calendar-connection";
+import { isHomeworksOAuthConfigured, isIntegrationConfigured } from "@/lib/env";
 import { HomeworksConnectionCard } from "@/components/settings/homeworks-connection-card";
+import { QuickBooksConnectionCard } from "@/components/settings/quickbooks-connection-card";
+import { GoogleCalendarConnectionCard } from "@/components/settings/google-calendar-connection-card";
 import { CheckCircle2, CircleDashed, TriangleAlert, Upload } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +23,33 @@ const statusMeta: Record<IntegrationStatus, { label: string; tone: BadgeTone; ic
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ homeworks?: string; homeworks_message?: string }>;
+  searchParams: Promise<{
+    homeworks?: string;
+    homeworks_message?: string;
+    quickbooks?: string;
+    quickbooks_message?: string;
+    gcal?: string;
+    gcal_message?: string;
+  }>;
 }) {
-  const [cards, homeworksConnection, { homeworks: homeworksStatus, homeworks_message: homeworksMessage }] = await Promise.all([
+  const [
+    cards,
+    homeworksConnection,
+    quickbooksConnection,
+    googleCalendarConnection,
+    {
+      homeworks: homeworksStatus,
+      homeworks_message: homeworksMessage,
+      quickbooks: quickbooksStatus,
+      quickbooks_message: quickbooksMessage,
+      gcal: gcalStatus,
+      gcal_message: gcalMessage,
+    },
+  ] = await Promise.all([
     getIntegrationCards(),
     getConnectionStatus(),
+    getQuickBooksConnectionStatus(),
+    getGoogleCalendarConnectionStatus(),
     searchParams,
   ]);
 
@@ -42,8 +68,25 @@ export default async function SettingsPage({
         urlMessage={homeworksStatus === "connected" || homeworksStatus === "error" ? { status: homeworksStatus, message: homeworksMessage } : null}
       />
 
+      <QuickBooksConnectionCard
+        connected={quickbooksConnection.connected}
+        connectedAt={quickbooksConnection.connected ? quickbooksConnection.connectedAt : null}
+        realmId={quickbooksConnection.connected ? quickbooksConnection.realmId : null}
+        configured={isIntegrationConfigured("quickbooks")}
+        urlMessage={quickbooksStatus === "connected" || quickbooksStatus === "error" ? { status: quickbooksStatus, message: quickbooksMessage } : null}
+      />
+
+      <GoogleCalendarConnectionCard
+        connected={googleCalendarConnection.connected}
+        connectedAt={googleCalendarConnection.connected ? googleCalendarConnection.connectedAt : null}
+        selectedCalendarId={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarId : null}
+        selectedCalendarSummary={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarSummary : null}
+        configured={isIntegrationConfigured("googleCalendar")}
+        urlMessage={gcalStatus === "connected" || gcalStatus === "error" ? { status: gcalStatus, message: gcalMessage } : null}
+      />
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card) => {
+        {cards.filter((card) => card.key !== "quickbooks" && card.key !== "googleCalendar").map((card) => {
           const meta = statusMeta[card.status];
           return (
             <Card key={card.key}>

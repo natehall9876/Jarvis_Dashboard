@@ -1129,6 +1129,62 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["homeworks_oauth_connection"]["Insert"]>;
         Relationships: [];
       };
+      /** Requires supabase/quickbooks-oauth-migration.sql — not live until that is run. */
+      quickbooks_oauth_connection: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          connected_by: string | null;
+          realm_id: string;
+          access_token: string;
+          refresh_token: string;
+          access_token_expires_at: string;
+          refresh_token_expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          connected_by?: string | null;
+          realm_id: string;
+          access_token: string;
+          refresh_token: string;
+          access_token_expires_at: string;
+          refresh_token_expires_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["quickbooks_oauth_connection"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Requires supabase/google-calendar-oauth-migration.sql — not live until that is run. */
+      google_calendar_oauth_connection: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          connected_by: string | null;
+          access_token: string;
+          refresh_token: string;
+          access_token_expires_at: string;
+          scope: string | null;
+          selected_calendar_id: string | null;
+          selected_calendar_summary: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          connected_by?: string | null;
+          access_token: string;
+          refresh_token: string;
+          access_token_expires_at: string;
+          scope?: string | null;
+          selected_calendar_id?: string | null;
+          selected_calendar_summary?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["google_calendar_oauth_connection"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
