@@ -11,9 +11,10 @@ import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/stat
 import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
 import { getJobPhotoUrls } from "@/lib/supabase/storage";
 import { getPropertyById } from "@/lib/data/properties";
-import { getClientOptions } from "@/lib/data/options";
+import { getClientOptions, getServiceOptions } from "@/lib/data/options";
 import { updateProperty, archiveProperty } from "@/lib/actions/properties";
 import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
+import { ServiceHistoryCard } from "@/components/jobs/service-history-card";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +27,12 @@ export default async function PropertyDetailPage({
 }) {
   const { id } = await params;
   const { edit: isEditing, error: formError } = await searchParams;
-  const [{ data, error }, clientsResult] = await Promise.all([
+  const [{ data, error }, clientsResult, { data: services }] = await Promise.all([
     getPropertyById(id),
     isEditing ? getClientOptions() : Promise.resolve({ data: [], error: null }),
+    getServiceOptions(),
   ]);
+  const serviceNameById = new Map((services ?? []).map((s) => [s.id, s.name]));
 
   if (error?.includes("not configured")) return <NotConfiguredState />;
   if (error) return <ErrorState description={error} />;
@@ -196,6 +199,8 @@ export default async function PropertyDetailPage({
           </CardBody>
         </Card>
       </div>
+
+      <ServiceHistoryCard jobs={jobs} serviceNameById={serviceNameById} />
 
       <Card>
         <CardHeader title="Photos" description={`${photos.length} on file`} />

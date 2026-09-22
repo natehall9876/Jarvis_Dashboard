@@ -28,16 +28,31 @@ export function BusinessPulse({
         <DataStateGate error={error} isEmpty={false}>
           {data ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              <StatTile label="Revenue Today" value={formatCurrency(data.revenueToday)} tone="accent" />
-              <StatTile label="Revenue This Week" value={formatCurrency(data.revenueWeek)} tone="accent" />
-              <StatTile label="Revenue This Month" value={formatCurrency(data.revenueMonth)} tone="accent" />
+              <StatTile label="Completed Job Revenue — Today" value={formatCurrency(data.revenueToday)} tone="accent" sublabel="Work finished, not necessarily paid" />
+              <StatTile label="Completed Job Revenue — This Week" value={formatCurrency(data.revenueWeek)} tone="accent" sublabel="Work finished, not necessarily paid" />
+              <StatTile label="Completed Job Revenue — This Month" value={formatCurrency(data.revenueMonth)} tone="accent" sublabel="Work finished, not necessarily paid" />
+              <StatTile
+                label="Cash Collected (Mo.)"
+                value={formatCurrency(data.cashCollectedMonth)}
+                tone="accent"
+                sublabel="The only figure below that is actually money in hand"
+              />
               <StatTile
                 label="Accounts Receivable"
                 value={formatCurrency(data.accountsReceivable)}
-                sublabel={`${data.outstandingInvoiceCount} outstanding`}
+                sublabel={`${data.outstandingInvoiceCount} outstanding — invoiced, not yet collected`}
                 tone={data.accountsReceivable > 0 ? "warning" : "neutral"}
               />
-              <StatTile label="Cash Collected (Mo.)" value={formatCurrency(data.cashCollectedMonth)} />
+              <StatTile
+                label="Scheduled Revenue (Mo.)"
+                value={formatCurrency(data.scheduledRevenueMonth)}
+                sublabel="Every non-cancelled job on the board this month — a projection, not a result"
+              />
+              <StatTile
+                label="Pending Estimates"
+                value={formatCurrency(data.pendingEstimatesValue)}
+                sublabel={`${data.pendingEstimatesCount} sent, awaiting a decision`}
+              />
               <StatTile
                 label="Field Production $/Hr"
                 value={data.productionDollarsPerHour !== null ? formatCurrency(data.productionDollarsPerHour, true) : "—"}

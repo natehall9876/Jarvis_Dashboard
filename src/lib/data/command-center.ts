@@ -3,6 +3,8 @@ import { todayInZone } from "@/lib/integrations/homeworks-dates";
 import { withDataResult } from "@/lib/data/shared";
 import { getOverdueInvoices } from "@/lib/data/invoices";
 import { getEquipment } from "@/lib/data/equipment";
+import { getOpenTasks, type OwnerTask } from "@/lib/data/notes-tasks";
+import { detectScheduleConflicts, type ScheduleConflict } from "@/lib/scheduling/conflicts";
 import { getDemoClientIds, getDemoPropertyIds } from "@/lib/data/data-source";
 import {
   averageTicket,
@@ -101,6 +103,7 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
 
     const crewMap = new Map<string, { id: string; name: string }>();
     const crewCountByJob: Record<string, number> = {};
+    const crewNamesByJob: Record<string, string[]> = {};
     for (const je of jobEmployees ?? []) {
       const jobId = (je as unknown as { job_id: string }).job_id;
       crewCountByJob[jobId] = (crewCountByJob[jobId] ?? 0) + 1;
@@ -108,6 +111,8 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
         .employee;
       if (employee) {
         crewMap.set(employee.id, { id: employee.id, name: [employee.first_name, employee.last_name].filter(Boolean).join(" ") });
+        const name = [employee.first_name, employee.last_name].filter(Boolean).join(" ");
+        (crewNamesByJob[jobId] ??= []).push(name);
       }
     }
 
@@ -127,11 +132,16 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
       return sentAt !== null && sentAt <= cutoff && q.client?.data_source !== "demo";
     });
 
-    const [overdueResult, equipmentResult] = await Promise.all([getOverdueInvoices(5), getEquipment()]);
+    const [overdueResult, equipmentResult, tasksResult] = await Promise.all([getOverdueInvoices(5), getEquipment(), getOpenTasks(200)]);
 
     const overdueInvoices = overdueResult.data ?? [];
     const equipmentIssues = (equipmentResult.data ?? []).filter(
       (e) => e.status !== "active" || e.maintenance_warning,
+    );
+    const overdueTasks = tasksResult.data.filter((t) => t.dueDate !== null && t.dueDate < today);
+
+    const conflicts = detectScheduleConflicts(
+      activeJobs.map((j) => ({ id: j.id, label: j.service?.name ?? "Job", crew: crewNamesByJob[j.id] ?? [], scheduledStartTime: j.scheduled_start_time, budgetedHours: j.budgeted_hours })),
     );
 
     const expectedRevenue = activeJobs.reduce((sum, j) => sum + (j.price ?? 0), 0);
@@ -142,6 +152,8 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
       quotesNeedingFollowUp,
       equipmentIssues,
       scheduleChanges,
+      conflicts,
+      overdueTasks,
     });
 
     return {
@@ -172,8 +184,29 @@ function buildPriorities(input: {
   quotesNeedingFollowUp: QuoteWithItems[];
   equipmentIssues: EquipmentWithMaintenanceFlag[];
   scheduleChanges: JobWithRelations[];
+  conflicts: ScheduleConflict[];
+  overdueTasks: OwnerTask[];
 }): PriorityItem[] {
   const items: PriorityItem[] = [];
+
+  if (input.conflicts.length > 0) {
+    const first = input.conflicts[0];
+    items.push({
+      label: `${input.conflicts.length} scheduling conflict${input.conflicts.length === 1 ? "" : "s"} today`,
+      detail: `${first.crewMember} double-booked ${first.jobA.start}–${first.jobA.end} & ${first.jobB.start}–${first.jobB.end}`,
+      severity: "critical",
+      href: "/schedule",
+    });
+  }
+
+  if (input.overdueTasks.length > 0) {
+    items.push({
+      label: `${input.overdueTasks.length} overdue task${input.overdueTasks.length === 1 ? "" : "s"}`,
+      detail: input.overdueTasks[0].title,
+      severity: "warning",
+      href: "/",
+    });
+  }
 
   if (input.overdueInvoices.length > 0) {
     const total = input.overdueInvoices.reduce((sum, inv) => sum + inv.balance, 0);
@@ -243,6 +276,17 @@ export type BusinessPulse = {
   quoteAcceptanceRatePct: number | null;
   /** The configurable planning target used for the vs-target comparisons — see lib/calculations.ts. */
   crewHourTarget: number;
+  /**
+   * The price of every non-cancelled job scheduled this month, whatever its
+   * status — this is NOT money owed or earned, only what the board is worth
+   * if everything on it happens. Distinct from revenueMonth (completed jobs
+   * only, the closest thing to "actually earned") and cashCollectedMonth
+   * (the only genuinely collected figure, from real payments).
+   */
+  scheduledRevenueMonth: number;
+  /** Sum of currently-open (sent, undecided) quote totals — work quoted but not yet won or lost. */
+  pendingEstimatesValue: number;
+  pendingEstimatesCount: number;
 };
 
 export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
@@ -253,17 +297,32 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
     const today = todayInZone(now);
     const weekStartStr = toISODate(startOfWeek(now));
     const monthStartStr = toISODate(startOfMonth(now));
+    const monthEndStr = toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
-    const [{ data: monthJobs, error: jobsError }, demoPropertyIds, demoClientIds] = await Promise.all([
+    const [{ data: monthJobs, error: jobsError }, { data: fullMonthJobs, error: fullMonthError }, demoPropertyIds, demoClientIds] = await Promise.all([
       supabase
         .from("jobs")
         .select("id, price, actual_hours, scheduled_date, status, property_id")
         .gte("scheduled_date", monthStartStr)
         .lte("scheduled_date", today),
+      // Separate query covering the WHOLE month (including days not yet reached) —
+      // monthJobs above is deliberately capped at today so completed-revenue math
+      // never counts a future date as if it already happened.
+      supabase
+        .from("jobs")
+        .select("price, status, property_id")
+        .gte("scheduled_date", monthStartStr)
+        .lte("scheduled_date", monthEndStr)
+        .neq("status", "cancelled"),
       getDemoPropertyIds(),
       getDemoClientIds(),
     ]);
     if (jobsError) throw jobsError;
+    if (fullMonthError) throw fullMonthError;
+
+    const scheduledRevenueMonth = (fullMonthJobs ?? [])
+      .filter((j) => !demoPropertyIds.has(j.property_id))
+      .reduce((sum, j) => sum + (j.price ?? 0), 0);
 
     // Confirmed-demo jobs/invoices/quotes are excluded from every figure
     // below — this is the one place Business Pulse's real $ totals are
@@ -301,9 +360,11 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
       0,
     );
 
-    const [invoicesResult, quotesResponse] = await Promise.all([
+    const [invoicesResult, quotesResponse, pendingQuotesResult] = await Promise.all([
       supabase.from("invoices").select("total, amount_paid, status, client_id"),
       supabase.from("quotes").select("status, accepted_at, declined_at, client_id").gte("created_at", monthStartStr),
+      // Not date-scoped — an estimate sent last month and still awaiting a decision is still pending today.
+      supabase.from("quotes").select("total, client_id").eq("status", "sent"),
     ]);
 
     // Void invoices are cancelled debt, not outstanding receivables.
@@ -321,6 +382,9 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
     );
     const acceptedQuotes = decidedQuotes.filter((q) => q.accepted_at !== null);
 
+    const pendingQuotes = (pendingQuotesResult.data ?? []).filter((q) => !demoClientIds.has(q.client_id));
+    const pendingEstimatesValue = pendingQuotes.reduce((sum, q) => sum + q.total, 0);
+
     return {
       revenueToday,
       revenueWeek,
@@ -337,6 +401,9 @@ export async function getBusinessPulse(): Promise<DataResult<BusinessPulse>> {
       jobsCompletedMonth: completedJobs.length,
       quoteAcceptanceRatePct: quoteAcceptanceRate(acceptedQuotes.length, decidedQuotes.length),
       crewHourTarget: DEFAULT_CREW_HOUR_TARGET,
+      scheduledRevenueMonth,
+      pendingEstimatesValue,
+      pendingEstimatesCount: pendingQuotes.length,
     };
   });
 }

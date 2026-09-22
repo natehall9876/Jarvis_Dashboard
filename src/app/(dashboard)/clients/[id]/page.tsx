@@ -12,8 +12,10 @@ import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/stat
 import { formatCurrency, formatDateOnly, clientDisplayName, propertyAddress } from "@/lib/format";
 import { getClientById } from "@/lib/data/clients";
 import { getClientPhotos } from "@/lib/data/client-photos";
+import { getServiceOptions } from "@/lib/data/options";
 import { getJobPhotoUrls } from "@/lib/supabase/storage";
 import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
+import { ServiceHistoryCard } from "@/components/jobs/service-history-card";
 import { updateClient, archiveClient } from "@/lib/actions/clients";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,8 @@ export default async function ClientDetailPage({
 
   const { client, properties, jobs, quotes, invoices, outstanding_balance, balance_verified } = data;
   const clientPhotos = await getClientPhotos(id);
+  const { data: services } = await getServiceOptions();
+  const serviceNameById = new Map((services ?? []).map((s) => [s.id, s.name]));
   const clientPhotoUrls = await getJobPhotoUrls(clientPhotos.data.map((p) => p.storage_path));
   const updateClientWithId = updateClient.bind(null, id);
   const archiveClientWithId = archiveClient.bind(null, id);
@@ -200,6 +204,8 @@ export default async function ClientDetailPage({
           </CardBody>
         </Card>
       </div>
+
+      <ServiceHistoryCard jobs={jobs} serviceNameById={serviceNameById} />
 
       <Card>
         <CardHeader title="Photos" description={`${clientPhotos.data.length} on file`} />

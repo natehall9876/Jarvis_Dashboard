@@ -58,11 +58,21 @@ export async function finalizeJobPhotoUpload(input: PhotoRequest & { path: strin
   }
 
   // Verify against what Storage actually holds, not what the browser claims.
+  // Retried with backoff: Storage's list() can briefly lag behind a just-completed
+  // upload (eventual consistency), and a single failed check here previously meant
+  // a real, successfully-uploaded photo was reported as failed and its row never
+  // created — the object was fine, the verification just ran too early.
   const folder = user.id;
   const fileName = input.path.slice(folder.length + 1);
-  const { data: listed, error: listError } = await supabase.storage.from(JOB_PHOTOS_BUCKET).list(folder, { search: fileName, limit: 5 });
-  const object = listed?.find((o) => o.name === fileName);
-  if (listError || !object) return { ok: false, message: "The upload didn't reach storage — please try again." };
+  let object: { name: string; metadata: unknown } | undefined;
+  let listError: { message: string } | null = null;
+  for (let attempt = 0; attempt < 4 && !object; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    const { data: listed, error } = await supabase.storage.from(JOB_PHOTOS_BUCKET).list(folder, { search: fileName, limit: 5 });
+    listError = error;
+    object = listed?.find((o) => o.name === fileName);
+  }
+  if (listError || !object) return { ok: false, message: "The upload didn't reach storage in time — please try again." };
   const realSize = Number((object.metadata as { size?: number } | null)?.size ?? input.size);
   if (realSize > MAX_PHOTO_BYTES) {
     await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([input.path]);
