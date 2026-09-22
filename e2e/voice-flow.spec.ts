@@ -165,7 +165,10 @@ test.describe("voice flow (simulated microphone)", () => {
     await mic(page).click();
     await say(page, "Pull up Jan Sparfven");
     await expect(page).toHaveURL(/\/voice-lab\/jobs\/lab-job-1$/);
-    await expect(page.getByTestId("lab-main")).toContainText("Lab job page lab-job-1");
+    // lab-job-1 renders the real JobDetailView (see voice-lab/jobs/[id]/page.tsx)
+    // with fixture data — this checks real page content actually rendered,
+    // not a placeholder string.
+    await expect(page.getByTestId("lab-main")).toContainText("Lawn Maintenance");
     expect(requests).toHaveLength(1);
     expect(await mounts(page)).toBe(mountsBefore);
     // The same conversation is still there after navigating.
