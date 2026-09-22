@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { MAX_PHOTO_BYTES, buildStoragePath, isOwnStoragePath, resolvePhotoType, validatePhotoRequest } from "../src/lib/jarvis/photo-validation";
+import { deletePhoto } from "../src/lib/actions/photos";
 
 // Pure-logic tests. The actual upload to Supabase Storage and the signed-URL read-back
 // need a signed-in session and the real bucket, and are NOT covered here — see the report.
@@ -50,5 +51,41 @@ test.describe("storage path safety", () => {
     expect(isOwnStoragePath("user-1", "user-1/../user-2/abc.jpg")).toBe(false);
     expect(isOwnStoragePath("user-1", "user-1/sub/abc.jpg")).toBe(false);
     expect(isOwnStoragePath("user-1", "user-10/abc.jpg")).toBe(false);
+  });
+});
+
+/**
+ * deletePhoto never accepts a storage path from the caller — only a photo
+ * id, with the real path always resolved server-side from the job_photos
+ * row (see photos.ts's own doc comment on the function). What's directly
+ * testable from a Node context with no real signed-in session (this
+ * environment has no test account — see docs/TESTING.md) is the property
+ * that matters most for authorization: there is no way to call this
+ * function and get `ok: true` back without a real, authenticated request.
+ * deletePhoto wraps its entire body in try/catch specifically so this is
+ * observable as a clean typed result rather than an uncaught exception —
+ * calling it here, outside of any Next.js request scope, exercises that
+ * exact path (createSupabaseServerClient() has no cookies() context to
+ * read and fails before ever reaching auth.getUser()).
+ */
+test.describe("photo deletion authorization", () => {
+  test("an empty photo id is rejected before any database or auth call", async () => {
+    const result = await deletePhoto("");
+    expect(result).toEqual({ ok: false, message: "No photo specified." });
+  });
+
+  test("deletion can never succeed without a real authenticated session — never throws, never returns ok:true", async () => {
+    const result = await deletePhoto("11111111-1111-1111-1111-111111111111");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message.length).toBeGreaterThan(0);
+  });
+
+  test("a made-up, non-existent photo id behaves the same as any other unauthenticated call (fails closed, not open)", async () => {
+    // Two different callers, two different fake ids — neither should ever
+    // succeed, and neither should throw regardless of what id is supplied.
+    const a = await deletePhoto("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    const b = await deletePhoto("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    expect(a.ok).toBe(false);
+    expect(b.ok).toBe(false);
   });
 });

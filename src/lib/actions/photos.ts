@@ -125,6 +125,91 @@ export async function finalizeJobPhotoUpload(input: PhotoRequest & { path: strin
   return { ok: true, photoId: inserted.id as string };
 }
 
+export type DeletePhotoResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Takes ONLY a photo id — never a storage path from the client. The real
+ * path is read back from the job_photos row itself, server-side, which is
+ * what makes "deleting one photo can't delete another file" a property of
+ * the code rather than something the caller has to get right: there is no
+ * code path here that can act on any path other than the exact one on the
+ * row the id resolves to.
+ *
+ * Authorization matches every other write in this app: a real signed-in
+ * session, checked here explicitly, through the RLS-scoped client (never
+ * the service-role client). This project has exactly one legitimate
+ * authenticated user — see docs/DECISIONS.md's single-owner RLS model,
+ * already applied identically to every other table — so "authorized to
+ * manage this job's photos" and "signed in" are the same check everywhere
+ * else in the codebase; inventing a second, photo-specific permission
+ * model here would be new surface area the rest of the app doesn't have
+ * and doesn't need.
+ *
+ * Order matters for the partial-failure case: the database row is deleted
+ * FIRST, then the storage object. If the row delete succeeds but the
+ * storage delete then fails, the result is an orphaned file in Storage —
+ * invisible to the app (nothing references it, it just sits there) and
+ * cleanable later, never a broken UI. The reverse order would risk the
+ * opposite: a storage object gone but a DB row still pointing at it, which
+ * would render as a visibly broken photo. The storage delete failing does
+ * NOT fail this action — the photo is already gone from the app's own
+ * data, which is what the owner asked for.
+ */
+export async function deletePhoto(photoId: string): Promise<DeletePhotoResult> {
+  if (!photoId) return { ok: false, message: "No photo specified." };
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "You must be signed in to delete a photo." };
+
+    const { data: photo, error: fetchError } = await supabase
+      .from("job_photos")
+      .select("id, storage_path, job_id, property_id, client_id, caption")
+      .eq("id", photoId)
+      .maybeSingle();
+    if (fetchError) return { ok: false, message: fetchError.message };
+    if (!photo) return { ok: false, message: "That photo no longer exists." };
+
+    const { error: deleteRowError } = await supabase.from("job_photos").delete().eq("id", photoId);
+    if (deleteRowError) return { ok: false, message: deleteRowError.message };
+
+    const { error: deleteStorageError } = await supabase.storage.from(JOB_PHOTOS_BUCKET).remove([photo.storage_path]);
+    if (deleteStorageError) {
+      // Logged, not surfaced as a failure — see the doc comment above.
+      console.error("[deletePhoto] DB row removed but storage cleanup failed", { photoId, message: deleteStorageError.message });
+    }
+
+    // job_photos_has_association (photo-upload-migration.sql) guarantees at
+    // least one of these is set — never log against an entity type the
+    // photo wasn't actually associated with.
+    const [entityType, entityId] = photo.job_id
+      ? (["job", photo.job_id] as const)
+      : photo.property_id
+        ? (["property", photo.property_id] as const)
+        : (["client", photo.client_id as string] as const);
+    await logActivity({
+      entityType,
+      entityId,
+      eventType: "job_photo_deleted",
+      summary: photo.caption ? `Photo deleted: "${photo.caption}"` : "Photo deleted",
+      detail: { photo_id: photoId },
+      source: "owner",
+    });
+
+    if (photo.job_id) revalidatePath(`/jobs/${photo.job_id}`);
+    if (photo.property_id) revalidatePath(`/properties/${photo.property_id}`);
+    if (photo.client_id) revalidatePath(`/clients/${photo.client_id}`);
+    return { ok: true };
+  } catch (err) {
+    // Matches every other action in this file: never throws, always a
+    // typed result — including when createSupabaseServerClient() itself
+    // fails (e.g. no request scope, or Supabase not configured).
+    return { ok: false, message: err instanceof Error ? err.message : "Couldn't delete this photo." };
+  }
+}
+
 function optional(formData: FormData, key: string): string | null {
   const value = formData.get(key);
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;

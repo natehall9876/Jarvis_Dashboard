@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Archive, TriangleAlert } from "lucide-react";
+import { Pencil, Archive } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { getClientPhotos } from "@/lib/data/client-photos";
 import { getServiceOptions } from "@/lib/data/options";
 import { getJobPhotoUrls } from "@/lib/supabase/storage";
 import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
+import { PhotoGrid } from "@/components/photos/photo-grid";
 import { ServiceHistoryCard } from "@/components/jobs/service-history-card";
 import { updateClient, archiveClient } from "@/lib/actions/clients";
 
@@ -212,34 +213,12 @@ export default async function ClientDetailPage({
         <CardBody className="space-y-4">
           <PhotoUploadForm clientId={id} />
           {clientPhotos.error ? <p className="text-xs text-[var(--color-warning)]">{clientPhotos.error}</p> : null}
-          {clientPhotos.data.length === 0 ? (
-            <EmptyState title="No photos yet" description="Photos of this customer's properties and work appear here." />
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {clientPhotoUrlsError ? (
-                <div className="col-span-2 sm:col-span-4">
-                  <p className="flex items-start gap-1.5 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
-                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    Photo previews are temporarily unavailable ({clientPhotoUrlsError}) — the {clientPhotos.data.length} file{clientPhotos.data.length === 1 ? "" : "s"} on record are unaffected.
-                  </p>
-                </div>
-              ) : null}
-              {clientPhotos.data.map((photo) => {
-                const url = clientPhotoUrls.get(photo.storage_path);
-                return (
-                  <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                    {url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={url} alt={photo.caption ?? "Customer photo"} className="h-28 w-full object-cover" />
-                    ) : (
-                      <div className="flex h-28 w-full items-center justify-center bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-muted)]">Unavailable</div>
-                    )}
-                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">{photo.caption ?? "Photo"}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <PhotoGrid
+            photos={clientPhotos.data}
+            photoUrls={clientPhotoUrls}
+            photoUrlsError={clientPhotoUrlsError}
+            emptyDescription="Photos of this customer's properties and work appear here."
+          />
         </CardBody>
       </Card>
 

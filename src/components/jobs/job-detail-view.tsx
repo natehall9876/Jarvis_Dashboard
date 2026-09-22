@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Pencil, TriangleAlert } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { formatCurrency, formatDateOnly, formatHours, formatTime, formatTimeStri
 import { jobProductionRate, type JobDetail } from "@/lib/data/jobs";
 import { ActivityTimeline } from "@/components/ui/activity-timeline";
 import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
+import { PhotoGrid } from "@/components/photos/photo-grid";
 import { JobNotes } from "@/components/jobs/job-notes";
 import type { JobNote } from "@/lib/data/notes-tasks";
 import type { ActivityEvent } from "@/lib/data/activity-log";
@@ -209,37 +210,8 @@ export function JobDetailView({
           <PhotoUploadForm jobId={id} />
           {job.sectionErrors.photos ? (
             <ErrorState title="Couldn't load photos" description={job.sectionErrors.photos} />
-          ) : job.photos.length === 0 ? (
-            <EmptyState title="No photos yet" />
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {photoUrlsError ? (
-                <div className="col-span-2 sm:col-span-4">
-                  <p className="flex items-start gap-1.5 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
-                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    Photo previews are temporarily unavailable ({photoUrlsError}) — the {job.photos.length} file{job.photos.length === 1 ? "" : "s"} on record are unaffected.
-                  </p>
-                </div>
-              ) : null}
-              {job.photos.map((photo) => {
-                const url = photoUrls.get(photo.storage_path);
-                return (
-                  <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                    {url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={url} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
-                    ) : (
-                      <div className="flex h-28 w-full items-center justify-center bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-muted)]">
-                        Unavailable
-                      </div>
-                    )}
-                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
-                      {photo.caption ?? photo.photo_type ?? "Photo"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <PhotoGrid photos={job.photos} photoUrls={photoUrls} photoUrlsError={photoUrlsError} />
           )}
         </CardBody>
       </Card>

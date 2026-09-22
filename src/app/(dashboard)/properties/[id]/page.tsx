@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Archive, TriangleAlert } from "lucide-react";
+import { Pencil, Archive } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { getPropertyById } from "@/lib/data/properties";
 import { getClientOptions, getServiceOptions } from "@/lib/data/options";
 import { updateProperty, archiveProperty } from "@/lib/actions/properties";
 import { PhotoUploadForm } from "@/components/photos/photo-upload-form";
+import { PhotoGrid } from "@/components/photos/photo-grid";
 import { ServiceHistoryCard } from "@/components/jobs/service-history-card";
 
 export const dynamic = "force-dynamic";
@@ -207,35 +208,7 @@ export default async function PropertyDetailPage({
         <CardHeader title="Photos" description={`${photos.length} on file`} />
         <CardBody className="space-y-4">
           <PhotoUploadForm propertyId={id} clientId={client?.id} />
-          {photos.length === 0 ? (
-            <EmptyState title="No photos yet" description="Before/after photos from completed jobs will appear here." />
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {photoUrlsError ? (
-                <div className="col-span-2 sm:col-span-4">
-                  <p className="flex items-start gap-1.5 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
-                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    Photo previews are temporarily unavailable ({photoUrlsError}) — the {photos.length} file{photos.length === 1 ? "" : "s"} on record are unaffected.
-                  </p>
-                </div>
-              ) : null}
-              {photos.map((photo) => {
-                const url = photoUrls.get(photo.storage_path);
-                return (
-                  <div key={photo.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                    {url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={url} alt={photo.caption ?? photo.photo_type ?? "Job photo"} className="h-28 w-full object-cover" />
-                    ) : (
-                      <div className="flex h-28 w-full items-center justify-center bg-[var(--color-surface-2)] text-[10px] text-[var(--color-text-muted)]">
-                        Unavailable
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <PhotoGrid photos={photos} photoUrls={photoUrls} photoUrlsError={photoUrlsError} emptyDescription="Before/after photos from completed jobs will appear here." />
         </CardBody>
       </Card>
 
