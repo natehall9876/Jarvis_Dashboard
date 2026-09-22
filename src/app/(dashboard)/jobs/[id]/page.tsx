@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { Pencil, TriangleAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ export default async function JobDetailPage({
   if (error) return <ErrorState description={error} />;
   if (!job) notFound();
 
-  const photoUrls = await getJobPhotoUrls(job.photos.map((p) => p.storage_path));
+  const { urls: photoUrls, error: photoUrlsError } = await getJobPhotoUrls(job.photos.map((p) => p.storage_path));
   const rate = jobProductionRate(job);
   const client = job.property?.client ?? null;
   const updateJobWithId = updateJob.bind(null, id);
@@ -91,9 +91,11 @@ export default async function JobDetailPage({
         </Card>
 
         <Card>
-          <CardHeader title="Crew" description={`${job.crew.length} assigned`} />
+          <CardHeader title="Crew" description={job.sectionErrors.crew ? undefined : `${job.crew.length} assigned`} />
           <CardBody>
-            {job.crew.length === 0 ? (
+            {job.sectionErrors.crew ? (
+              <ErrorState title="Couldn't load crew" description={job.sectionErrors.crew} />
+            ) : job.crew.length === 0 ? (
               <EmptyState title="No crew assigned" />
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
@@ -114,9 +116,11 @@ export default async function JobDetailPage({
         </Card>
 
         <Card>
-          <CardHeader title="Equipment" description={`${job.equipment.length} used`} />
+          <CardHeader title="Equipment" description={job.sectionErrors.equipment ? undefined : `${job.equipment.length} used`} />
           <CardBody>
-            {job.equipment.length === 0 ? (
+            {job.sectionErrors.equipment ? (
+              <ErrorState title="Couldn't load equipment" description={job.sectionErrors.equipment} />
+            ) : job.equipment.length === 0 ? (
               <EmptyState title="No equipment logged" />
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
@@ -144,9 +148,11 @@ export default async function JobDetailPage({
         </Card>
 
         <Card>
-          <CardHeader title="Materials" description={`${job.materials.length} used`} />
+          <CardHeader title="Materials" description={job.sectionErrors.materials ? undefined : `${job.materials.length} used`} />
           <CardBody>
-            {job.materials.length === 0 ? (
+            {job.sectionErrors.materials ? (
+              <ErrorState title="Couldn't load materials" description={job.sectionErrors.materials} />
+            ) : job.materials.length === 0 ? (
               <EmptyState title="No materials logged" />
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
@@ -190,13 +196,23 @@ export default async function JobDetailPage({
       </Card>
 
       <Card>
-        <CardHeader title="Before / After Photos" description={`${job.photos.length} on file`} />
+        <CardHeader title="Before / After Photos" description={job.sectionErrors.photos ? undefined : `${job.photos.length} on file`} />
         <CardBody className="space-y-4">
           <PhotoUploadForm jobId={id} />
-          {job.photos.length === 0 ? (
+          {job.sectionErrors.photos ? (
+            <ErrorState title="Couldn't load photos" description={job.sectionErrors.photos} />
+          ) : job.photos.length === 0 ? (
             <EmptyState title="No photos yet" />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {photoUrlsError ? (
+                <div className="col-span-2 sm:col-span-4">
+                  <p className="flex items-start gap-1.5 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    Photo previews are temporarily unavailable ({photoUrlsError}) — the {job.photos.length} file{job.photos.length === 1 ? "" : "s"} on record are unaffected.
+                  </p>
+                </div>
+              ) : null}
               {job.photos.map((photo) => {
                 const url = photoUrls.get(photo.storage_path);
                 return (

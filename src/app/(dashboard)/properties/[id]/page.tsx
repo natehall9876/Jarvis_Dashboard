@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Archive } from "lucide-react";
+import { Pencil, Archive, TriangleAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -40,7 +40,7 @@ export default async function PropertyDetailPage({
   if (!data) notFound();
 
   const { property, client, route, agreements, jobs, quotes, invoices, photos } = data;
-  const photoUrls = await getJobPhotoUrls(photos.map((p) => p.storage_path));
+  const { urls: photoUrls, error: photoUrlsError } = await getJobPhotoUrls(photos.map((p) => p.storage_path));
   const updatePropertyWithId = updateProperty.bind(null, id);
   const archivePropertyWithId = archiveProperty.bind(null, id);
 
@@ -211,6 +211,14 @@ export default async function PropertyDetailPage({
             <EmptyState title="No photos yet" description="Before/after photos from completed jobs will appear here." />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {photoUrlsError ? (
+                <div className="col-span-2 sm:col-span-4">
+                  <p className="flex items-start gap-1.5 rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
+                    <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    Photo previews are temporarily unavailable ({photoUrlsError}) — the {photos.length} file{photos.length === 1 ? "" : "s"} on record are unaffected.
+                  </p>
+                </div>
+              ) : null}
               {photos.map((photo) => {
                 const url = photoUrls.get(photo.storage_path);
                 return (

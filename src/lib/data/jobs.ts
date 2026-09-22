@@ -56,6 +56,21 @@ export type JobDetail = JobWithRelations & {
   equipment: (JobEquipment & { equipment: { id: string; name: string } | null })[];
   materials: JobMaterial[];
   photos: JobPhoto[];
+  /**
+   * A failing related query (crew/equipment/materials/photos/time entries)
+   * must never blank the whole job page — the core job record loaded fine,
+   * so it renders. But silently falling back to `[]` on a real query error
+   * would show a lie ("No crew assigned") instead of a failure ("couldn't
+   * load crew"). These carry that distinction into the page so each section
+   * can render its own honest error instead of a false empty state.
+   */
+  sectionErrors: {
+    crew: string | null;
+    timeEntries: string | null;
+    equipment: string | null;
+    materials: string | null;
+    photos: string | null;
+  };
 };
 
 export async function getJobById(id: string): Promise<DataResult<JobDetail | null>> {
@@ -65,17 +80,22 @@ export async function getJobById(id: string): Promise<DataResult<JobDetail | nul
     const job = await getOrNotFound(supabase.from("jobs").select(JOB_RELATIONS_SELECT).eq("id", id).maybeSingle());
     if (!job) return null;
 
-    const [{ data: jobEmployees }, { data: timeEntries }, { data: equipment }, { data: materials }, { data: photos }] =
-      await Promise.all([
-        supabase
-          .from("job_employees")
-          .select("hours_worked, employee:employees(id, first_name, last_name)")
-          .eq("job_id", id),
-        supabase.from("time_entries").select("*").eq("job_id", id),
-        supabase.from("job_equipment").select("*, equipment:equipment(id, name)").eq("job_id", id),
-        supabase.from("job_materials").select("*").eq("job_id", id),
-        supabase.from("job_photos").select("*").eq("job_id", id),
-      ]);
+    const [
+      { data: jobEmployees, error: crewErr },
+      { data: timeEntries, error: timeEntriesErr },
+      { data: equipment, error: equipmentErr },
+      { data: materials, error: materialsErr },
+      { data: photos, error: photosErr },
+    ] = await Promise.all([
+      supabase
+        .from("job_employees")
+        .select("hours_worked, employee:employees(id, first_name, last_name)")
+        .eq("job_id", id),
+      supabase.from("time_entries").select("*").eq("job_id", id),
+      supabase.from("job_equipment").select("*, equipment:equipment(id, name)").eq("job_id", id),
+      supabase.from("job_materials").select("*").eq("job_id", id),
+      supabase.from("job_photos").select("*").eq("job_id", id),
+    ]);
 
     const crew = (jobEmployees ?? [])
       .map((je) => {
@@ -94,6 +114,13 @@ export async function getJobById(id: string): Promise<DataResult<JobDetail | nul
       equipment: (equipment ?? []) as unknown as JobDetail["equipment"],
       materials: materials ?? [],
       photos: photos ?? [],
+      sectionErrors: {
+        crew: crewErr ? crewErr.message : null,
+        timeEntries: timeEntriesErr ? timeEntriesErr.message : null,
+        equipment: equipmentErr ? equipmentErr.message : null,
+        materials: materialsErr ? materialsErr.message : null,
+        photos: photosErr ? photosErr.message : null,
+      },
     };
   });
 }
