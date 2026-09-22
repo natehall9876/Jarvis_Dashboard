@@ -131,3 +131,67 @@ export function reconcileDay(input: {
     rows,
   };
 }
+
+export type ReconRangeResult = {
+  from: string;
+  to: string;
+  days: ReconResult[];
+  /**
+   * `totals.homeworks`/`totals.jarvis` are sums of each day's own totals —
+   * a multi-day Homeworks event (start before the day, end on/after it)
+   * legitimately appears on every day it spans, same as the single-day
+   * schedule view already shows it, so this is "job-days in range", not
+   * "distinct events in range". `uniqueHomeworksEvents` is the distinct
+   * count, for whichever question is actually being asked.
+   */
+  totals: { homeworks: number; jarvis: number; matched: number; missing: number; extra: number };
+  uniqueHomeworksEvents: number;
+};
+
+/**
+ * Runs reconcileDay for every calendar date in [from, to] against the SAME
+ * shared Homeworks/Jarvis data (fetched once for the whole range, not once
+ * per day) and aggregates the totals — the previous reconciliation feature
+ * only ever covered one calendar day at a time (confirmed by reading
+ * reconcileHomeworksDay before this was added), which is exactly the gap
+ * named explicitly: "the earlier reported 62 September events, 15 this
+ * week... are timestamped observations, not permanent expected totals" —
+ * this is what lets the owner re-run that comparison for any range, live,
+ * from inside the app itself, using the app's own authenticated Homeworks
+ * connection and its own Jarvis database — not a one-off script.
+ *
+ * Deliberately read-only, same as reconcileDay: this NEVER writes to the
+ * jobs table or any other Jarvis record. It only explains differences.
+ */
+export function reconcileRange(input: {
+  from: string;
+  to: string;
+  dates: string[];
+  hwEvents: ReconEvent[];
+  jarvisJobs: ReconJarvisJob[];
+  linkedPropertyHwIds: Set<string>;
+  hwLookup: Map<string, ReconEvent>;
+}): ReconRangeResult {
+  const jarvisJobsByHwId = new Map<string, ReconJarvisJob>();
+  for (const j of input.jarvisJobs) if (j.homeworks_id) jarvisJobsByHwId.set(j.homeworks_id, j);
+
+  const days = input.dates.map((date) =>
+    reconcileDay({
+      date,
+      hwEvents: input.hwEvents,
+      jarvisJobsOnDate: input.jarvisJobs.filter((j) => j.scheduled_date === date),
+      jarvisJobsByHwId,
+      linkedPropertyHwIds: input.linkedPropertyHwIds,
+      hwLookup: input.hwLookup,
+    }),
+  );
+
+  const sum = (key: keyof ReconResult["totals"]) => days.reduce((n, d) => n + d.totals[key], 0);
+  return {
+    from: input.from,
+    to: input.to,
+    days,
+    totals: { homeworks: sum("homeworks"), jarvis: sum("jarvis"), matched: sum("matched"), missing: sum("missing"), extra: sum("extra") },
+    uniqueHomeworksEvents: new Set(input.hwEvents.map((e) => e.id)).size,
+  };
+}

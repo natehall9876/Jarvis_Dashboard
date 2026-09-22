@@ -46,6 +46,17 @@ export function rangeForDays(days: number, now: Date = new Date()): DateRange {
   return { from, to: addDaysISO(from, days) };
 }
 
+/** Every calendar date from `from` to `to`, inclusive, as YYYY-MM-DD strings. */
+export function datesInRange(range: DateRange): string[] {
+  const dates: string[] = [];
+  let d = range.from;
+  while (d <= range.to) {
+    dates.push(d);
+    d = addDaysISO(d, 1);
+  }
+  return dates;
+}
+
 export function validateRange(range: DateRange): { ok: true } | { ok: false; message: string } {
   if (!isISODate(range.from) || !isISODate(range.to)) return { ok: false, message: "Dates must be valid YYYY-MM-DD values." };
   if (range.to < range.from) return { ok: false, message: "The end date is before the start date." };
