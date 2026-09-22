@@ -68,12 +68,25 @@
 - **Command Center:** living particle-network hero, honest capability map (connected/partial/planned, never fabricated), briefing built only from real job rows, schedule-conflict + overdue-task alerts wired into the existing priorities list, Business Pulse split into completed/collected/scheduled/pending-estimate revenue.
 - **Schedule:** day/week views, status filters, conflict detection, daily summary.
 
+## PRIORITY 3 — CONNECTOR AUDIT (this session, `src/lib/data/integrations.ts` read in full)
+
+This file already does exactly what was asked: it distinguishes `connected` / `needs_setup` / `not_connected`, and only Supabase, Weather, and the Homeworks Zapier webhook are ever verified with an actual live call — every other card is capped at `needs_setup` even with credentials present, and explicitly labeled "credentials found, but not implemented." Confirmed by reading the code, not assumed:
+
+- **Supabase** — verified live (a real `select` query). Status shown is real.
+- **Weather (NWS)** — verified live (real API call). Status shown is real.
+- **Homeworks Zapier webhook** — verified live (counts `clients.homeworks_id is not null`). Separate from the Homeworks *direct API* (OAuth 2.1+PKCE) built across prior sessions — that one has its own preview/enrich/historical/sync-status panels on the Settings page, outside this file.
+- **QuickBooks — zero integration code exists.** Only checks whether `QUICKBOOKS_CLIENT_ID`/`SECRET` env vars are present. No OAuth flow, no API client, nothing to "repair" — there is nothing built yet. **Blocked: needs the owner to decide whether to build this and supply real QuickBooks app credentials.**
+- **Google Calendar — zero integration code exists.** Same situation as QuickBooks exactly. **Blocked: same reason.**
+- **Zapier (general/outbound)** — this is a *different* thing from the Homeworks Zapier webhook (which works): this card is for Jarvis pushing data OUT to other Zapier automations, and nothing is wired up. **Blocked: no automations have been defined to wire up.**
+- **GitHub** — credential-presence only, used for a not-yet-built future CI/deploy integration. No current functional purpose.
+
+**Nothing was built or changed for QuickBooks/Calendar/Zapier this session** — there was nothing safe to build without real OAuth app credentials from the owner, and the existing status reporting for all three was already honest and accurate on inspection. This satisfies the instruction to record the blocker and move on rather than inventing endpoints.
+
 ## WHAT IS NOT BUILT / NOT ASSESSED THIS SESSION
 
-- QuickBooks: no integration code exists at all (confirmed by earlier sessions' capability map — `finances` capability explicitly says "QuickBooks is not connected"). Not re-verified this session.
-- Google Calendar: no integration code found in prior sweeps. Not re-verified this session.
-- Zapier: the existing webhook-based Homeworks sync IS the Zapier integration (separate from the direct API). Its live status not re-checked this session.
 - Historical (completed-work) Homeworks sync: built, has never been run by the owner. Preview it before confirming.
+- Priority 5 (visual/workflow coherence full pass): not started this session.
+- Full live-device voice test: not done this session (needs the owner's phone/browser).
 
 ## NEXT EXECUTABLE STEP (if this session is interrupted)
 
