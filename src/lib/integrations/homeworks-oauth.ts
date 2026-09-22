@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "crypto";
-import { homeworksOAuthEnv } from "@/lib/env";
+import { homeworksOAuthEnv } from "@/lib/env.server";
 
 /**
  * Real Homeworks OAuth 2.1 + PKCE client — verified live against

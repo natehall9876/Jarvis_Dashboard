@@ -1,4 +1,4 @@
-import { integrationEnv, isIntegrationConfigured } from "@/lib/env";
+import { integrationEnv, isIntegrationConfigured } from "@/lib/env.server";
 import type {
   AICompletionResult,
   AIContentBlock,

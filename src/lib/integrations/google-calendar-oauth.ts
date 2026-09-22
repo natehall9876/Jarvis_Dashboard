@@ -1,4 +1,4 @@
-import { integrationEnv } from "@/lib/env";
+import { integrationEnv } from "@/lib/env.server";
 
 /**
  * Google OAuth 2.0 (standard Authorization Code flow) for read-only

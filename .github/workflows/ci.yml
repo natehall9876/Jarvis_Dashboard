@@ -48,3 +48,10 @@ jobs:
         # the build require real values, add them as repository secrets and
         # reference them here — never hardcode a value in this file.
         run: npm run build
+
+      - name: Verify no server secrets leaked into the client bundle
+        # Checks the actual shipped .next/static/ output for OAuth client
+        # secrets, the Supabase service-role key, webhook secrets, and
+        # provider token endpoints — found and fixed once already (see
+        # scripts/check-no-client-secrets.mjs's own doc comment).
+        run: npm run verify:no-client-secrets

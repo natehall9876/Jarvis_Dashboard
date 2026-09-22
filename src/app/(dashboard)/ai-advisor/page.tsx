@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AskAdvisor } from "@/components/ai-advisor/ask-advisor";
-import { isIntegrationConfigured } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/env.server";
 
 export const dynamic = "force-dynamic";
 

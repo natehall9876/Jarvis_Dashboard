@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { homeworksWebhookEnv } from "@/lib/env";
+import { homeworksWebhookEnv } from "@/lib/env.server";
 import { isValidHomeworksSyncPayload, syncHomeworksEntity } from "@/lib/integrations/homeworks-sync";
 
 /**

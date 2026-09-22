@@ -6,7 +6,7 @@ import { getIntegrationCards, type IntegrationStatus } from "@/lib/data/integrat
 import { getConnectionStatus } from "@/lib/integrations/homeworks-connection";
 import { getConnectionStatus as getQuickBooksConnectionStatus } from "@/lib/integrations/quickbooks-connection";
 import { getConnectionStatus as getGoogleCalendarConnectionStatus } from "@/lib/integrations/google-calendar-connection";
-import { isHomeworksOAuthConfigured, isIntegrationConfigured } from "@/lib/env";
+import { isHomeworksOAuthConfigured, isIntegrationConfigured } from "@/lib/env.server";
 import { HomeworksConnectionCard } from "@/components/settings/homeworks-connection-card";
 import { QuickBooksConnectionCard } from "@/components/settings/quickbooks-connection-card";
 import { GoogleCalendarConnectionCard } from "@/components/settings/google-calendar-connection-card";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isHomeworksOAuthConfigured } from "@/lib/env";
+import { isHomeworksOAuthConfigured } from "@/lib/env.server";
 import { generateCodeVerifier, codeChallengeFromVerifier, buildAuthorizationUrl } from "@/lib/integrations/homeworks-oauth";
 
 /**

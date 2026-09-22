@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isIntegrationConfigured } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/env.server";
 import { buildAuthorizationUrl } from "@/lib/integrations/google-calendar-oauth";
 
 /**

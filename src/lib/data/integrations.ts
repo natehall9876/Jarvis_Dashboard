@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured, isIntegrationConfigured, integrationEnv, homeworksWebhookEnv, supabaseServiceRoleKey } from "@/lib/env";
+import { isSupabaseConfigured } from "@/lib/env";
+import { isIntegrationConfigured, integrationEnv, homeworksWebhookEnv, supabaseServiceRoleKey } from "@/lib/env.server";
 import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
 type IntegrationKey = keyof typeof integrationEnv;

@@ -1,4 +1,4 @@
-import { integrationEnv, isIntegrationConfigured } from "@/lib/env";
+import { integrationEnv, isIntegrationConfigured } from "@/lib/env.server";
 
 /**
  * Fires a Zapier "Catch Hook" webhook so external Zaps can react to Jarvis

@@ -1,7 +1,7 @@
 import { CloudRain, CloudOff, CloudSun, TriangleAlert } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { integrationEnv, isIntegrationConfigured } from "@/lib/env";
+import { integrationEnv, isIntegrationConfigured } from "@/lib/env.server";
 import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
 const weatherTitle = (
