@@ -5,6 +5,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, optionalNumber, requiredNumber, withError, runMutation } from "./shared";
 import { VALID_JOB_STATUSES } from "./job-constants";
 import { logActivity } from "@/lib/data/activity-log";
+import { getJobsForDate } from "@/lib/data/jobs";
+import { todayInZone } from "@/lib/integrations/homeworks-dates";
+import { clientDisplayName } from "@/lib/format";
 import type { JobInsert, JobUpdate } from "@/types/domain";
 
 function jobFieldsFromForm(formData: FormData): JobInsert {
@@ -111,6 +114,34 @@ export async function updateJob(jobId: string, formData: FormData) {
   });
   if (!result.ok) redirect(withError(`/jobs/${jobId}?edit=1`, result.message));
   redirect(`/jobs/${jobId}`);
+}
+
+export type FirstJobTodayResult = { ok: true; job: { id: string; label: string } | null } | { ok: false; message: string };
+
+/**
+ * Backs the voice command "open the first job" (see
+ * lib/jarvis/voice-utils.ts's FIRST_JOB intent). Resolves against the EXACT
+ * same query and ordering the Schedule page itself uses for its day view
+ * (getJobsForDate -> getJobs, ordered by scheduled_date then
+ * scheduled_start_time, nulls first) — "first" means whatever a human
+ * looking at today's Schedule page would call the first job, not a
+ * separate, possibly-inconsistent definition. `job: null` (not an error)
+ * when today genuinely has no jobs — never invents one.
+ */
+export async function getFirstJobToday(): Promise<FirstJobTodayResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "You must be signed in." };
+
+  const { data: jobs, error } = await getJobsForDate(todayInZone());
+  if (error) return { ok: false, message: error };
+  if (!jobs || jobs.length === 0) return { ok: true, job: null };
+
+  const first = jobs[0];
+  const label = `${first.service?.name ?? "Job"} for ${clientDisplayName(first.property?.client)}`;
+  return { ok: true, job: { id: first.id, label } };
 }
 
 export async function changeJobStatus(jobId: string, redirectTo: string, formData: FormData) {

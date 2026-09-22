@@ -61,8 +61,28 @@ function job(overrides: Partial<JobDetail>): JobDetail {
   } as JobDetail;
 }
 
+// Two tiny inline SVG data URIs — real, renderable images with no network
+// dependency, so the photo grid's delete/preview UI can be reviewed against
+// something that actually loads, not just an "Unavailable" placeholder.
+const BEFORE_PHOTO_URL =
+  "data:image/svg+xml;base64," +
+  Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect width="200" height="150" fill="#3a2a1a"/><text x="100" y="80" fill="#e8c9a0" font-size="16" text-anchor="middle">Before</text></svg>').toString("base64");
+const AFTER_PHOTO_URL =
+  "data:image/svg+xml;base64," +
+  Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect width="200" height="150" fill="#1a3a1f"/><text x="100" y="80" fill="#a0e8b0" font-size="16" text-anchor="middle">After</text></svg>').toString("base64");
+
+export const FIXTURE_PHOTO_URLS: Record<string, string> = {
+  "lab/before.svg": BEFORE_PHOTO_URL,
+  "lab/after.svg": AFTER_PHOTO_URL,
+};
+
 export const FIXTURE_JOBS: Record<string, JobDetail> = {
-  "lab-job-1": job({}),
+  "lab-job-1": job({
+    photos: [
+      { id: "lab-photo-before", job_id: "lab-job-1", storage_path: "lab/before.svg", caption: "Before — overgrown beds", photo_type: "before", created_at: "2026-09-20T12:00:00Z" } as JobDetail["photos"][number],
+      { id: "lab-photo-after", job_id: "lab-job-1", storage_path: "lab/after.svg", caption: "After — trimmed and mulched", photo_type: "after", created_at: "2026-09-20T13:00:00Z" } as JobDetail["photos"][number],
+    ],
+  }),
   "lab-job-error": job({
     crew: [],
     equipment: [],

@@ -2,10 +2,11 @@
  * Central place for reading and validating PUBLIC, client-safe environment
  * configuration only. Everything secret (OAuth client secrets, webhook
  * shared secrets, the Supabase service-role key) lives in
- * src/lib/env.server.ts instead, guarded by the `server-only` package so
- * importing it from client-reachable code is a build error rather than a
- * silent bundling accident — see that file's doc comment for the real
- * problem this split fixes.
+ * src/lib/env.server.ts instead. That file's own doc comment explains both
+ * the real problem this split fixes and why it's enforced by a build-time
+ * check on the actual shipped output (scripts/check-no-client-secrets.mjs)
+ * rather than the `server-only` package, which was tried and reverted —
+ * it broke this project's own Node-based tests.
  *
  * Nothing in this file throws at import time — pages and data-access
  * functions must be able to render "not configured" states instead of

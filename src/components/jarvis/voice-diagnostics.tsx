@@ -27,18 +27,25 @@ const MIC_PERMISSION_LABEL: Record<string, string> = {
  */
 export function VoiceDiagnostics() {
   const jarvis = useJarvis();
-  const { voiceSupported, speechOutputSupported, micPermission, visualState, listening, speaking, loading, muted, conversationMode, lastVoiceError, lastVoiceErrorAt } = jarvis;
+  const { voiceSupported, speechOutputSupported, micPermission, visualState, listening, speaking, loading, muted, conversationMode, lastVoiceError, lastVoiceErrorAt, lastTranscript, lastTranscriptAt } = jarvis;
 
   return (
     <details className="rounded-lg border border-[var(--color-border)] text-xs" data-testid="voice-diagnostics">
       <summary className="cursor-pointer px-3 py-2 font-medium text-[var(--color-text-secondary)]">Voice diagnostics</summary>
       <div className="space-y-1.5 border-t border-[var(--color-border)] px-3 py-2 text-[var(--color-text-secondary)]">
-        <Row label="Voice input (speech-to-text)" value={voiceSupported ? "Supported in this browser" : "Not supported — Chrome, Edge, or Safari required"} />
+        <Row
+          label="Voice input (speech-to-text)"
+          value={voiceSupported ? "Supported in this browser" : "Not supported — try Chrome or Edge (iOS/iPadOS doesn't support voice input in any browser; typing still works)"}
+        />
         <Row label="Spoken replies (text-to-speech)" value={speechOutputSupported ? "Supported in this browser" : "Not supported in this browser"} />
         <Row label="Microphone permission" value={MIC_PERMISSION_LABEL[micPermission] ?? micPermission} />
         <Row label="Current state" value={`${visualState}${listening ? " (listening)" : ""}${speaking ? " (speaking)" : ""}${loading ? " (waiting on Jarvis)" : ""}`} />
         <Row label="Muted" value={muted ? "Yes — spoken replies are off" : "No"} />
         <Row label="Hands-free mode" value={conversationMode ? "On — listens again automatically after Jarvis finishes speaking" : "Off"} />
+        <Row
+          label="Last thing heard"
+          value={lastTranscript ? `"${lastTranscript}" (${when(lastTranscriptAt)})` : "Nothing captured yet this session"}
+        />
         <Row label="Last voice error" value={lastVoiceError ? `${lastVoiceError} (${when(lastVoiceErrorAt)})` : "None recorded this session"} />
       </div>
     </details>

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { JobDetailView } from "@/components/jobs/job-detail-view";
 import { updateJob, changeJobStatus } from "@/lib/actions/jobs";
-import { FIXTURE_JOBS, FIXTURE_ACTIVITY, FIXTURE_NOTES } from "./fixtures";
+import { FIXTURE_JOBS, FIXTURE_ACTIVITY, FIXTURE_NOTES, FIXTURE_PHOTO_URLS } from "./fixtures";
 
 /**
  * Renders the REAL job detail view (src/components/jobs/job-detail-view.tsx
@@ -45,7 +45,7 @@ export default async function LabJob({ params }: { params: Promise<{ id: string 
     <JobDetailView
       id={id}
       job={job}
-      photoUrls={new Map()}
+      photoUrls={id === "lab-job-error" ? new Map() : new Map(Object.entries(FIXTURE_PHOTO_URLS))}
       photoUrlsError={id === "lab-job-error" ? "Storage temporarily unavailable (503)" : null}
       activity={FIXTURE_ACTIVITY}
       jobNotes={FIXTURE_NOTES}

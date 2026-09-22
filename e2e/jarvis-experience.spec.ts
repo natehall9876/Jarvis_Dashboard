@@ -41,6 +41,24 @@ test.describe("navigation intent", () => {
     expect(parseNavigationIntent("show me Phil Hirons' property")).toMatchObject({ kind: "entity" });
   });
 
+  test("\"today's jobs\" opens the Schedule (today's real view), not the full unfiltered jobs list", () => {
+    expect(parseNavigationIntent("Show me today's jobs")).toEqual({ kind: "route", target: { label: "today's schedule", href: "/schedule" } });
+    expect(parseNavigationIntent("show today's schedule")).toMatchObject({ kind: "route", target: { href: "/schedule" } });
+    // The generic plural-jobs route still works for anything that isn't "today's".
+    expect(parseNavigationIntent("open my jobs")).toMatchObject({ kind: "route", target: { href: "/jobs" } });
+  });
+
+  test("\"open the first job\" is its own deterministic intent, not an entity search for the literal phrase", () => {
+    expect(parseNavigationIntent("Open the first job")).toEqual({ kind: "first_job" });
+    expect(parseNavigationIntent("open my first job")).toEqual({ kind: "first_job" });
+    expect(parseNavigationIntent("show me the next job")).toEqual({ kind: "first_job" });
+    // Without this intent, "first job" (singular) would fall through to an
+    // entity lookup — /\bjobs\b/ (plural) never matches "job" — and get
+    // sent to the advisor as a literal, meaningless search string. Locking
+    // that regression in directly:
+    expect(parseNavigationIntent("open job 42")).not.toEqual({ kind: "first_job" });
+  });
+
   test("ordinary questions are not navigation", () => {
     expect(parseNavigationIntent("What's my schedule today?")).toEqual({ kind: "none" });
     expect(parseNavigationIntent("How many jobs do I have tomorrow")).toEqual({ kind: "none" });

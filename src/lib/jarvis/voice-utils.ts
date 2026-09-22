@@ -52,6 +52,10 @@ export type NavTarget = { label: string; href: string };
 
 const ROUTES: { words: RegExp; target: NavTarget }[] = [
   { words: /\b(command center|home|dashboard|today screen)\b/, target: { label: "the Command Center", href: "/" } },
+  // Checked before the generic /jobs pattern below: "today's jobs" is a
+  // request to SEE today's schedule, not to open the full, unfiltered jobs
+  // list — /schedule already defaults to today's day view.
+  { words: /\btoday'?s?\s+(jobs?|schedule|work)\b/, target: { label: "today's schedule", href: "/schedule" } },
   { words: /\b(schedule|calendar)\b/, target: { label: "the schedule", href: "/schedule" } },
   { words: /\b(customers?|clients?)\b(?!\s+\w)/, target: { label: "your clients", href: "/clients" } },
   { words: /\bproperties\b/, target: { label: "your properties", href: "/properties" } },
@@ -68,15 +72,26 @@ const ROUTES: { words: RegExp; target: NavTarget }[] = [
 
 export type NavIntent =
   | { kind: "route"; target: NavTarget }
+  | { kind: "first_job" }
   | { kind: "entity"; query: string }
   | { kind: "none" };
 
 const NAV_VERB = /^(?:hey |ok |okay )?(?:jarvis[, ]+)?(?:please )?(open|show me|show|pull up|bring up|go to|take me to|navigate to|find|look up)\b\s*(.*)$/i;
 
+// "job" (singular) never matches the /\bjobs\b/ ROUTES pattern above, so
+// without this "open the first job" would fall through to an entity lookup
+// and get sent to the advisor as a literal search for "the first job" —
+// which has no deterministic meaning to a text search. Checked before the
+// ROUTES loop; resolved with real data (today's actual schedule order),
+// never a language model — same reasoning as every other route intent.
+const FIRST_JOB = /^(first|next|1st)\s+job\b/;
+
 /**
  * Deterministic navigation. "Open my schedule" is a route change and needs no
- * language model. "Pull up Rob Elliot" is an entity lookup: the advisor
- * resolves it, and the caller only navigates if exactly one record matched.
+ * language model. "Open the first job" resolves against today's real,
+ * actually-scheduled job order (see getFirstJobToday). "Pull up Rob Elliot"
+ * is an entity lookup: the advisor resolves it, and the caller only
+ * navigates if exactly one record matched.
  */
 export function parseNavigationIntent(utterance: string): NavIntent {
   const text = utterance.trim().replace(/[.?!]+$/g, "");
@@ -84,6 +99,7 @@ export function parseNavigationIntent(utterance: string): NavIntent {
   if (!match) return { kind: "none" };
   const rest = match[2].toLowerCase().replace(/^(my|the|our|all)\s+/, "").trim();
   if (!rest) return { kind: "none" };
+  if (FIRST_JOB.test(rest)) return { kind: "first_job" };
   for (const r of ROUTES) if (r.words.test(rest) && rest.split(/\s+/).length <= 3) return { kind: "route", target: r.target };
   return { kind: "entity", query: match[2].trim() };
 }

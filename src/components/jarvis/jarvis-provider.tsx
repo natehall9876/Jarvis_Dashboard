@@ -6,6 +6,7 @@ import type { EntityReference } from "@/lib/ai/tool-types";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { JarvisVisualState } from "@/lib/jarvis/network-engine";
 import { parseNavigationIntent, takeSpeakableSentences, toolToCapabilities } from "@/lib/jarvis/voice-utils";
+import { getFirstJobToday } from "@/lib/actions/jobs";
 
 /**
  * The single, app-wide Jarvis session. It is mounted once in the dashboard
@@ -71,6 +72,20 @@ type JarvisContextValue = {
   lastVoiceErrorAt: string | null;
   /** From the Permissions API where supported; "unknown" (not "denied") when the browser can't report it without an active request — Safari/Firefox don't support querying `microphone` this way. */
   micPermission: "granted" | "denied" | "prompt" | "unknown";
+  /**
+   * The exact final transcript SpeechRecognition produced, set the instant
+   * onresult fires with isFinal text — BEFORE submit() does anything with
+   * it (parses it as navigation, sends it to the advisor, etc.). This is
+   * the single most useful piece of information for telling apart "the mic
+   * never captured anything" from "it heard something, just not what was
+   * said" from "it heard correctly but the app didn't act on it right" —
+   * the conversation panel already shows this as the bubble's question
+   * text for a NAVIGATION command, but there was previously no way to see
+   * it distinctly from the diagnostics view, and no record at all if
+   * something failed before a bubble ever rendered.
+   */
+  lastTranscript: string | null;
+  lastTranscriptAt: string | null;
   panelOpen: boolean;
   activeCapabilities: string[];
   /** The exchange currently shown in the dock's answer bubble (null when none). */
@@ -142,6 +157,8 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   const [lastVoiceError, setLastVoiceError] = useState<string | null>(null);
   const [lastVoiceErrorAt, setLastVoiceErrorAt] = useState<string | null>(null);
   const [micPermission, setMicPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown");
+  const [lastTranscript, setLastTranscript] = useState<string | null>(null);
+  const [lastTranscriptAt, setLastTranscriptAt] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
@@ -341,6 +358,31 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
         return;
       }
 
+      if (nav.kind === "first_job") {
+        // Still deterministic — resolved against the real, actually-
+        // scheduled data (getFirstJobToday, same query/order the Schedule
+        // page itself uses), never a language model guessing at "first".
+        setExchanges((prev) => [{ ...base, status: "streaming" }, ...prev]);
+        const result = await getFirstJobToday();
+        const reply = !result.ok
+          ? `Couldn't check today's schedule: ${result.message}`
+          : result.job
+            ? `Opening ${result.job.label}.`
+            : "There's nothing on today's schedule.";
+        patch(id, { answer: reply, status: result.ok ? "done" : "error", error: result.ok ? null : result.message });
+        if (result.ok && result.job) {
+          router.push(`${pathPrefix}/jobs/${result.job.id}`);
+          finishFlash("success", 1400);
+        } else if (!result.ok) {
+          finishFlash("error", 3500);
+        }
+        if (viaVoice) {
+          streamDoneRef.current = true;
+          enqueueSpeech([reply]);
+        }
+        return;
+      }
+
       loadingRef.current = true;
       setLoading(true);
       setGotFirstToken(false);
@@ -462,7 +504,21 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
     if (loadingRef.current || recognitionRef.current) return;
     const Ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Ctor) {
-      reportVoiceError("Voice input isn't supported in this browser. Use Chrome, Edge, or Safari, or type instead.");
+      // The previous message claimed Safari was supported — true on macOS,
+      // false on iOS/iPadOS: Apple has never shipped SpeechRecognition
+      // (neither prefixed nor unprefixed) in mobile Safari, which is also
+      // the engine every other iOS browser (Chrome, Edge) is forced to use,
+      // so this is a real platform gap, not just "wrong browser" — and a
+      // very plausible actual cause for "voice commands aren't working" on
+      // an iPhone specifically, which a lawn-care owner testing in the
+      // field is realistically doing. Typing still works either way — see
+      // the text input right below the mic in the panel.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      reportVoiceError(
+        isIOS
+          ? "Voice input isn't available on iPhone/iPad — Apple doesn't support it in any iOS browser yet. Type your question or command instead; everything voice can do, typing can too."
+          : "Voice input isn't supported in this browser. Use Chrome or Edge, or type instead.",
+      );
       return;
     }
     stopSpeaking(); // barge-in: talking over Jarvis interrupts it
@@ -482,6 +538,8 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       }
       if (finalText.trim()) {
         setInterim("");
+        setLastTranscript(finalText.trim());
+        setLastTranscriptAt(new Date().toISOString());
         void submit(finalText.trim(), { viaVoice: true });
       } else {
         setInterim(interimText);
@@ -592,6 +650,8 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       lastVoiceError,
       lastVoiceErrorAt,
       micPermission,
+      lastTranscript,
+      lastTranscriptAt,
       panelOpen,
       activeCapabilities,
       bubbleId,
@@ -624,6 +684,8 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       lastVoiceError,
       lastVoiceErrorAt,
       micPermission,
+      lastTranscript,
+      lastTranscriptAt,
       panelOpen,
       activeCapabilities,
       bubbleId,

@@ -156,6 +156,24 @@ test.describe("voice flow (simulated microphone)", () => {
     expect(await mounts(page)).toBe(mountsBefore);
   });
 
+  test("'open the first job' resolves against real data (not the advisor) and fails honestly with no session, never crashing", async ({ page }) => {
+    // getFirstJobToday() is the REAL server action — not mocked — so in this
+    // signed-out lab environment it genuinely returns "You must be signed
+    // in", the same way it would for any unauthenticated caller in
+    // production. This proves the wiring end-to-end: no advisor call, no
+    // navigation on failure, no fabricated job, no crash — the honest
+    // failure case a real user with an expired session would also see.
+    const requests = await setup(page, { answer: "unused" });
+    await page.goto("/voice-lab");
+    await expect.poll(() => mounts(page)).toBeGreaterThan(0);
+    await mic(page).click();
+    await say(page, "Open the first job");
+    await expect(page.getByTestId("jarvis-bubble")).toContainText("You must be signed in");
+    expect(requests).toHaveLength(0);
+    // No navigation happened — still on the lab home page.
+    await expect(page).toHaveURL(/\/voice-lab$/);
+  });
+
   test("'pull up' a person navigates to their record only when exactly one match comes back", async ({ page }) => {
     const requests = await setup(page, { answer: "Here is Jan Sparfven's job.", references: [{ type: "job", id: "lab-job-1", label: "Jan Sparfven" }] });
     await page.goto("/voice-lab");
