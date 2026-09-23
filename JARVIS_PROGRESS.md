@@ -1,45 +1,32 @@
 # Jarvis Progress — Resumable Handoff
 
-**Last updated:** 2026-09-22, Phase H continuation #2 (setup guides delivered, touch targets fixed, a systemic mobile overflow bug found and fixed across 12 pages, the flaky test root-caused, a security exposure question answered empirically, deployed and verified).
+**Last updated:** 2026-09-22, Phase I (photo deletion, voice command fixes, in direct response to the owner's real, signed-in test results).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
+**Deployed commit:** `4fb69bd` — Vercel deployment confirmed `success` via its API, tied to this exact commit SHA.
 **Repo:** natehall9876/Jarvis_Dashboard, branch `main`.
-**Latest pushed commit:** `4032f81`.
 
----
+## THIS SESSION
 
-## THIS SESSION'S WORK
+**Verified fresh, not assumed:** deployment live (`37b43d7`, prior commit) and the secret-boundary fix both re-confirmed true from scratch before any new work started. Found and fixed a small stale doc comment (env.ts still credited the reverted `server-only` package).
 
-### 1. Setup guides delivered
-Complete SQL for all 3 pending migrations (QuickBooks, Google Calendar, Homeworks sync failures) given directly, verified column-by-column against consuming code, each with a read-only `information_schema` verification query. Exact Google Calendar and QuickBooks setup steps given (provider page, redirect URI, Vercel env var names, approval requirements — Google's 7-day Testing-mode refresh token limit and Intuit's Production-key self-serve process specifically called out). No secrets requested in or pasted into chat.
+**Photo deletion (was completely missing):** `deletePhoto` server action (photo id only, path always resolved server-side, single-owner auth matching every other action, DB-then-storage delete order for safe orphan handling, never throws) + `PhotoGrid` shared component (delete button, confirm, per-photo loading/error state, full-size lightbox preview) wired into Job/Property/Client detail pages, replacing three copies of duplicated grid JSX. Verified live in-browser (confirm dialog fires with the right text, declining blocks deletion) and with 3 new regression tests (deletion can never succeed without a real session).
 
-### 2. Secret exposure — resolved empirically, not by inference
-Reproduced the exact pre-fix leak pattern (a "use client" component importing the pre-split env module) with a real, already-present secret value (`HOMEWORKS_WEBHOOK_SECRET`, genuinely configured in this environment all session). Confirmed the reference (`process.env.HOMEWORKS_WEBHOOK_SECRET`) DOES appear in client-shipped code when the leak pattern is reproduced — but the actual secret **value** appears **zero times**, verified by grepping the built output for the literal value (never printed). This is consistent with Next.js's documented build behavior: only `NEXT_PUBLIC_*`-prefixed vars are string-inlined into client bundles; anything else ships as a live `process.env.X` property read that evaluates to `undefined` in a real browser. **No credential rotation is required** — this was a reference-only exposure, not a value exposure, in this build system, verified directly rather than assumed. QuickBooks/Google Calendar credentials were confirmed never configured in this local environment at any point (empty in `.env.local` throughout), consistent with them never having been connected.
+**Voice — traced end-to-end, found 3 real issues:**
+1. The "unsupported browser" message wrongly claimed Safari works — it doesn't on iOS/iPadOS (Apple platform limitation, not a bug), a very plausible actual explanation for "voice isn't working" if tested on an iPhone. Fixed the message.
+2. Diagnostics had no way to see the actual transcript SpeechRecognition produced — added `lastTranscript`.
+3. "Show me today's jobs" went to the generic unfiltered /jobs list, not /schedule (today's real view) — fixed. "Open the first job" had zero handling at all (singular "job" never matched the plural /jobs pattern, fell through to a meaningless entity search) — added a new deterministic `first_job` intent resolved against `getFirstJobToday()`, the exact same query/order the Schedule page itself uses. Verified end-to-end (real action call, no session → honest failure, no crash, no navigation).
 
-### 3. Touch targets fixed
-`Button` and the shared `inputClass` (used by `TextInput`/`Select`/`Textarea`) now enforce 44px minimum height only below the `sm` breakpoint — desktop density untouched, verified via `getBoundingClientRect()` before/after at both widths. Also applied to `/login` and `/reset-password`, which had their own duplicated (not shared-component) input styling — pointed both at the same shared `inputClass` instead.
+"Add a note to this job" was verified already correctly wired (existing confirm-gated `propose_add_job_note` tool, page-context-aware) — no change needed.
 
-### 4. A systemic mobile horizontal-overflow bug — found, root-caused, fixed everywhere
-Reviewing Command Center's real components (not a stub) at 375px found genuine horizontal overflow (530px content in a 375px viewport). Root cause, confirmed via `getComputedStyle`: `<div className="grid ... lg:grid-cols-3">` with no base `grid-cols` — an implicit single mobile column sizes to its content's max-content width instead of the container's width. Grepped the identical pattern across the whole app: **12 occurrences** (Command Center, Client Detail ×2, Employee/Equipment/Property ×2/Quote/Invoice Detail, Routes, Settings, the job detail page's info-card row, Today's Mission's secondary grid, the Homeworks link panel). All fixed with the same one-line change (adding the base `grid-cols-1`); confirmed zero remaining instances via the same grep afterward. Verified live (0px overflow, screenshotted, full scroll height) before and after on Command Center specifically.
+**Homeworks import:** verified untouched (git history confirms no session this engagement modified it) and re-checked live Homeworks-side counts fresh via the GraphQL MCP: 25 active customers (matches every prior check, no drift), 26 properties. Could not re-verify the "47 deleted customers" figure from an earlier session — a fresh unfiltered query returns only the same 25, and an explicit `isDeleted: true` filter returns zero; not stated as current fact since it couldn't be reproduced this session, per instruction not to assume an earlier count is current. Jarvis-side synced counts still cannot be checked from this session (blocked channel from a prior session, not retried).
 
-### 5. Mobile review, continued
-Command Center's `/voice-lab` fixture now renders every real Command Center component (previously just 2 of 7). Schedule and Client Detail were not given the same full fixture-extraction treatment as Job Detail and Command Center (time-boxed, and the grid-overflow fix already found and fixed their concrete bug) — they share every other fix made this session (Button, inputClass, the grid pattern) since those are component-level, not page-specific.
+**Regression:** typecheck/lint/build/secret-check all clean; full Playwright suite 448/448 passing (up from 436 — 12 new tests, 0 weakened).
 
-### 6. The flaky test — actual root cause found, not hand-waved
-Investigated properly rather than re-asserting "known flaky." Isolated mobile-safari alone: 3/3 clean. Ran the full suite repeatedly while my own manual browser-testing tool (`preview_start`, used throughout this session for live verification) had an active session on the *same* dev server Playwright's `reuseExistingServer: true` was reusing: failures reproduced. Stopped that manual session, let Playwright run against a server with no concurrent manual traffic: **5 consecutive clean full-suite runs (436/436 each)**, then it failed again the moment I restarted my own manual browser session for further review, then passed clean again the moment I stopped it. This is a precise, reproduced, actionable finding: **the failure correlates with two automation harnesses (my manual browser tool and Playwright) sharing one dev server process at the same time**, not a genuine application bug and not true randomness. A normal test run (CI, or any run without a concurrent manual browser session hitting the same server) is not exposed to this.
+## STILL BLOCKED (same reasons as before, not retried)
+- Supabase Auth Admin API (access-control question) — sandbox classifier denial from an earlier session, not retried.
+- Jarvis-side live DB counts — same blocked channel; `SUPABASE_SERVICE_ROLE_KEY` is also blank in this local checkout.
+- Real microphone / real iPhone testing — this sandbox's browser has mic access blocked at the pane level.
+- Vercel runtime/function logs — no dashboard or CLI token access from this session.
 
-### 7. Deployed and verified
-Commit `4032f81` pushed. [Verify CI/Vercel status below was current as of the report — check again if time has passed.]
-
----
-
-## MIGRATIONS — STILL NOT VERIFIED LIVE
-
-Exact SQL for all 3 was given directly in chat this session (not repeated here — see that response, or the files in `supabase/`). **Live application status in Supabase still cannot be checked from this session** — the Auth Admin API script that would answer both this and the access-control question remains blocked by the sandbox's permission classifier from last session, not retried.
-
-## NEXT EXECUTABLE STEP
-
-1. Run the 3 migrations (SQL given directly in chat this session).
-2. Add QuickBooks/Google Calendar credentials to Vercel (steps given directly in chat).
-3. Owner: Supabase Studio → Authentication → Users (the one check still blocked from here).
-4. Follow the core-workflow verification guide (open a job, save a note, upload a photo, refresh, confirm persistence; then voice navigation and a voice-created note) once signed in — this is the first genuine signed-in verification of anything in this entire engagement, and it has not happened yet.
-5. If continuing the mobile pass: Schedule and Client Detail would benefit from the same fixture-extraction treatment Job Detail and Command Center got, though their known concrete bugs (grid overflow) are already fixed.
+## NEXT STEP
+Owner: test voice again (should now show an honest, correct message if on iPhone, or actually navigate on Chrome/Edge/desktop Safari); test photo delete + preview; report back with what the diagnostics panel's "Last thing heard" shows if voice still doesn't do what's expected — that field is new this session and is the fastest way to find any remaining gap precisely.
