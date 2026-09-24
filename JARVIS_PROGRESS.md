@@ -1,5 +1,38 @@
 # Jarvis Progress — Resumable Handoff
 
+## September 23, 2026 — workflow recovery branch (not production)
+
+Fresh remote main: `0baedae9961fcfae287c5f0d9a2a82ff9f123b92`; only main
+was listed before this task. The four supplied recovery SHAs are unavailable
+from GitHub and the cloned history. No recovery patches were found locally.
+
+Branch `fix/jarvis-workflow-20260923` preserves login destinations on failure,
+rejects external login redirects, and preserves note drafts with an inline
+recovery message if a save response is lost. Added regression coverage and a
+separate, opt-in real note/photo persistence suite with a designated demo-job gate.
+See `docs/WORKFLOW_VERIFICATION.md` for exact access and verification boundaries.
+
+Fresh checks: typecheck, lint, production build, and client-secret check passed.
+New regressions: 6/6 passed after correcting a test alert locator and waiting for
+the development fixture to hydrate. Full existing suite: 446 passed, 8 failed
+(six Homeworks checks expect <500 but get the intentional 503 because no webhook
+secret is configured; two mobile voice UI checks timed out). No assertions or
+authorization were weakened to make those checks pass.
+The complete mobile voice spec passed on a serial rerun (12/12); the original
+full-suite failures remain recorded above rather than being relabeled as a pass.
+
+Live Supabase anonymous reads returned zero rows for clients, properties, jobs,
+job_notes, and job_photos. Direct project access works despite empty project
+enumeration. Restrictive owner-access policies already exist, and the photo
+bucket is private; all were preserved. No customer writes or database changes.
+
+Desktop and phone-width browser checks verified login and note error recovery
+using the existing development fixture, not authenticated live persistence.
+No test login or designated test job was supplied. Vercel account access to
+`weedeater` is denied (403). Nothing was merged or promoted to production.
+
+---
+
 **Last updated:** 2026-09-22, Phase I (photo deletion, voice command fixes, in direct response to the owner's real, signed-in test results).
 **Production URL:** https://jarvis-dashboard-fawn.vercel.app
 **Deployed commit:** `4fb69bd` — Vercel deployment confirmed `success` via its API, tied to this exact commit SHA.

@@ -2,24 +2,29 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { loginErrorUrl, safeLoginDestination } from "@/lib/auth/redirect";
 
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const redirectTo = String(formData.get("redirectTo") ?? "/");
+  const redirectTo = safeLoginDestination(String(formData.get("redirectTo") ?? "/"));
 
   if (!email || !password) {
-    redirect(`/login?error=${encodeURIComponent("Email and password are required.")}`);
+    redirect(loginErrorUrl("Email and password are required.", redirectTo));
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  let message: string | null = null;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    message = error?.message ?? null;
+  } catch {
+    message = "Sign-in is temporarily unavailable. Please try again.";
   }
+  // redirect throws; keep it outside the request error handler.
+  if (message) redirect(loginErrorUrl(message, redirectTo));
 
-  redirect(redirectTo.startsWith("/") ? redirectTo : "/");
+  redirect(redirectTo);
 }
 
 export async function signOut() {

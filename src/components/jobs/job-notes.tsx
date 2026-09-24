@@ -17,11 +17,17 @@ export function JobNotes({ jobId, notes, needsMigration, error }: { jobId: strin
   function submit() {
     setMessage(null);
     start(async () => {
-      const res = await addJobNote(jobId, text);
-      if (res.ok) {
-        setText("");
-        router.refresh();
-      } else setMessage(res.message);
+      try {
+        const res = await addJobNote(jobId, text);
+        if (res.ok) {
+          setText("");
+          router.refresh();
+        } else setMessage(res.message);
+      } catch {
+        // A dropped response may follow a committed write. Keep the draft,
+        // and ask the owner to check before retrying rather than duplicating it.
+        setMessage("Couldn't confirm the save. Your draft is still here. Check this job's notes after reconnecting before trying again.");
+      }
     });
   }
 
@@ -42,6 +48,7 @@ export function JobNotes({ jobId, notes, needsMigration, error }: { jobId: strin
           onChange={(e) => setText(e.target.value)}
           rows={2}
           maxLength={2000}
+          disabled={pending}
           placeholder="Add a note about this job…"
           aria-label="New job note"
           className="min-h-[3rem] flex-1 resize-y rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
@@ -51,9 +58,9 @@ export function JobNotes({ jobId, notes, needsMigration, error }: { jobId: strin
           Save note
         </Button>
       </div>
-      {message ? <p className="text-xs text-[var(--color-warning)]">{message}</p> : null}
+      {message ? <p role="alert" className="text-xs text-[var(--color-warning)]">{message}</p> : null}
       {error ? <p className="text-xs text-[var(--color-warning)]">{error}</p> : null}
-      {notes.length === 0 ? (
+      {notes.length === 0 && !error ? (
         <p className="text-xs text-[var(--color-text-muted)]">No notes yet. You can also say &ldquo;add a note to this job…&rdquo; to Jarvis.</p>
       ) : (
         <ul className="space-y-2">

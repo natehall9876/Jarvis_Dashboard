@@ -27,7 +27,7 @@ export default async function LoginPage({
           <input type="hidden" name="redirectTo" value={redirectTo ?? "/"} />
 
           {error ? (
-            <div className="flex items-start gap-2 rounded-md border border-[var(--color-critical)]/30 bg-[var(--color-critical-soft)] px-3 py-2 text-sm text-[var(--color-critical)]">
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-[var(--color-critical)]/30 bg-[var(--color-critical-soft)] px-3 py-2 text-sm text-[var(--color-critical)]">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
