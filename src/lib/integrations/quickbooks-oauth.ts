@@ -1,4 +1,4 @@
-import { readTokenResponse, tokenEndpointError } from "@/lib/integrations/oauth-token-response";
+import { readTokenResponse, readTokenError } from "@/lib/integrations/oauth-token-response";
 import { integrationEnv } from "@/lib/env.server";
 
 /**
@@ -42,7 +42,7 @@ export type QuickBooksTokenResponse = {
   token_type: string;
 };
 
-type TokenResult = { ok: true; data: QuickBooksTokenResponse } | { ok: false; message: string };
+type TokenResult = { ok: true; data: QuickBooksTokenResponse } | { ok: false; message: string; reauthRequired?: boolean };
 
 function basicAuthHeader(): string {
   return `Basic ${Buffer.from(`${integrationEnv.quickbooks.clientId}:${integrationEnv.quickbooks.clientSecret}`).toString("base64")}`;
@@ -62,12 +62,11 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
       },
       body: new URLSearchParams(body).toString(),
     });
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach the QuickBooks token endpoint." };
+  } catch {
+    return { ok: false, message: "Failed to reach the QuickBooks token endpoint." };
   }
   if (!response.ok) {
-    const text = await response.text();
-    return { ok: false, message: tokenEndpointError("QuickBooks", response.status, text) };
+    return readTokenError(response, "QuickBooks");
   }
   return readTokenResponse<QuickBooksTokenResponse>(response, "QuickBooks", { requireRefresh: true, requireRefreshExpiry: true });
 }
@@ -84,7 +83,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<TokenRes
 export async function revokeToken(token: string): Promise<void> {
   try {
     await fetch(REVOKE_ENDPOINT, {
-      method: "POST",
+      method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000),
       headers: { "content-type": "application/json", accept: "application/json", authorization: basicAuthHeader() },
       body: JSON.stringify({ token }),
     });

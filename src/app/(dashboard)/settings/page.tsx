@@ -73,6 +73,8 @@ export default async function SettingsPage({
         connectedAt={quickbooksConnection.connected ? quickbooksConnection.connectedAt : null}
         statusError={!quickbooksConnection.connected ? quickbooksConnection.error : null}
         realmId={quickbooksConnection.connected ? quickbooksConnection.realmId : null}
+        statusCheckedAt={new Date().toISOString()}
+        refreshExpiresAt={quickbooksConnection.connected ? quickbooksConnection.refreshExpiresAt : null}
         configured={isIntegrationConfigured("quickbooks")}
         urlMessage={quickbooksStatus === "connected" || quickbooksStatus === "error" ? { status: quickbooksStatus, message: quickbooksMessage } : null}
       />

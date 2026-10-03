@@ -20,6 +20,8 @@ export function QuickBooksConnectionCard({
   connected,
   connectedAt,
   realmId,
+  refreshExpiresAt,
+  statusCheckedAt,
   configured,
   statusError,
   urlMessage,
@@ -27,6 +29,8 @@ export function QuickBooksConnectionCard({
   connected: boolean;
   connectedAt: string | null;
   realmId: string | null;
+  refreshExpiresAt: string | null;
+  statusCheckedAt: string;
   configured: boolean;
   statusError: string | null;
   urlMessage: { status: "connected" | "error"; message?: string } | null;
@@ -37,17 +41,25 @@ export function QuickBooksConnectionCard({
   const [pending, startTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
 
+  const expired = connected && !!refreshExpiresAt && Date.parse(refreshExpiresAt) <= Date.parse(statusCheckedAt);
+  const needsReconnect = expired || (result && !result.ok && result.reason === "reauth_required") || (preview && !preview.ok && preview.reason === "reauth_required");
+  const verifiedAt = result?.ok ? result.verifiedAt : preview?.ok ? preview.verifiedAt : null;
+  const busy = pending || previewPending;
+
   function verify() {
+    setPreview(null);
     setResult(null);
     startTransition(async () => setResult(await verifyQuickBooksConnection()));
   }
   function runPreview() {
+    setResult(null);
     setPreview(null);
     startPreviewTransition(async () => setPreview(await previewQuickBooksFinancials()));
   }
   function disconnectNow() {
     startTransition(async () => {
-      await disconnectQuickBooksAction();
+      const disconnected = await disconnectQuickBooksAction();
+      if (!disconnected.ok) { setResult(disconnected); setPreview(null); return; }
       setResult(null);
       setPreview(null);
       router.refresh();
@@ -67,7 +79,7 @@ export function QuickBooksConnectionCard({
             {urlMessage.message ?? "The connection attempt failed."}
           </p>
         ) : null}
-        {urlMessage?.status === "connected" ? (
+        {urlMessage?.status === "connected" && connected ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
             Authorization saved - click Verify below to confirm real data comes back.
@@ -80,7 +92,7 @@ export function QuickBooksConnectionCard({
             Not configured — <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">QUICKBOOKS_CLIENT_ID</code> and{" "}
             <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">QUICKBOOKS_CLIENT_SECRET</code> are missing. Register an app at{" "}
             <span className="text-[var(--color-text-secondary)]">developer.intuit.com</span> with redirect URI{" "}
-            <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">/api/integrations/quickbooks/oauth/callback</code>.
+            <code className="break-all rounded bg-[var(--color-surface-3)] px-1 py-0.5">https://jarvis-dashboard-fawn.vercel.app/api/integrations/quickbooks/oauth/callback</code>.
           </p>
         ) : statusError ? null : !connected ? (
           <a
@@ -91,19 +103,21 @@ export function QuickBooksConnectionCard({
           </a>
         ) : (
           <div className="space-y-2">
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">{expired ? "Expired authorization" : needsReconnect ? "Needs reconnect" : verifiedAt ? "Verified live at " + new Date(verifiedAt).toLocaleString("en-US", { timeZone: "America/New_York" }) : "Saved authorization - not verified in this view"}</p>
+            {needsReconnect ? <a className="inline-flex min-h-11 items-center text-sm text-[var(--color-accent)] underline" href="/api/integrations/quickbooks/oauth/connect">Reconnect QuickBooks</a> : null}
             <p className="text-xs text-[var(--color-text-secondary)]">
               Company {realmId ?? "unknown"} — token on file since {connectedAt ? new Date(connectedAt).toLocaleString() : "unknown"}.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={verify} disabled={pending}>
+              <Button type="button" variant="secondary" onClick={verify} disabled={busy}>
                 {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Verify — fetch company info
               </Button>
-              <Button type="button" variant="secondary" onClick={runPreview} disabled={previewPending}>
+              <Button type="button" variant="secondary" onClick={runPreview} disabled={busy}>
                 {previewPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Preview financial summary (read-only)
               </Button>
-              <Button type="button" variant="ghost" onClick={disconnectNow} disabled={pending}>
+              <Button type="button" variant="ghost" onClick={disconnectNow} disabled={busy}>
                 <Unplug className="h-3.5 w-3.5" />
                 Disconnect
               </Button>

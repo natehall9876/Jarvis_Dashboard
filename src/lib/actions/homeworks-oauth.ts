@@ -15,7 +15,8 @@ export async function verifyHomeworksConnection(): Promise<VerifyResult> {
   return { ok: true, customers: result.data.customers };
 }
 
-export async function disconnectHomeworksAction(): Promise<void> {
-  await disconnect();
-  revalidatePath("/settings");
+export async function disconnectHomeworksAction() {
+  const result = await disconnect();
+  if (result.ok) revalidatePath("/settings");
+  return result;
 }

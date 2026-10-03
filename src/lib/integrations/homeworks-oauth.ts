@@ -1,4 +1,4 @@
-import { readTokenResponse, tokenEndpointError } from "@/lib/integrations/oauth-token-response";
+import { readTokenResponse, readTokenError } from "@/lib/integrations/oauth-token-response";
 import { randomBytes, createHash } from "crypto";
 import { homeworksOAuthEnv } from "@/lib/env.server";
 
@@ -45,7 +45,7 @@ export type TokenResponse = {
   scope?: string;
 };
 
-type TokenResult = { ok: true; data: TokenResponse } | { ok: false; message: string };
+type TokenResult = { ok: true; data: TokenResponse } | { ok: false; message: string; reauthRequired?: boolean };
 
 export async function exchangeCodeForToken(params: { code: string; redirectUri: string; codeVerifier: string }): Promise<TokenResult> {
   return postTokenRequest({
@@ -75,12 +75,11 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(body).toString(),
     });
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach the Homeworks token endpoint." };
+  } catch {
+    return { ok: false, message: "Failed to reach the Homeworks token endpoint." };
   }
   if (!response.ok) {
-    const text = await response.text();
-    return { ok: false, message: tokenEndpointError("Homeworks", response.status, text) };
+    return readTokenError(response, "Homeworks");
   }
   return readTokenResponse<TokenResponse>(response, "Homeworks", { requireRefresh: true, requireRefreshExpiry: false });
 }

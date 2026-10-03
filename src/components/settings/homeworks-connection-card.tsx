@@ -120,7 +120,8 @@ export function HomeworksConnectionCard({
 
   function disconnectNow() {
     startTransition(async () => {
-      await disconnectHomeworksAction();
+      const disconnected = await disconnectHomeworksAction();
+      if (!disconnected.ok) { setResult(disconnected); return; }
       setResult(null);
       setPreview(null);
       setImportResult(null);
@@ -143,7 +144,7 @@ export function HomeworksConnectionCard({
             {urlMessage.message ?? "The connection attempt failed."}
           </p>
         ) : null}
-        {urlMessage?.status === "connected" ? (
+        {urlMessage?.status === "connected" && connected ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
             Authorization saved - click Verify below to confirm real data comes back.

@@ -23,7 +23,8 @@ export function loadServerModule<T>(file: string, mocks: Record<string, unknown>
       return nativeRequire(id);
     };
     const code = ts.transpileModule(fs.readFileSync(absolute, "utf8"), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+      fileName: absolute,
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     new Function("require", "module", "exports", "fetch", code)(resolve, loadedModule, loadedModule.exports, fetchImpl);
     return loadedModule.exports;

@@ -6,16 +6,16 @@ import { getAllCustomers, getAllInvoices, getAllPayments, getCompanyInfo } from 
 import { summarizeQuickBooks, type QuickBooksSummary } from "@/lib/integrations/quickbooks-summary";
 import { todayInZone } from "@/lib/integrations/homeworks-dates";
 
-export type VerifyQuickBooksResult = { ok: true; companyName: string } | { ok: false; message: string; reason?: "not_connected" | "reauth_required" };
+export type VerifyQuickBooksResult = { ok: true; companyName: string; verifiedAt: string } | { ok: false; message: string; reason?: "not_connected" | "reauth_required" };
 
 /** Read-only. The one real provider call that proves the stored token actually works — mirrors the Homeworks "Verify" button. */
 export async function verifyQuickBooksConnection(): Promise<VerifyQuickBooksResult> {
   const result = await getCompanyInfo();
   if (!result.ok) return { ok: false, message: result.message, reason: result.reason === "not_connected" || result.reason === "reauth_required" ? result.reason : undefined };
-  return { ok: true, companyName: result.data.CompanyName };
+  return { ok: true, companyName: result.data.CompanyName, verifiedAt: new Date().toISOString() };
 }
 
-export type PreviewQuickBooksResult = { ok: true; summary: QuickBooksSummary } | { ok: false; message: string; reason?: "not_connected" | "reauth_required" };
+export type PreviewQuickBooksResult = { ok: true; summary: QuickBooksSummary; verifiedAt: string } | { ok: false; message: string; reason?: "not_connected" | "reauth_required" };
 
 /**
  * Read-only. Fetches every customer/invoice/payment (paginated, capped —
@@ -30,10 +30,11 @@ export async function previewQuickBooksFinancials(): Promise<PreviewQuickBooksRe
   }
   if (!customers.ok || !invoices.ok || !payments.ok) return { ok: false, message: "Unexpected error reading QuickBooks data." };
   const summary = summarizeQuickBooks({ customers: customers.data.customers, invoices: invoices.data.invoices, payments: payments.data.payments, today: todayInZone() });
-  return { ok: true, summary };
+  return { ok: true, summary, verifiedAt: new Date().toISOString() };
 }
 
-export async function disconnectQuickBooksAction(): Promise<void> {
-  await disconnectQuickBooks();
-  revalidatePath("/settings");
+export async function disconnectQuickBooksAction() {
+  const result = await disconnectQuickBooks();
+  if (result.ok) revalidatePath("/settings");
+  return result;
 }

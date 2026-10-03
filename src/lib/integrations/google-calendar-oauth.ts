@@ -1,4 +1,4 @@
-import { readTokenResponse, tokenEndpointError } from "@/lib/integrations/oauth-token-response";
+import { readTokenResponse, readTokenError } from "@/lib/integrations/oauth-token-response";
 import { integrationEnv } from "@/lib/env.server";
 
 /**
@@ -40,7 +40,7 @@ export type GoogleTokenResponse = {
   token_type: string;
 };
 
-type TokenResult = { ok: true; data: GoogleTokenResponse } | { ok: false; message: string };
+type TokenResult = { ok: true; data: GoogleTokenResponse } | { ok: false; message: string; reauthRequired?: boolean };
 
 async function postTokenRequest(body: Record<string, string>): Promise<TokenResult> {
   let response: Response;
@@ -56,12 +56,11 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
         ...body,
       }).toString(),
     });
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach Google's token endpoint." };
+  } catch {
+    return { ok: false, message: "Failed to reach Google's token endpoint." };
   }
   if (!response.ok) {
-    const text = await response.text();
-    return { ok: false, message: tokenEndpointError("Google", response.status, text) };
+    return readTokenError(response, "Google");
   }
   return readTokenResponse<GoogleTokenResponse>(response, "Google", { requireRefresh: false, requireRefreshExpiry: false });
 }
@@ -77,7 +76,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<TokenRes
 /** Best-effort — revokes at Google so disconnect is real, not just local. Never blocks the local disconnect. */
 export async function revokeToken(token: string): Promise<void> {
   try {
-    await fetch(REVOKE_ENDPOINT, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token }).toString() });
+    await fetch(REVOKE_ENDPOINT, { method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000), headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token }).toString() });
   } catch {
     // Local disconnect still proceeds.
   }

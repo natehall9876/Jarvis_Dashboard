@@ -19,3 +19,15 @@ export async function readTokenResponse<T>(response: Response, provider: string,
   }
   return { ok: true, data: value as T };
 }
+
+/** OAuth invalid_grant requires consent again; configuration/temporary failures do not. */
+export async function readTokenError(response: Response, provider: string): Promise<{ ok: false; message: string; reauthRequired: boolean }> {
+  let body = "";
+  try { body = await response.text(); } catch { /* An interrupted error body is still a failed request. */ }
+  let reauthRequired = false;
+  try {
+    const error = JSON.parse(body) as { error?: unknown };
+    reauthRequired = error.error === "invalid_grant";
+  } catch { /* No structured OAuth error code. */ }
+  return { ok: false, message: tokenEndpointError(provider, response.status, body), reauthRequired };
+}

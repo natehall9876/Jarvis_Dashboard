@@ -1,41 +1,43 @@
+import { isISODate } from "@/lib/integrations/homeworks-dates";
+import { fetchApiJson, invalidApiResponse, isRecord, type ApiFailure } from "@/lib/integrations/api-response";
 import { calendarTimeBounds } from "@/lib/integrations/google-calendar-dates";
-import { getValidAccessToken } from "@/lib/integrations/google-calendar-connection";
+import { getValidAccessToken, type ValidTokenResult } from "@/lib/integrations/google-calendar-connection";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
-type ApiResult<T> = { ok: true; data: T } | { ok: false; message: string; reason?: "not_connected" | "error" };
+type ApiResult<T> = { ok: true; data: T; connectionVersion?: string } | { ok: false; message: string; reason?: "not_connected" | ApiFailure["reason"] };
 
-async function callApi<T>(path: string, searchParams?: Record<string, string>): Promise<ApiResult<T>> {
-  const token = await getValidAccessToken();
-  if (!token.ok) return { ok: false, message: token.message, reason: token.reason === "not_connected" ? "not_connected" : "error" };
+async function callApi<T>(path: string, searchParams?: Record<string, string>, snapshot?: ValidTokenResult): Promise<ApiResult<T>> {
+  const token = snapshot ?? await getValidAccessToken();
+  if (!token.ok) return { ok: false, message: token.message, reason: token.reason === "not_connected" || token.reason === "reauth_required" ? token.reason : "error" };
 
   const url = new URL(`${CALENDAR_API_BASE}/${path}`);
   for (const [k, v] of Object.entries(searchParams ?? {})) url.searchParams.set(k, v);
 
-  let response: Response;
-  try {
-    response = await fetch(url.toString(), { headers: { authorization: `Bearer ${token.accessToken}` } });
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach Google Calendar.", reason: "error" };
-  }
-  if (!response.ok) {
-    const text = await response.text();
-    return { ok: false, message: `Google Calendar API returned ${response.status}: ${text.slice(0, 300)}`, reason: "error" };
-  }
-  return { ok: true, data: (await response.json()) as T };
+  const result = await fetchApiJson<T & { items?: unknown; nextPageToken?: unknown; kind?: string }>("Google Calendar", url.toString(), { headers: { authorization: `Bearer ${token.accessToken}` } });
+  if (!result.ok) return result;
+  const data = result.data;
+  if (!("items" in data) && !("nextPageToken" in data) && !(typeof data.kind === "string" && data.kind.startsWith("calendar#"))) return invalidApiResponse("Google Calendar");
+  if ((data.items !== undefined && (!Array.isArray(data.items) || !data.items.every(item => isRecord(item) && typeof item.id === "string" && item.id.length > 0)))
+    || (data.nextPageToken !== undefined && (typeof data.nextPageToken !== "string" || !data.nextPageToken))) return invalidApiResponse("Google Calendar");
+  return { ok: true, data };
 }
 
 export type GoogleCalendarListEntry = { id: string; summary: string; primary?: boolean };
 
 /** Read-only. Powers the calendar-selection step after connecting. */
 export async function listCalendars(): Promise<ApiResult<GoogleCalendarListEntry[]>> {
-  const calendars: GoogleCalendarListEntry[] = [];
+  const snapshot = await getValidAccessToken();
+  const calendars = new Map<string, GoogleCalendarListEntry>();
+  const seenTokens = new Set<string>();
   let pageToken: string | undefined;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const result = await callApi<{ items?: GoogleCalendarListEntry[]; nextPageToken?: string }>("users/me/calendarList", pageToken ? { pageToken } : {});
+    const result = await callApi<{ items?: GoogleCalendarListEntry[]; nextPageToken?: string }>("users/me/calendarList", pageToken ? { pageToken } : {}, snapshot);
     if (!result.ok) return result;
-    calendars.push(...(result.data.items ?? []));
-    if (!result.data.nextPageToken) return { ok: true, data: calendars };
+    for (const item of result.data.items ?? []) calendars.set(item.id, item);
+    if (!result.data.nextPageToken) return { ok: true, data: [...calendars.values()], connectionVersion: snapshot.ok ? snapshot.connectionVersion : undefined };
+    if (seenTokens.has(result.data.nextPageToken)) return { ok: false, reason: "error", message: "Google Calendar repeated a page token; no partial result was used." };
+    seenTokens.add(result.data.nextPageToken);
     pageToken = result.data.nextPageToken;
   }
   return { ok: false, message: "Calendar list exceeded the pagination limit; no partial list returned.", reason: "error" };
@@ -70,7 +72,9 @@ export async function listEvents(calendarId: string, range: { from: string; to: 
   try { bounds = calendarTimeBounds(range); } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "Invalid date range.", reason: "error" };
   }
-  const events: GoogleCalendarEvent[] = [];
+  const snapshot = await getValidAccessToken();
+  const events = new Map<string, GoogleCalendarEvent>();
+  const seenTokens = new Set<string>();
   let pageToken: string | undefined;
   for (let page = 0; page < MAX_PAGES; page++) {
     const params: Record<string, string> = {
@@ -81,10 +85,20 @@ export async function listEvents(calendarId: string, range: { from: string; to: 
       showDeleted: "false",
     };
     if (pageToken) params.pageToken = pageToken;
-    const result = await callApi<{ items?: GoogleCalendarEvent[]; nextPageToken?: string }>(`calendars/${encodeURIComponent(calendarId)}/events`, params);
+    const result = await callApi<{ items?: GoogleCalendarEvent[]; nextPageToken?: string }>(`calendars/${encodeURIComponent(calendarId)}/events`, params, snapshot);
     if (!result.ok) return result;
-    events.push(...(result.data.items ?? []).filter((e) => e.status !== "cancelled"));
-    if (!result.data.nextPageToken) return { ok: true, data: { events, pages: page + 1 } };
+    if (!(result.data.items ?? []).every(event => event.status === "cancelled" || (
+      isRecord(event.start) && isRecord(event.end) &&
+      ((typeof event.start.date === "string" && isISODate(event.start.date)) ||
+        (typeof event.start.dateTime === "string" && Number.isFinite(Date.parse(event.start.dateTime))))
+    ))) return invalidApiResponse("Google Calendar");
+    for (const event of result.data.items ?? []) {
+      if (event.status === "cancelled") events.delete(event.id);
+      else events.set(event.id, event);
+    }
+    if (!result.data.nextPageToken) return { ok: true, data: { events: [...events.values()], pages: page + 1 } };
+    if (seenTokens.has(result.data.nextPageToken)) return { ok: false, reason: "error", message: "Google Calendar repeated a page token; no partial result was used." };
+    seenTokens.add(result.data.nextPageToken);
     pageToken = result.data.nextPageToken;
   }
   return { ok: false, message: `Stopped after ${MAX_PAGES} pages without reaching the end.`, reason: "error" };

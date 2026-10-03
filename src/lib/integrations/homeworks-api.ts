@@ -1,8 +1,29 @@
+import { fetchApiJson, invalidApiResponse, isRecord } from "@/lib/integrations/api-response";
 import { getValidAccessToken } from "@/lib/integrations/homeworks-connection";
 import { HOMEWORKS_GRAPHQL_ENDPOINT } from "@/lib/integrations/homeworks-oauth";
 import { normalizeCustomer, normalizeJob } from "@/lib/integrations/homeworks-normalize";
 import { fetchAllPages, type PageFetch } from "@/lib/integrations/homeworks-paging";
-import { rangeForDays, validateRange } from "@/lib/integrations/homeworks-dates";
+import { isISODate, rangeForDays, validateRange } from "@/lib/integrations/homeworks-dates";
+
+function validRows(rows: unknown): boolean {
+  return Array.isArray(rows) && rows.every(row => isRecord(row) && ((typeof row.id === "string" && row.id.length > 0) || (typeof row.id === "number" && Number.isSafeInteger(row.id))));
+}
+
+function validCustomerRows(rows: HomeworksCustomerSample[]): boolean {
+  return validRows(rows) && rows.every(row => row.properties == null || validRows(row.properties));
+}
+
+function validEventRows(rows: HomeworksUpcomingJob[]): boolean {
+  return validRows(rows) && rows.every(row =>
+    typeof row.title === "string" && typeof row.status === "string" &&
+    typeof row.hasTime === "boolean" && typeof row.startDate === "string" && isISODate(row.startDate) &&
+    (row.endDate == null || isISODate(row.endDate)) &&
+    (typeof row.total === "number" || (typeof row.total === "string" && row.total.trim() !== "")) &&
+    Number.isFinite(Number(row.total)) &&
+    (row.customer == null || validRows([row.customer])) &&
+    (row.property == null || validRows([row.property]))
+  );
+}
 
 type GraphQLResult<T> = { ok: true; data: T } | { ok: false; message: string; retryable?: boolean };
 
@@ -10,31 +31,17 @@ async function queryHomeworks<T>(query: string, variables?: Record<string, unkno
   const token = await getValidAccessToken();
   if (!token.ok) return { ok: false, message: token.message };
 
-  let response: Response;
-  try {
-    response = await fetch(HOMEWORKS_GRAPHQL_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${token.accessToken}`,
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach the Homeworks API.", retryable: true };
+  const result = await fetchApiJson<{ data?: T; errors?: { message: string }[] }>("Homeworks", HOMEWORKS_GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token.accessToken}` },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!result.ok) return result;
+  const json = result.data;
+  if (json.errors && (!Array.isArray(json.errors) || json.errors.length > 0)) {
+    return { ok: false, message: "Homeworks returned a GraphQL error. No partial data was used." };
   }
-
-  if (!response.ok) {
-    const text = await response.text();
-    const retryable = response.status === 429 || response.status >= 500;
-    return { ok: false, message: `Homeworks API returned ${response.status}: ${text.slice(0, 400)}`, retryable };
-  }
-
-  const json = (await response.json()) as { data?: T; errors?: { message: string }[] };
-  if (json.errors && json.errors.length > 0) {
-    return { ok: false, message: json.errors.map((e) => e.message).join("; ") };
-  }
-  if (!json.data) return { ok: false, message: "Homeworks API returned no data." };
+  if (!isRecord(json.data)) return { ok: false, message: "Homeworks API returned no data." };
   return { ok: true, data: json.data };
 }
 
@@ -94,6 +101,7 @@ const CUSTOMERS_QUERY = `
 export async function getSampleCustomers(take = 5): Promise<GraphQLResult<{ customers: HomeworksCustomerSample[] }>> {
   const result = await queryHomeworks<{ customers: HomeworksCustomerSample[] }>(CUSTOMERS_QUERY, { take });
   if (!result.ok) return result;
+  if (!validCustomerRows(result.data.customers)) return invalidApiResponse("Homeworks");
   return { ok: true, data: { customers: result.data.customers.map(normalizeCustomer) } };
 }
 
@@ -123,6 +131,7 @@ export async function getAllCustomers(): Promise<GraphQLResult<{ customers: Home
       skip: page * pageSize,
     });
     if (!result.ok) return result;
+    if (!validCustomerRows(result.data.customers)) return invalidApiResponse("Homeworks");
     all.push(...result.data.customers.map(normalizeCustomer));
     page++;
     if (result.data.customers.length < pageSize) {
@@ -236,6 +245,7 @@ export async function getEventsInRange(range: { from: string; to: string }, opti
   const page = (query: string, vars: Record<string, unknown>): PageFetch<HomeworksUpcomingJob> => async (skip, take) => {
     const result = await queryHomeworks<{ events: HomeworksUpcomingJob[] }>(query, { ...vars, take, skip });
     if (!result.ok) return { ok: false, message: result.message, retryable: result.retryable };
+    if (!validEventRows(result.data.events)) return invalidApiResponse("Homeworks");
     return { ok: true, items: result.data.events.map(normalizeJob) };
   };
 
@@ -269,6 +279,7 @@ export async function getEventsByIds(ids: string[]): Promise<GraphQLResult<{ eve
     const chunk = unique.slice(i, i + 200).map(Number).filter((n) => Number.isSafeInteger(n));
     const result = await queryHomeworks<{ events: HomeworksUpcomingJob[] }>(EVENTS_BY_IDS_QUERY, { ids: chunk, take: chunk.length });
     if (!result.ok) return result;
+    if (!validEventRows(result.data.events)) return invalidApiResponse("Homeworks");
     found.push(...result.data.events.map(normalizeJob));
   }
   return { ok: true, data: { events: found } };
@@ -290,5 +301,6 @@ export type HomeworksAccount = { userEmail: string; companyName: string };
 export async function getConnectedAccount(): Promise<GraphQLResult<HomeworksAccount>> {
   const result = await queryHomeworks<{ currentUser: { email: string; company: { name: string } | null } }>(WHO_AM_I_QUERY);
   if (!result.ok) return result;
+  if (!isRecord(result.data.currentUser) || typeof result.data.currentUser.email !== "string") return invalidApiResponse("Homeworks");
   return { ok: true, data: { userEmail: result.data.currentUser.email, companyName: result.data.currentUser.company?.name ?? "(unknown company)" } };
 }

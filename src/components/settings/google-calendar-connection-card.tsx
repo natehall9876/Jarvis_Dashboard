@@ -37,30 +37,47 @@ export function GoogleCalendarConnectionCard({
   urlMessage: { status: "connected" | "error"; message?: string } | null;
 }) {
   const router = useRouter();
+  const [actionError, setActionError] = useState<string | null>(null);
   const [calendars, setCalendars] = useState<ListCalendarsResult | null>(null);
   const [preview, setPreview] = useState<PreviewGoogleCalendarResult | null>(null);
   const [pending, startTransition] = useTransition();
   const [listPending, startListTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
 
+  const busy = pending || listPending || previewPending;
+  const needsReconnect = (calendars && !calendars.ok && calendars.reason === "reauth_required") || (preview && !preview.ok && preview.reason === "reauth_required");
+  const verifiedAt = preview?.ok ? preview.verifiedAt : calendars?.ok ? calendars.verifiedAt : null;
+
   function loadCalendars() {
+    setActionError(null);
+    setPreview(null);
     setCalendars(null);
     startListTransition(async () => setCalendars(await listGoogleCalendars()));
   }
   function pickCalendar(id: string, summary: string) {
+    if (!calendars?.ok) return;
+    const version = calendars.connectionVersion;
+    setPreview(null);
+    setActionError(null);
     startTransition(async () => {
-      await selectGoogleCalendar(id, summary);
+      const selected = await selectGoogleCalendar(id, summary, version);
+      if (!selected.ok) { setActionError(selected.message); return; }
+      setCalendars(null);
       router.refresh();
     });
   }
   function runPreview() {
     if (!selectedCalendarId) return;
+    setActionError(null);
+    setCalendars(null);
     setPreview(null);
     startPreviewTransition(async () => setPreview(await previewGoogleCalendarEvents(selectedCalendarId)));
   }
   function disconnectNow() {
     startTransition(async () => {
-      await disconnectGoogleCalendarAction();
+      const disconnected = await disconnectGoogleCalendarAction();
+      if (!disconnected.ok) { setActionError(disconnected.message); return; }
+      setActionError(null);
       setCalendars(null);
       setPreview(null);
       router.refresh();
@@ -71,13 +88,14 @@ export function GoogleCalendarConnectionCard({
     <Card>
       <CardHeader title="Google Calendar" description="Read-only. Previewed separately from Homeworks jobs — never merged into the schedule, so nothing is ever double-counted." />
       <CardBody className="space-y-3">
+        {actionError ? <p role="alert" className="text-xs text-[var(--color-critical)]">{actionError}</p> : null}
         {urlMessage?.status === "error" ? (
           <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {urlMessage.message ?? "The connection attempt failed."}
           </p>
         ) : null}
-        {urlMessage?.status === "connected" ? (
+        {urlMessage?.status === "connected" && connected ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
             Authorization saved - pick a calendar below.
@@ -90,7 +108,7 @@ export function GoogleCalendarConnectionCard({
             Not configured — <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">GOOGLE_CALENDAR_CLIENT_ID</code> and{" "}
             <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">GOOGLE_CALENDAR_CLIENT_SECRET</code> are missing. Create an OAuth client at{" "}
             <span className="text-[var(--color-text-secondary)]">console.cloud.google.com</span> with redirect URI{" "}
-            <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">/api/integrations/google-calendar/oauth/callback</code>, and enable the Calendar API.
+            <code className="break-all rounded bg-[var(--color-surface-3)] px-1 py-0.5">https://jarvis-dashboard-fawn.vercel.app/api/integrations/google-calendar/oauth/callback</code>, and enable the Calendar API.
           </p>
         ) : statusError ? null : !connected ? (
           <a
@@ -101,6 +119,8 @@ export function GoogleCalendarConnectionCard({
           </a>
         ) : (
           <div className="space-y-2">
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">{needsReconnect ? "Needs reconnect" : verifiedAt ? "Verified live at " + new Date(verifiedAt).toLocaleString("en-US", { timeZone: "America/New_York" }) : "Saved authorization - not verified in this view"}</p>
+            {needsReconnect ? <a className="inline-flex min-h-11 items-center text-sm text-[var(--color-accent)] underline" href="/api/integrations/google-calendar/oauth/connect">Reconnect Google Calendar</a> : null}
             <p className="text-xs text-[var(--color-text-secondary)]">
               Token on file since {connectedAt ? new Date(connectedAt).toLocaleString() : "unknown"}.{" "}
               {selectedCalendarSummary ? (
@@ -110,17 +130,17 @@ export function GoogleCalendarConnectionCard({
               )}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={loadCalendars} disabled={listPending}>
+              <Button type="button" variant="secondary" onClick={loadCalendars} disabled={busy}>
                 {listPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 {selectedCalendarId ? "Change calendar" : "Choose a calendar"}
               </Button>
               {selectedCalendarId ? (
-                <Button type="button" variant="secondary" onClick={runPreview} disabled={previewPending}>
+                <Button type="button" variant="secondary" onClick={runPreview} disabled={busy}>
                   {previewPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   Preview next 14 days (read-only)
                 </Button>
               ) : null}
-              <Button type="button" variant="ghost" onClick={disconnectNow} disabled={pending}>
+              <Button type="button" variant="ghost" onClick={disconnectNow} disabled={busy}>
                 <Unplug className="h-3.5 w-3.5" />
                 Disconnect
               </Button>
@@ -141,8 +161,8 @@ export function GoogleCalendarConnectionCard({
                 <button
                   type="button"
                   onClick={() => pickCalendar(cal.id, cal.summary)}
-                  disabled={pending}
-                  className={`w-full rounded-md border px-2.5 py-1.5 text-left text-xs ${
+                  disabled={busy}
+                  className={`min-h-11 w-full rounded-md border px-2.5 py-1.5 text-left text-xs ${
                     selectedCalendarId === cal.id ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]" : "border-[var(--color-border-strong)] text-[var(--color-text-secondary)]"
                   }`}
                 >

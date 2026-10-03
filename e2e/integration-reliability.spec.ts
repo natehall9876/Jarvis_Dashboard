@@ -31,6 +31,7 @@ for (const provider of providers) {
       });
       const connection = loadServerModule<typeof HomeworksConnection>("src/lib/integrations/" + provider + "-connection.ts", {
         "@/lib/supabase/server": { createSupabaseServerClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }) } }) },
+    "@/lib/integrations/owner-auth": { requireIntegrationOwner: async () => ({ ok: true, userId: "owner" }) },
         "@/lib/supabase/admin": { createSupabaseAdminClient: () => { if (options.missingConfig) throw new Error("SUPABASE_SERVICE_ROLE_KEY missing"); return client; } },
         ["@/lib/integrations/" + provider + "-oauth"]: { refreshAccessToken: async () => { refreshCalls++; return { ok: true, data: tokenResponse }; } },
       });
@@ -186,6 +187,7 @@ for (const [provider, parameter, cookie] of [
   test(provider + " callback reports declined authorization and clears path-scoped cookies", async () => {
     const route = loadServerModule<{ GET: (request: Request) => Promise<Response> }>("src/app/api/integrations/" + provider + "/oauth/callback/route.ts", {
       "@/lib/supabase/server": { createSupabaseServerClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }) } }) },
+    "@/lib/integrations/owner-auth": { requireIntegrationOwner: async () => ({ ok: true, userId: "owner" }) },
       ["@/lib/integrations/" + provider + "-connection"]: { saveConnection: async () => { throw new Error("Must not save a declined authorization"); } },
       ["@/lib/integrations/" + provider + "-oauth"]: { exchangeCodeForToken: async () => { throw new Error("Must not exchange a declined authorization"); } },
     });

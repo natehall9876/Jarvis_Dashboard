@@ -55,6 +55,13 @@ export type ActivitySource = "jarvis" | "owner" | "system";
 export type Database = {
   public: {
     Tables: {
+      /** Live membership guard verified October 3, 2026; owner/employee role CHECK exists. */
+      app_members: {
+        Row: { user_id: string; role: "owner" | "employee"; active: boolean; created_at: string };
+        Insert: { user_id: string; role: "owner" | "employee"; active?: boolean; created_at?: string };
+        Update: { user_id?: string; role?: "owner" | "employee"; active?: boolean; created_at?: string };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;
