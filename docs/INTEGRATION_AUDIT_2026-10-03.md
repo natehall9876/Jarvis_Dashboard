@@ -148,4 +148,9 @@ modules with external auth/network boundaries replaced; no live business
 data is written. Failing cases were observed before fixes.
 The final combined integration/OAuth run passed 124 tests across Chromium and WebKit projects.
 Typecheck, lint, production build and client-secret-reference check passed.
-Full Playwright and final deployment results are recorded in JARVIS_PROGRESS.md.
+Full Playwright and deployment results are recorded in JARVIS_PROGRESS.md.
+Application release 2274b778cfa812aadfef8f28a541a87a677dc8c1 was verified
+READY in Vercel production, with successful GitHub CI and live unauthenticated
+route checks. A local GitHub API-token attempt returned 401; git push and the
+connected GitHub tools still worked, and public CI status was verified without
+credentials. Credential presence must not be treated as credential validity.
