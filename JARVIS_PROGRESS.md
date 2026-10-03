@@ -113,3 +113,35 @@ Google requires owner setup/consent. Existing QBO authorization is preserved.
 No unattended sync enabled: distributed refresh coordination and source-version/
 owner-edit/cancellation conflict rules are unresolved, so a timer would risk
 business data. No new subscription/platform introduced.
+
+### Follow-up release evidence
+
+Pushed without force/history rewrite:
+- 903b02f13e7dd7a29b88557b99b21b87a461d85a — OAuth ownership/refresh/provider reads.
+- b19ac015f8375fdb36ebf7786ce567d48c659136 — Homeworks preservation/history.
+- 558397ae8be738ef9c6f4cb2581582a7554a82ec — owner dashboard accuracy.
+- 39de90fbc048afb68aa8787bb57b7c192663857a — current-state documentation.
+
+Vercel production deployment dpl_DW9guuW1EAdXn7LRWEz4XTnhE2dp reached READY
+for exact commit 39de90fbc048afb68aa8787bb57b7c192663857a. Production alias
+jarvis-dashboard-fawn.vercel.app was attached without alias errors.
+Live checks: /login 200; /, /settings and all three OAuth connect routes
+redirect unauthenticated callers to /login. Connected Vercel runtime-error
+query reported no errors in its selected one-hour window. This verifies
+deployment/routing, not fresh Homeworks/QBO/Google data.
+
+Supabase additionally confirmed authenticated SELECT privilege on app_members,
+RLS enabled, and one active owner, so the new owner guard uses an existing
+verified table/policy/permission rather than a pending schema assumption.
+No real business records changed. The next owner action remains Vercel CLI
+authorization; it was not restarted during this follow-up.
+
+GitHub CI for 39de90fbc048afb68aa8787bb57b7c192663857a completed successfully:
+https://github.com/natehall9876/Jarvis_Dashboard/actions/runs/37155176906.
+
+Final public-schema cross-check ruled out a suspected Homeworks date scalar
+mismatch: Event outputs LocalDate, but EventFilter.startDate/endDate use
+DateFilter, whose gte/lte/lt operands are Date. The existing Date! query
+variables are correct. events supports where/orderBy/take/skip as implemented.
+This schema read does not authenticate to the business account or verify data
+freshness. No speculative query rewrite was made.
