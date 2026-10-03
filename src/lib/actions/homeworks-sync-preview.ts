@@ -28,7 +28,7 @@ export type SyncPreviewResult =
       wouldCreate: number;
       wouldUpdate: number;
       possibleDuplicates: number;
-      upcomingJobCount: number;
+      upcomingJobCount: number | null;
       rows: SyncPreviewRow[];
     }
   | { ok: false; message: string };
@@ -50,7 +50,7 @@ export async function previewHomeworksSync(): Promise<SyncPreviewResult> {
   // comparison (the actual point of this action) still ran successfully;
   // an account-identity or job-count hiccup is shown as absent, not fatal.
   const account = accountResult.ok ? accountResult.data : null;
-  const upcomingJobCount = upcomingJobsResult.ok ? upcomingJobsResult.data.jobs.length : 0;
+  const upcomingJobCount = upcomingJobsResult.ok ? upcomingJobsResult.data.jobs.length : null;
 
   const supabase = await createSupabaseServerClient();
   const { data: existingClients, error } = await supabase.from("clients").select("id, homeworks_id, phone, email, first_name, last_name, company_name");

@@ -1,88 +1,62 @@
-# Homeworks Sync — End-to-End Verification Procedure
+# Homeworks verification
 
-No step here requires pasting a secret anywhere outside Vercel's or
-Zapier's own dashboards. Follow in order.
+Current evidence is in `INTEGRATION_AUDIT_2026-10-03.md`. Direct API access,
+webhook receipt, stored records, and automatic scheduling are separate checks.
+A saved OAuth authorization or populated customer table proves neither a
+fresh API read nor continuing webhook delivery.
 
-## 0. Prerequisite: rotate the webhook secret first
+## Prerequisites
 
-If you haven't already (see `JARVIS_PROGRESS.md`), do this before testing —
-otherwise you're verifying a connection using a secret that may already be
-compromised.
+Use the existing production Jarvis project and an authenticated owner session.
+The server needs `SUPABASE_SERVICE_ROLE_KEY`; direct OAuth also needs
+`HOMEWORKS_OAUTH_CLIENT_ID`. Webhook ingestion needs `HOMEWORKS_WEBHOOK_SECRET`.
+Check variable names and deployment scopes without printing values.
+Historical handoff notes raised a webhook-secret rotation concern. Its current
+rotation state was not verified in the October 3 audit. Resolve that history in
+the existing Vercel and sender configuration before using it for a write test;
+coordinate both ends so legitimate deliveries are not broken.
 
-1. Generate a new secret yourself (a password manager, or run
-   `openssl rand -hex 32` in a terminal — the output stays on your screen,
-   never sent anywhere by that command itself).
-2. Vercel → your project → Settings → Environment Variables →
-   `HOMEWORKS_WEBHOOK_SECRET` → edit the value → confirm **Production** is
-   checked → Save.
-3. Zapier → open the Zap → the "Webhooks by Zapier" POST step → Headers →
-   update `x-homeworks-webhook-secret` to the same new value → Save.
-4. Vercel → Deployments → latest → **⋯** → **Redeploy** (environment
-   variable changes need a fresh deployment to take effect).
-5. Wait for the deployment to show **Ready**.
+## Direct API, read-only first
 
-## 1. Confirm the new deployment is live (no secret needed)
+1. Open Settings and use Homeworks **Verify**. Record success/error and time,
+   never tokens. A stored authorization is not this check.
+2. Preview the full customer/property sync, upcoming jobs, and reconciliation.
+   Compare totals and dates with Homeworks itself. A failed schedule read must
+   show unknown, not zero. A capped customer result cannot be confirmed.
+3. Inspect proposed additions and updates. Confirm imports only after reviewing
+   actual changes and source authority. Do not use real customer writes as a test.
+4. Check sync status and distinguish manual imports from webhook receipts.
 
-In a terminal:
+## Webhook authentication, no write
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://jarvis-dashboard-fawn.vercel.app/
-```
+POST a deliberately invalid secret to the existing webhook route. A 401 with
+an invalid-secret error proves only that the route rejects that request.
+A 503 names missing server configuration. Neither proves valid delivery.
+Never put the real secret in command output, a transcript, or a committed file.
 
-Expect `307` (redirects to login — this just confirms the server responds).
+## Valid delivery, dedicated test record only
 
-## 2. Confirm the secret was actually updated (no secret needed)
+Use the already configured sender, if one exists. Do not buy another service.
+First inspect its trigger coverage and delivery history. Send a clearly marked,
+owner-approved dedicated test record with a unique external ID. Check:
 
-```bash
-curl -s -X POST https://jarvis-dashboard-fawn.vercel.app/api/integrations/homeworks/webhook \
-  -H "content-type: application/json" \
-  -H "x-homeworks-webhook-secret: obviously-wrong-value" \
-  -d '{"entity_type":"customer","homeworks_id":"probe"}'
-```
+- Successful response and exactly one matching database record.
+- An activity event with `origin: webhook` and `provenance_version: 2`.
+- The same record is visible in the owner's Jarvis session.
+- Repeating the same test event preserves the record ID and does not duplicate it.
 
-Expect: `{"error":"Invalid or missing webhook secret."}`. This proves a
-secret is configured and being checked, without revealing what it is. (If
-you instead see `"not configured"`, the env var didn't save or the
-redeploy hasn't finished — go back to step 0.)
+Do not replay arbitrary real customer payloads or remove records during this
+check. A test delivery verifies only that event shape, not every entity type.
 
-## 3. Run the real Zapier test (uses your real secret, stays inside Zapier)
+## Automatic freshness
 
-In the Zap editor, on the "Webhooks by Zapier" step, click **Test step**.
-Zapier will show you the actual response inline. Look for:
+The repository has no scheduled full sync. Direct import, enrichment, job sync,
+and reconciliation run only when requested. A webhook receiver cannot produce
+events by itself; its sender must be configured and delivering each needed type.
+Historical `homeworks_webhook_sync` labels are ambiguous because manual imports
+used the same default before the October 3 fix. Version-2 provenance separates
+new deliveries without rewriting historical records.
 
-```json
-{ "ok": true, "entity_type": "customer", "id": "<some uuid>" }
-```
-
-- `"ok": true` + a `id` → the write succeeded.
-- Anything else (an `"error"` field) → copy *only the error message text*
-  (never the request/headers) and share that — it will name the exact
-  problem (e.g. a missing required field, or a real database error).
-
-## 4. Confirm the record independently, two ways (no secret needed for either)
-
-**A — In Supabase directly** (fastest, fully independent of the app):
-Supabase dashboard → Table Editor → `clients` table → search/filter for
-the value you sent as `homeworks_id` in step 3. If a row exists with that
-`homeworks_id` and the customer's name in `first_name`/`last_name`, the
-sync worked at the database level.
-
-**B — In Jarvis itself:**
-Log into https://jarvis-dashboard-fawn.vercel.app → Clients → search for
-that same customer's name. It should appear in the list — this confirms
-not just that the row exists, but that the rest of the app (RLS,
-rendering) sees it correctly too.
-
-## 5. Confirm idempotency (optional but recommended)
-
-Click **Test step** in Zapier a second time for the *same* customer
-record. Expect the *same* `id` back (not a new one), and check Supabase's
-Table Editor again — still exactly one row for that customer, not two.
-This confirms re-syncs update rather than duplicate.
-
-## What "done" looks like
-
-All of: step 2 shows the secret is live, step 3 returns `ok: true`, and
-step 4 shows the record in both Supabase and Jarvis's Clients page. Only
-then is it accurate to say the Homeworks integration is verified working
-— not before.
+Before enabling recurring writes, verify current provider data and sender
+coverage, deletion/cancellation behavior, and how Homeworks changes interact
+with owner edits. Preview and preserve records until those semantics are clear.

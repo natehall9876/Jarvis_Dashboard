@@ -27,10 +27,13 @@ export async function saveConnection(tokens: GoogleTokenResponse, userId: string
 
   const supabase = createSupabaseAdminClient();
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  const { error: deleteError } = await supabase.from("google_calendar_oauth_connection").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-  if (deleteError) return { ok: false, message: `Couldn't clear the previous connection: ${deleteError.message}` };
+  // Preserve the prior connection if this atomic replacement fails.
+  const { data: existing, error: lookupError } = await supabase.from("google_calendar_oauth_connection").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (lookupError) return { ok: false, message: "Could not read the previous connection before saving." };
 
-  const { error: insertError } = await supabase.from("google_calendar_oauth_connection").insert({
+  const { error: insertError } = await supabase.from("google_calendar_oauth_connection").upsert({
+    id: existing?.id ?? "00000000-0000-4000-8000-000000000001",
+    updated_at: new Date().toISOString(),
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     access_token_expires_at: expiresAt,
@@ -47,27 +50,43 @@ export type ConnectionStatus =
   | { connected: true; connectedAt: string; selectedCalendarId: string | null; selectedCalendarSummary: string | null };
 
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
-  const auth = await requireAuthenticatedUser();
-  if (!auth.ok) return { connected: false, error: null };
+  try {
+    const auth = await requireAuthenticatedUser();
+    if (!auth.ok) return { connected: false, error: null };
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("google_calendar_oauth_connection")
-    .select("created_at, selected_calendar_id, selected_calendar_summary")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) return { connected: false, error: error.message };
-  if (!data) return { connected: false, error: null };
-  return { connected: true, connectedAt: data.created_at, selectedCalendarId: data.selected_calendar_id, selectedCalendarSummary: data.selected_calendar_summary };
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("google_calendar_oauth_connection")
+      .select("created_at, selected_calendar_id, selected_calendar_summary")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return { connected: false, error: error.message };
+    if (!data) return { connected: false, error: null };
+    return { connected: true, connectedAt: data.created_at, selectedCalendarId: data.selected_calendar_id, selectedCalendarSummary: data.selected_calendar_summary };
+  } catch (error) {
+    return { connected: false, error: error instanceof Error ? error.message : "Could not read connection status." };
+  }
 }
 
 export type ValidTokenResult = { ok: true; accessToken: string } | { ok: false; reason: "not_connected" | "refresh_failed" | "auth"; message: string };
+
+// Coalesce parallel reads in this server process; no token is cached after completion.
+let tokenRequest: Promise<ValidTokenResult> | null = null;
 
 export async function getValidAccessToken(): Promise<ValidTokenResult> {
   const auth = await requireAuthenticatedUser();
   if (!auth.ok) return { ok: false, reason: "auth", message: "You must be signed in." };
 
+  if (!tokenRequest) {
+    tokenRequest = readAndRefreshToken()
+      .catch((): ValidTokenResult => ({ ok: false, reason: "refresh_failed", message: "Could not access the OAuth token store. Check server configuration and retry." }))
+      .finally(() => { tokenRequest = null; });
+  }
+  return tokenRequest;
+}
+
+async function readAndRefreshToken(): Promise<ValidTokenResult> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("google_calendar_oauth_connection")
@@ -89,12 +108,15 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
     return { ok: false, reason: "refresh_failed", message: refreshed.message };
   }
   const newExpiresAt = new Date(Date.now() + refreshed.data.expires_in * 1000).toISOString();
-  await supabase
+  const { data: saved, error: saveError } = await supabase
     .from("google_calendar_oauth_connection")
     // Google's refresh response never includes a new refresh_token — the
     // original stays valid. Only the access token and its expiry are updated.
     .update({ access_token: refreshed.data.access_token, access_token_expires_at: newExpiresAt, updated_at: new Date().toISOString() })
-    .eq("id", data.id);
+    .eq("id", data.id)
+    .select("id")
+    .maybeSingle();
+  if (saveError || !saved) return { ok: false, reason: "refresh_failed", message: "Could not save refreshed tokens. The connection is not verified; retry or reconnect from Settings." };
   return { ok: true, accessToken: refreshed.data.access_token };
 }
 

@@ -1,3 +1,20 @@
+# Current handoff - October 3, 2026
+
+Canonical checkout remains C:\Users\nateh\OneDrive\Documents\Jarvis_Dashboard. Baseline main and origin/main were both 9aa06f25d25f7b5e16472b4b5932570c4f1bbffe.
+
+Integration reliability changes: atomic OAuth reconnects preserve the prior row on failure; refresh persistence errors no longer report success; parallel reads coalesce refreshes within a process; malformed token responses fail safely; callbacks clear their scoped cookies; missing admin config produces an actionable status. Google Calendar pagination and Eastern date/DST bounds are corrected. Manual Homeworks imports no longer pretend to be webhooks, capped imports cannot be confirmed, and failed schedule previews report unknown.
+
+Verification: typecheck, lint, production build, and shipped-client secret-reference check passed. 31 new reliability cases; focused integration/OAuth run 61/61. Full default Playwright run: 464 passed and 52 initially blocked by absent browser binaries. After installing the required Chromium/WebKit browsers, all 52 blocked cases passed on retry. Thus all 516 cases passed across the two runs. Assertions were not weakened. Authenticated live note/photo tests were not run because an owner test session and designated test job were unavailable.
+
+Live read-only audit: Supabase schema, RLS policies, unique indexes, migration history and counts inspected directly. 25 linked customers, 26 linked properties and 48 linked jobs; last job update September 25 UTC. Homeworks and QuickBooks each have one authorization row last updated October 2; Google Calendar has none. No fresh provider Verify call was possible, and no business records or database schema were changed.
+
+Production baseline was READY at the expected SHA; connected Vercel tooling is available, unlike earlier handoff notes. Local Vercel CLI is logged out and cannot yet audit production environment names. Local missing credentials do not establish that production credentials are missing. Deployment result for this change must be checked against its Git SHA through Vercel after push.
+
+Remaining owner-only access: Vercel CLI authorization and a signed-in Jarvis session for fresh provider checks. Google Calendar additionally needs its own OAuth client/consent. QuickBooks should not be reauthorized unless the existing connection actually fails. No automatic Homeworks writer was enabled: fresh source comparisons, sender coverage, cancellation/deletion and owner-edit handling must be established first.
+
+See docs/INTEGRATION_AUDIT_2026-10-03.md for exact evidence, configuration boundaries and remaining risks. Everything below is historical and may describe superseded blockers or deployments.
+
+---
 # Jarvis Progress — Resumable Handoff
 
 ## September 23, 2026 — workflow recovery branch (not production)

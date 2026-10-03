@@ -199,7 +199,7 @@ for (const [label, oauth] of [
       }
     });
 
-    test("the authorization URL includes state, redirect_uri and the read-only scope", () => {
+    test("the authorization URL includes state, redirect_uri and the requested scope", () => {
       const url = new URL(oauth.buildAuthorizationUrl({ redirectUri: "https://example.com/cb", state: "csrf-state-123" }));
       expect(url.searchParams.get("redirect_uri")).toBe("https://example.com/cb");
       expect(url.searchParams.get("state")).toBe("csrf-state-123");
@@ -220,7 +220,7 @@ test("Google's authorization URL specifically forces a refresh token (access_typ
   expect(url.searchParams.get("scope")).toContain("calendar.readonly");
 });
 
-test("QuickBooks' authorization URL requests only the read-only accounting scope", () => {
+test("QuickBooks' authorization URL requests the accounting scope (read-only behavior is enforced by Jarvis)", () => {
   const url = new URL(quickbooksOAuth.buildAuthorizationUrl({ redirectUri: "https://example.com/cb", state: "s" }));
   expect(url.searchParams.get("scope")).toBe("com.intuit.quickbooks.accounting");
 });

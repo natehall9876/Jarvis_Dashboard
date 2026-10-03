@@ -54,6 +54,8 @@ export async function confirmHomeworksImport(): Promise<ImportResult> {
   const homeworksResult = await getAllCustomers();
   if (!homeworksResult.ok) return { ok: false, message: homeworksResult.message };
 
+  if (homeworksResult.data.hitCap) return { ok: false, message: "Customer fetch reached its pagination limit. No records were imported; a complete preview is required." };
+
   const supabase = await createSupabaseServerClient();
   const { data: existingClients, error } = await supabase.from("clients").select("id, homeworks_id, phone, email");
   if (error) return { ok: false, message: `Couldn't read existing Jarvis clients: ${error.message}` };

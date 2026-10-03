@@ -8,7 +8,9 @@ function redirectWithStatus(request: Request, status: "connected" | "error", mes
   const url = new URL("/settings", request.url);
   url.searchParams.set("quickbooks", status);
   if (message) url.searchParams.set("quickbooks_message", message);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  response.cookies.set("qb_oauth_state", "", { httpOnly: true, secure: true, sameSite: "lax", path: "/api/integrations/quickbooks/oauth", maxAge: 0 });
+  return response;
 }
 
 export async function GET(request: Request) {
@@ -19,8 +21,6 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
   const url = new URL(request.url);
-  const realmId = url.searchParams.get("realmId");
-  if (!realmId) return redirectWithStatus(request, "error", "No QuickBooks company (realmId) was returned.");
 
   const validation = validateOAuthCallback({
     searchParams: url.searchParams,
@@ -29,6 +29,8 @@ export async function GET(request: Request) {
     stateCookieName: "qb_oauth_state",
   });
   if (!validation.ok) return redirectWithStatus(request, "error", validation.message);
+  const realmId = url.searchParams.get("realmId");
+  if (!realmId || !/^\d+$/.test(realmId)) return redirectWithStatus(request, "error", "No valid QuickBooks company (realmId) was returned.");
 
   const redirectUri = new URL("/api/integrations/quickbooks/oauth/callback", request.url).toString();
   const result = await exchangeCodeForToken({ code: validation.code, redirectUri });
@@ -38,6 +40,5 @@ export async function GET(request: Request) {
   if (!saveResult.ok) return redirectWithStatus(request, "error", saveResult.message);
 
   const response = redirectWithStatus(request, "connected");
-  response.cookies.delete("qb_oauth_state");
   return response;
 }

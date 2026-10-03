@@ -189,7 +189,7 @@ async function logSync(
         origin === "webhook"
           ? `${payload.entity_type} synced from a live Homeworks webhook (Zapier)`
           : `${payload.entity_type} synced via bulk import`,
-      detail: { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type },
+      detail: { homeworks_id: payload.homeworks_id, entity_type: payload.entity_type, origin, provenance_version: 2 },
       source: "system",
     },
     supabase,
@@ -199,7 +199,7 @@ async function logSync(
 export async function syncHomeworksEntity(
   supabase: SupabaseClient<Database>,
   payload: HomeworksSyncPayload,
-  origin: "webhook" | "bulk_import" = "webhook",
+  origin: "webhook" | "bulk_import" = "bulk_import",
 ): Promise<HomeworksSyncResult> {
   try {
     switch (payload.entity_type) {

@@ -6,13 +6,12 @@ import { supabaseEnv } from "@/lib/env";
 
 /**
  * Server-side Supabase client for use in Server Components, Server Actions,
- * and Route Handlers. Reads/writes auth cookies via next/headers so a future
- * login flow (Supabase Auth) works without changing call sites.
+ * and Route Handlers. Reads/writes Supabase Auth cookies via next/headers.
  *
  * Uses the public URL and publishable (anon) key plus the caller's cookies —
  * row-level security in Supabase is what should scope access, not a
- * service-role bypass. No service-role key is read here or anywhere in the
- * app.
+ * service-role bypass. This module never reads the service-role key; narrowly
+ * scoped integration exceptions use admin.ts.
  *
  * Wrapped in React's `cache()` so every call with no arguments within the
  * same request (a page's own data-fetching, its layout's Topbar, etc.) reuses

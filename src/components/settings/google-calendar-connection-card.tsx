@@ -25,6 +25,7 @@ export function GoogleCalendarConnectionCard({
   selectedCalendarId,
   selectedCalendarSummary,
   configured,
+  statusError,
   urlMessage,
 }: {
   connected: boolean;
@@ -32,6 +33,7 @@ export function GoogleCalendarConnectionCard({
   selectedCalendarId: string | null;
   selectedCalendarSummary: string | null;
   configured: boolean;
+  statusError: string | null;
   urlMessage: { status: "connected" | "error"; message?: string } | null;
 }) {
   const router = useRouter();
@@ -78,10 +80,11 @@ export function GoogleCalendarConnectionCard({
         {urlMessage?.status === "connected" ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            Connected — pick a calendar below.
+            Authorization saved - pick a calendar below.
           </p>
         ) : null}
 
+        {statusError ? <p role="alert" className="text-xs text-[var(--color-critical)]">{statusError}</p> : null}
         {!configured ? (
           <p className="text-xs text-[var(--color-text-muted)]">
             Not configured — <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">GOOGLE_CALENDAR_CLIENT_ID</code> and{" "}
@@ -89,7 +92,7 @@ export function GoogleCalendarConnectionCard({
             <span className="text-[var(--color-text-secondary)]">console.cloud.google.com</span> with redirect URI{" "}
             <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">/api/integrations/google-calendar/oauth/callback</code>, and enable the Calendar API.
           </p>
-        ) : !connected ? (
+        ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/google-calendar/oauth/connect"
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"

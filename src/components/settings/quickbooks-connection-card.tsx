@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { verifyQuickBooksConnection, previewQuickBooksFinancials, disconnectQuickBooksAction, type PreviewQuickBooksResult, type VerifyQuickBooksResult } from "@/lib/actions/quickbooks";
 
 /**
- * Mirrors HomeworksConnectionCard's pattern: a "Connected" badge means only
+ * Mirrors HomeworksConnectionCard's pattern: saved authorization means only
  * that a token is stored — Verify makes one real, cheap QuickBooks call
  * (CompanyInfo) to prove it actually works, before anything is claimed.
  * "Preview financial summary" fetches customers/invoices/payments read-only
@@ -21,12 +21,14 @@ export function QuickBooksConnectionCard({
   connectedAt,
   realmId,
   configured,
+  statusError,
   urlMessage,
 }: {
   connected: boolean;
   connectedAt: string | null;
   realmId: string | null;
   configured: boolean;
+  statusError: string | null;
   urlMessage: { status: "connected" | "error"; message?: string } | null;
 }) {
   const router = useRouter();
@@ -68,10 +70,11 @@ export function QuickBooksConnectionCard({
         {urlMessage?.status === "connected" ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            Connected — click Verify below to confirm real data comes back.
+            Authorization saved - click Verify below to confirm real data comes back.
           </p>
         ) : null}
 
+        {statusError ? <p role="alert" className="text-xs text-[var(--color-critical)]">{statusError}</p> : null}
         {!configured ? (
           <p className="text-xs text-[var(--color-text-muted)]">
             Not configured — <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">QUICKBOOKS_CLIENT_ID</code> and{" "}
@@ -79,7 +82,7 @@ export function QuickBooksConnectionCard({
             <span className="text-[var(--color-text-secondary)]">developer.intuit.com</span> with redirect URI{" "}
             <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">/api/integrations/quickbooks/oauth/callback</code>.
           </p>
-        ) : !connected ? (
+        ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/quickbooks/oauth/connect"
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"

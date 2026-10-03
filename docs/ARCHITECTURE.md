@@ -1,7 +1,7 @@
 # Architecture
 
 This documents what's actually built, not the long-term vision. See
-`docs/CURRENT_STATE.md` for what's live vs. pending, and `docs/DECISIONS.md`
+`docs/INTEGRATION_AUDIT_2026-10-03.md` for current integration evidence, and `docs/DECISIONS.md`
 for why specific choices were made.
 
 ## Layers
@@ -25,17 +25,12 @@ the human-facing UI uses. There is no separate "AI data path."
 `src/proxy.ts` (Next.js middleware) refreshes the Supabase session cookie on
 every request and redirects signed-out users to `/login` for any non-API,
 non-public route. `src/lib/supabase/server.ts` creates the per-request
-Supabase client from that cookie — every query in the app runs as the
-authenticated user, scoped by RLS. There is no service-role key anywhere in
-this codebase.
-
-`supabase/rls-policies.sql` — the actual live policy: every table has one
-`authenticated_full_access` policy (any signed-in user can read/write
-everything). This is a deliberate single-owner-tool model: there's no public
-sign-up, so in practice only accounts created directly in the Supabase
-dashboard can ever sign in. Multi-role permissions (owner/manager/crew) would
-need real schema work (a `role` column somewhere) before they'd mean
-anything — intentionally not built yet since there's only one user.
+Supabase client from that cookie. Ordinary business reads/writes use the
+authenticated client and live RLS owner guards backed by app_members.
+The admin client is a narrow exception for inbound webhooks and server-side
+OAuth token stores. Browser roles cannot read those token rows.
+Do not mistake the historical rls-policies.sql for the complete current
+policy set; the October 3 audit inspected the live restrictive owner policies.
 
 ## Data model
 
@@ -45,8 +40,7 @@ shape): `clients`, `properties`, `services`, `employees`, `routes`,
 `equipment`, `job_equipment`, `equipment_maintenance`, `quotes`,
 `quote_items`, `invoices`, `invoice_items`, `payments`, `expenses`,
 `job_materials`, `job_photos`, `integration_mappings` (defined, not yet used
-by any integration), `activity_log` and `action_requests` (defined in code,
-**not yet applied to the live database** — see CURRENT_STATE.md).
+by any integration), `activity_log` and `action_requests` (both verified in the live database on October 3).
 
 Plan vs. actual already exists on `jobs`: `budgeted_hours`/`actual_hours`,
 `price`, `scheduled_date` vs. `started_at`/`completed_at`, and a `status`
@@ -110,7 +104,7 @@ silently pick one.
 
 ## Activity history
 
-`activity_log` (not yet live — see CURRENT_STATE.md) is an append-only table:
+`activity_log` (verified live on October 3) is an append-only table:
 `entity_type`, `entity_id`, `event_type`, `summary`, `detail` (jsonb),
 `source` (`jarvis`/`owner`/`system`). `src/lib/data/activity-log.ts`'s
 `logActivity()` is best-effort and never throws — a missing audit trail must
@@ -120,9 +114,16 @@ and quote mutations (both the Jarvis executor and the human-facing forms in
 
 ## What's intentionally not built yet
 
-Role/permission tables (no second user exists), a dedicated recommendations
+A dedicated recommendations
 table with accept/reject/outcome tracking (the deterministic
 `get_attention_items`/`get_owner_briefing` tools cover the "evidence-backed"
 requirement today without one), route-level true-paid $/hr breakdown
-(company-wide only so far), any real QuickBooks/Homeworks/Google Calendar
-sync, a visible "Jarvis orb" UI centerpiece.
+(company-wide only so far), scheduled unattended Homeworks synchronization,
+and matching QuickBooks financials or Calendar events into job records.
+
+## Provider integrations
+
+Homeworks direct OAuth/GraphQL, manual imports/reconciliation and inbound
+webhooks exist. QuickBooks and Google Calendar OAuth and read-only preview
+adapters exist. See INTEGRATION_AUDIT_2026-10-03.md for live evidence, refresh
+limitations, environment requirements and owner-only setup steps.

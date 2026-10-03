@@ -1,72 +1,54 @@
 # Testing
 
-## What exists today
+## Standard checks
 
-**CI** (`.github/workflows/ci.yml`): on every push/PR to `main`, runs
-`npm ci`, `npm run typecheck`, `npm run lint`, `npm run build`. No secrets
-required — the app is designed to build and boot without live credentials
-(verified locally by running a full build with `.env.local` removed).
-
-**E2E** (`e2e/unauthenticated.spec.ts`, Playwright): three tests, run against
-both desktop Chromium and mobile Safari (`iPhone 14` viewport/UA):
-
-1. Visiting a protected route with zero session cookies redirects to
-   `/login`.
-2. `/login` renders the real form (email, password, submit).
-3. Submitting invalid credentials shows a real inline error instead of
-   crashing.
-
-Run locally: `npm run test:e2e` (needs `npx playwright install` once, and a
-running dev server or let Playwright start one — see `playwright.config.ts`).
-
-**This suite already caught a real bug**, not a hypothetical one: a
-completely fresh, cookie-less visitor to `/` was not being redirected to
-`/login` — `src/proxy.ts` treated `AuthSessionMissingError` (a distinct,
-unambiguous "there was never a session" error) the same as a transient
-refresh-token race error, and skipped the redirect for both. RLS meant no
-real data was ever exposed (every query came back empty for the unauthenticated
-role), but the owner-facing gate itself wasn't firing. Fixed by
-distinguishing the two error names; verified by rerunning the same test.
-
-## What does NOT exist yet, and why
-
-**Authenticated E2E coverage** (Command Center, client → property → job
-drill-down, Schedule, Jarvis, write-action confirm/cancel) is not in this
-suite yet. It needs a real test Supabase account, and no test credentials
-exist in this environment — inventing fake ones or hardcoding a real
-password into a spec file would be a worse outcome than not having the
-coverage yet. **To add it:** create a dedicated test-only Supabase Auth user,
-store its email/password as GitHub Actions secrets (`E2E_TEST_EMAIL`,
-`E2E_TEST_PASSWORD`), and add a Playwright `storageState` setup project that
-logs in once and reuses the session across the authenticated specs.
-
-**Deterministic safety tests** for the write-action architecture (propose
-cannot mutate, invalid type rejected, stale proposal rejected, duplicate
-execution prevented, etc.) were verified manually and extensively this
-session — live, against real dedicated test records, including genuinely
-concurrent duplicate-confirmation requests — but are not yet codified as
-an automated test file. The manual verification is described in
-`docs/CURRENT_STATE.md`; turning it into `execute.spec.ts`-style
-unit/integration tests (calling `executeProposedAction` directly with
-hand-built `ProposedAction` fixtures, no LLM involved) is the natural next
-step and doesn't need any credentials beyond the same Supabase project the
-app already uses.
-
-**Golden owner-question scenarios** (a fixed set of real owner phrasing with
-expected tool usage / grounding / confidence behavior) do not exist as a
-committed file yet. A representative sample was tested live this session
-(see conversation history / `docs/CURRENT_STATE.md`), but a permanent
-`docs/GOLDEN_SCENARIOS.md` capturing them as reusable regression scenarios
-was not written this session — flagged as a next-session task rather than
-rushed.
-
-## Running everything
-
-```bash
-npm ci
+```sh
 npm run typecheck
 npm run lint
 npm run build
-npx playwright install   # first time only
-npm run test:e2e
+npm run verify:no-client-secrets
+npx playwright test --workers=2 --reporter=line
 ```
+
+Use npm.cmd/npx.cmd on NatesPC PowerShell. Browser binaries must already be
+installed, or install them with npx playwright install. The default suite
+can start its own localhost:3000 dev server; avoid running a production
+build against the same .next directory while that server is compiling.
+
+## What the default suite covers
+
+e2e includes pure domain/integration tests and browser tests in Chromium
+and mobile Safari. Coverage includes Homeworks normalization, linking,
+pagination, reconciliation, history/enrichment, webhook auth boundaries;
+OAuth state/expiry/token handling; notes, tasks, photos, schedule/revenue,
+voice, login redirects, section isolation and interrupted workflows.
+
+integration-reliability.spec.ts exercises real server modules using the
+load-server-module helper to replace only external auth/network boundaries.
+It tests reconnect failure preserving old credentials, refresh persistence
+failures, concurrent refresh coalescing, missing admin config, malformed
+token responses, callback cookie scope, Homeworks provenance/completeness
+and Calendar pagination/DST boundaries. The fixture values are synthetic;
+these tests never read real tokens or write business records.
+
+The voice-lab tests exercise isolated application components and mocked
+browser APIs. They are not evidence of a signed-in production session or a
+real microphone's behavior on the owner's phone.
+
+## Live persistence suite
+
+npm run test:persistence uses playwright.persistence.config.ts and
+e2e-live/persistence.spec.ts. It requires E2E_TEST_EMAIL, E2E_TEST_PASSWORD,
+E2E_TEST_JOB_ID, the public Supabase config and the configured app target.
+The selected job must belong to a demo client before any note/photo writes
+are allowed. It verifies reload persistence and anonymous read denial.
+Do not substitute a real customer job. Credentials must remain outside git
+and logs. This suite was not run during the October 3 integration audit
+because no authenticated dedicated test setup was available locally.
+
+## Evidence boundaries
+
+A passing mocked provider test proves error handling and request behavior,
+not that real credentials are accepted. A READY deployment proves deployment
+health, not CRM freshness. Record fresh provider verification and database
+observations with timestamps. See INTEGRATION_AUDIT_2026-10-03.md.

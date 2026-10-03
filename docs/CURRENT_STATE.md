@@ -1,3 +1,5 @@
+> Current integration/schema evidence: [October 3, 2026 audit](INTEGRATION_AUDIT_2026-10-03.md). Earlier observations below are historical; they do not override that audit.
+
 # Current State
 
 Last rewritten: 2026-09-18. The version of this file before today claimed

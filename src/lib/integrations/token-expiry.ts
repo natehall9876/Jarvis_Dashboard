@@ -8,5 +8,6 @@
  * e2e/oauth-integrations.spec.ts.
  */
 export function isExpiringWithin(expiresAtIso: string, marginMs: number, now: number = Date.now()): boolean {
-  return now >= new Date(expiresAtIso).getTime() - marginMs;
+  const expiresAt = new Date(expiresAtIso).getTime();
+  return !Number.isFinite(expiresAt) || now >= expiresAt - marginMs;
 }

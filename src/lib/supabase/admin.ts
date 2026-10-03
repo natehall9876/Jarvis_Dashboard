@@ -15,7 +15,7 @@ import { supabaseServiceRoleKey } from "@/lib/env.server";
  *    knowledge of HOMEWORKS_WEBHOOK_SECRET, checked by the route before
  *    this client is ever touched.
  *
- * 2. lib/integrations/homeworks-connection.ts — the OAuth token store.
+ * 2. The Homeworks, QuickBooks, and Google Calendar OAuth token stores.
  *    Unlike the webhook, a real user session DOES exist here, but RLS
  *    can't protect this specific table: Postgres RLS can't distinguish
  *    "this app's own server code" from "an authenticated owner's browser
@@ -24,8 +24,8 @@ import { supabaseServiceRoleKey } from "@/lib/env.server";
  *    own tokens would equally let a direct REST call read raw bearer
  *    tokens for an external system — a materially worse exposure than
  *    ordinary business data. RLS denies `authenticated`/`anon` entirely
- *    on that one table (see supabase/homeworks-oauth-security-fix.sql);
- *    every exported function in that file independently calls
+ *    on these tables (see the OAuth security SQL and integration-store migration);
+ *    every exported store operation independently calls
  *    `auth.getUser()` before touching it, since bypassing RLS means the
  *    application code is now the only access control for that table.
  *

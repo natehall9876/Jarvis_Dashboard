@@ -1,12 +1,10 @@
 # Trial Runbook — how to open and test Jarvis
 
-This is the exact, current way to run Jarvis locally and try everything that's
-actually built. Nothing here is aspirational — if a step doesn't work, that's
-a bug to report, not a documentation gap.
+Use this guide for local checks. See INTEGRATION_AUDIT_2026-10-03.md for live integration evidence and TESTING.md for automated and authenticated test boundaries.
 
 ## 1. Prerequisites
 
-- Node.js (whatever version is already installed — the project doesn't pin one)
+- Node.js 24 (matches current Vercel production)
 - npm
 - A `.env.local` file in the project root (see below)
 
@@ -23,10 +21,10 @@ anywhere — it's already gitignored.**
 | `AI_PROVIDER_API_KEY` | Optional | Jarvis's AI answers. Without it, Jarvis explains it isn't configured instead of failing |
 | `AI_PROVIDER_MODEL` | Optional | Defaults to `claude-sonnet-5` if unset |
 | `WEATHER_LOCATION_LAT` / `WEATHER_LOCATION_LON` | Optional | Command Center weather card (National Weather Service, no key needed) |
-| `HOMEWORKS_API_KEY`, `QUICKBOOKS_CLIENT_ID`/`SECRET`, `ZAPIER_WEBHOOK_URL`, `GOOGLE_CALENDAR_CLIENT_ID`/`SECRET`, `GITHUB_TOKEN` | Optional | Not yet wired to real functionality — see Settings page for honest status |
+| Integration variables | Per integration | See README.md and INTEGRATION_AUDIT_2026-10-03.md; Homeworks, QuickBooks, and Google Calendar OAuth are implemented |
 
-The Supabase URL/key are the **anon (publishable) key**, never a service-role
-key. There is no service-role key anywhere in this codebase.
+The public Supabase key is the publishable key. The separate service-role
+key is server-only and must never use a NEXT_PUBLIC_ prefix.
 
 ## 3. Install and run
 
@@ -119,10 +117,8 @@ containing the word "confirm," executes anything by itself.
 5. Click **Cancel** — verify nothing changed (reload the page).
 6. Ask again, click **Confirm** — verify the field actually changed and the
    page behind the drawer updates without a manual reload.
-7. Scroll to the job's **History** card — once `activity_log` is migrated
-   (see `docs/CURRENT_STATE.md`), this shows the change with a timestamp.
-   Until then it shows an honest "No activity recorded yet" instead of an
-   error.
+7. Scroll to the job's **History** card — this shows recorded changes with timestamps. The table was
+   verified present live on October 3.
 
 Supported actions right now: reschedule a job, change a job's status,
 assign/change its crew, create a new job. Nothing else is wired to write
@@ -130,23 +126,20 @@ yet — invoices, quotes, clients, etc. are read-only through Jarvis.
 
 ## 9. What's real data vs. test data
 
-Every seeded client/property/job in this database is realistic demo data
-for WeedEater Lawn Care, not fake placeholder numbers hardcoded in the UI —
-it comes from real Supabase queries. Anything you see prefixed `ZZZ-` was
-created during agent testing sessions as a deliberately-labeled throwaway
-record; safe to delete, or leave as an obvious non-customer for future
-testing. `src/mock/` in the codebase is never imported by any real page —
-confirmed, not assumed.
+The live database contains both Homeworks-sourced records and demo records.
+Use the clients.data_source classification and an explicitly designated
+demo job for tests; never infer that a realistic name is fake. Do not
+delete records merely because older documentation called them seeded.
 
-## 10. Known limitations right now
+## 10. Known limitations
 
-- `activity_log` and `action_requests` tables are defined in the codebase
-  (fully typed, app degrades gracefully) but **not yet applied to the live
-  Supabase database** — see `docs/CURRENT_STATE.md` for the exact SQL to run.
-- Only 4 Jarvis write actions exist (reschedule, status, crew, create job).
-- No employee-facing view yet — this is an owner-only tool right now.
-- No QuickBooks/Homeworks/Google Calendar integration is live — Settings
-  honestly shows each as not connected.
+- Homeworks imports and reconciliation are manual; scheduled polling is absent.
+- Existing provider authorization needs a fresh Verify call before claiming
+  live connectivity. Google Calendar has no authorization on file in the
+  October 3 audit.
+- Local credential availability differs from Vercel production.
+- OAuth refresh coalescing is per process, not a distributed lock.
+- Owner-only tool: no employee-facing app is provided.
 
 ## 11. Stopping / restarting
 
@@ -164,5 +157,4 @@ The app is designed to degrade honestly, not fake it:
 - **No weather coordinates**: the weather card doesn't render fabricated
   conditions.
 
-Check `/settings` at any time for a live, verified connection status of
-every integration the app knows about.
+Check `/settings` for configuration, saved authorization, and explicit Verify actions. A saved authorization is not proof of current API access.

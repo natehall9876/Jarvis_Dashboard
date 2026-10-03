@@ -8,7 +8,9 @@ function redirectWithStatus(request: Request, status: "connected" | "error", mes
   const url = new URL("/settings", request.url);
   url.searchParams.set("gcal", status);
   if (message) url.searchParams.set("gcal_message", message);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  response.cookies.set("gcal_oauth_state", "", { httpOnly: true, secure: true, sameSite: "lax", path: "/api/integrations/google-calendar/oauth", maxAge: 0 });
+  return response;
 }
 
 export async function GET(request: Request) {
@@ -35,6 +37,5 @@ export async function GET(request: Request) {
   if (!saveResult.ok) return redirectWithStatus(request, "error", saveResult.message);
 
   const response = redirectWithStatus(request, "connected");
-  response.cookies.delete("gcal_oauth_state");
   return response;
 }

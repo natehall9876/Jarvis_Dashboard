@@ -1,3 +1,4 @@
+import { readTokenResponse, tokenEndpointError } from "@/lib/integrations/oauth-token-response";
 import { integrationEnv } from "@/lib/env.server";
 
 /**
@@ -46,6 +47,8 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
   try {
     response = await fetch(TOKEN_ENDPOINT, {
       method: "POST",
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: integrationEnv.googleCalendar.clientId,
@@ -58,10 +61,9 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
   }
   if (!response.ok) {
     const text = await response.text();
-    return { ok: false, message: `Google token endpoint returned ${response.status}: ${text.slice(0, 300)}` };
+    return { ok: false, message: tokenEndpointError("Google", response.status, text) };
   }
-  const data = (await response.json()) as GoogleTokenResponse;
-  return { ok: true, data };
+  return readTokenResponse<GoogleTokenResponse>(response, "Google", { requireRefresh: false, requireRefreshExpiry: false });
 }
 
 export async function exchangeCodeForToken(params: { code: string; redirectUri: string }): Promise<TokenResult> {

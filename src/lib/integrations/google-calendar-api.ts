@@ -1,3 +1,4 @@
+import { calendarTimeBounds } from "@/lib/integrations/google-calendar-dates";
 import { getValidAccessToken } from "@/lib/integrations/google-calendar-connection";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
@@ -28,9 +29,16 @@ export type GoogleCalendarListEntry = { id: string; summary: string; primary?: b
 
 /** Read-only. Powers the calendar-selection step after connecting. */
 export async function listCalendars(): Promise<ApiResult<GoogleCalendarListEntry[]>> {
-  const result = await callApi<{ items: GoogleCalendarListEntry[] }>("users/me/calendarList");
-  if (!result.ok) return result;
-  return { ok: true, data: result.data.items };
+  const calendars: GoogleCalendarListEntry[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const result = await callApi<{ items?: GoogleCalendarListEntry[]; nextPageToken?: string }>("users/me/calendarList", pageToken ? { pageToken } : {});
+    if (!result.ok) return result;
+    calendars.push(...(result.data.items ?? []));
+    if (!result.data.nextPageToken) return { ok: true, data: calendars };
+    pageToken = result.data.nextPageToken;
+  }
+  return { ok: false, message: "Calendar list exceeded the pagination limit; no partial list returned.", reason: "error" };
 }
 
 export type GoogleCalendarEvent = {
@@ -45,7 +53,7 @@ export type GoogleCalendarEvent = {
   htmlLink?: string;
 };
 
-const PAGE_SIZE = 250; // Google's own max per page
+const PAGE_SIZE = 250; // Conservative page size; Google's maximum is 2500.
 const MAX_PAGES = 20;
 
 /**
@@ -58,21 +66,24 @@ const MAX_PAGES = 20;
  * everything.
  */
 export async function listEvents(calendarId: string, range: { from: string; to: string }): Promise<ApiResult<{ events: GoogleCalendarEvent[]; pages: number }>> {
+  let bounds: { timeMin: string; timeMax: string };
+  try { bounds = calendarTimeBounds(range); } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Invalid date range.", reason: "error" };
+  }
   const events: GoogleCalendarEvent[] = [];
   let pageToken: string | undefined;
   for (let page = 0; page < MAX_PAGES; page++) {
     const params: Record<string, string> = {
-      timeMin: new Date(`${range.from}T00:00:00`).toISOString(),
-      timeMax: new Date(`${range.to}T23:59:59`).toISOString(),
+      ...bounds,
       singleEvents: "true",
       orderBy: "startTime",
       maxResults: String(PAGE_SIZE),
       showDeleted: "false",
     };
     if (pageToken) params.pageToken = pageToken;
-    const result = await callApi<{ items: GoogleCalendarEvent[]; nextPageToken?: string }>(`calendars/${encodeURIComponent(calendarId)}/events`, params);
+    const result = await callApi<{ items?: GoogleCalendarEvent[]; nextPageToken?: string }>(`calendars/${encodeURIComponent(calendarId)}/events`, params);
     if (!result.ok) return result;
-    events.push(...result.data.items.filter((e) => e.status !== "cancelled"));
+    events.push(...(result.data.items ?? []).filter((e) => e.status !== "cancelled"));
     if (!result.data.nextPageToken) return { ok: true, data: { events, pages: page + 1 } };
     pageToken = result.data.nextPageToken;
   }

@@ -75,16 +75,17 @@ model.
 ## 8. Secrets never reach the model or the client
 
 `AI_PROVIDER_API_KEY` is read only in server-only files
-(`src/lib/env.ts`, `src/lib/ai/providers/anthropic.ts`) and used only in an
+(`src/lib/env.server.ts`, `src/lib/ai/providers/anthropic.ts`) and used only in an
 HTTP header to Anthropic — it is never placed in the model's context, a
 response body, a log line, or a client bundle. A direct prompt-injection
 attempt to extract it or the system prompt has been tested and refused by
 the model; this is also structurally impossible regardless of the model's
 behavior, since the key is never in-context to begin with.
 
-## 9. No service-role key, ever
+## 9. Keep privileged integration access narrow
 
-Every Supabase call — read or write, human or Jarvis-originated — goes
-through the same authenticated, RLS-scoped client
-(`src/lib/supabase/server.ts`). There is no service-role key in this
-codebase and no code path that would need one added.
+Human and AI business reads/writes use the authenticated RLS-scoped client.
+Server-only OAuth token stores and authenticated inbound webhook handling
+are deliberate admin-client exceptions; see src/lib/supabase/admin.ts.
+Never import the admin client into browser code, expose tokens through AI
+tools, or use service-role access to bypass ordinary business-data RLS.

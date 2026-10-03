@@ -15,13 +15,7 @@ export type IntegrationCard = {
   statusDetail: string;
 };
 
-/**
- * Supabase is the only integration we can actually verify with a live call —
- * everything else only reports whether credentials are present, which is
- * why they cap out at "needs_setup" rather than "connected". Claiming a
- * verified connection for an integration Jarvis has never actually talked
- * to would violate the "don't pretend it's connected" requirement.
- */
+/** This card verifies Supabase with a live query. */
 async function getSupabaseStatus(): Promise<IntegrationCard> {
   if (!isSupabaseConfigured()) {
     return {
@@ -99,66 +93,37 @@ async function getWeatherStatus(): Promise<IntegrationCard> {
   };
 }
 
-/**
- * The real Homeworks integration is the Zapier webhook
- * (src/app/api/integrations/homeworks/webhook/route.ts), authenticated by
- * HOMEWORKS_WEBHOOK_SECRET + SUPABASE_SERVICE_ROLE_KEY — NOT the unused
- * HOMEWORKS_API_KEY env var (there is no direct Homeworks API; that
- * variable predates the actual integration and nothing reads it anymore).
- * Checking the old variable here would report "Not Connected" even with a
- * fully live, working integration — this checks the real credentials the
- * webhook actually needs, and verifies with a live query (same rigor as
- * Supabase/Weather above) whether at least one record has actually synced,
- * rather than just reporting that secrets exist.
- */
+/** Webhook delivery evidence is distinct from direct API/manual import counts. */
 async function getHomeworksStatus(): Promise<IntegrationCard> {
-  const name = "Homeworks (Zapier sync)";
-  const description =
-    "CRM push sync via Homeworks' own Zapier app — new customers/properties/invoices arrive here as they're created in Homeworks. Separate from the direct API card above, and separate from the generic \"Zapier\" card below (that one is for unrelated future automations, not this).";
-
-  if (!homeworksWebhookEnv.secret || !supabaseServiceRoleKey) {
-    const missing = [!homeworksWebhookEnv.secret && "HOMEWORKS_WEBHOOK_SECRET", !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY"]
-      .filter(Boolean)
-      .join(" and ");
-    return { key: "homeworks", name, description, status: "not_connected", statusDetail: `Missing ${missing} — see docs/HOMEWORKS_VERIFICATION.md.` };
-  }
-
+  const name = "Homeworks (webhook sync)";
+  const description = "Receives configured Homeworks events. Direct API imports and job reconciliation remain manual; a stored customer count does not prove automatic delivery.";
+  const missing = [!homeworksWebhookEnv.secret && "HOMEWORKS_WEBHOOK_SECRET", !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY"].filter(Boolean);
+  if (missing.length) return { key: "homeworks", name, description, status: "not_connected", statusDetail: "Missing " + missing.join(" and ") + "." };
   try {
     const supabase = await createSupabaseServerClient();
-    const { count, error } = await supabase.from("clients").select("id", { count: "exact", head: true }).not("homeworks_id", "is", null);
-    if (error) {
-      return { key: "homeworks", name, description, status: "needs_setup", statusDetail: `Credentials found but the verification query failed: ${error.message}` };
-    }
-    if (!count || count === 0) {
-      return { key: "homeworks", name, description, status: "needs_setup", statusDetail: "Credentials configured, but no customer has synced yet — see docs/HOMEWORKS_VERIFICATION.md." };
-    }
-    return { key: "homeworks", name, description, status: "connected", statusDetail: `Verified — ${count} customer${count === 1 ? "" : "s"} synced from Homeworks.` };
-  } catch (err) {
-    return { key: "homeworks", name, description, status: "needs_setup", statusDetail: err instanceof Error ? err.message : "Verification query failed." };
+    const { data, error } = await supabase.from("activity_log").select("created_at")
+      .eq("event_type", "homeworks_webhook_sync")
+      .contains("detail", { origin: "webhook", provenance_version: 2 })
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) return { key: "homeworks", name, description, status: "needs_setup", statusDetail: "Delivery verification failed: " + error.message };
+    if (!data) return { key: "homeworks", name, description, status: "needs_setup", statusDetail: "Configured, but no delivery with verified webhook provenance is recorded. Older entries may be manual imports." };
+    const recent = Date.now() - new Date(data.created_at).getTime() < 24 * 60 * 60 * 1000;
+    return { key: "homeworks", name, description, status: recent ? "connected" : "needs_setup", statusDetail: "Last verified webhook delivery: " + data.created_at + (recent ? "." : ". No verified delivery in the past 24 hours.") };
+  } catch (error) {
+    return { key: "homeworks", name, description, status: "needs_setup", statusDetail: error instanceof Error ? error.message : "Delivery verification failed." };
   }
 }
 
-/**
- * Unlike QuickBooks/Google Calendar (credential-only cards below — zero
- * integration code exists for those yet, so "needs_setup" is accurate),
- * the AI Advisor is a fully built, extensively real-world-verified feature
- * — the "Needs Setup" tier previously applied here directly contradicted
- * its own description text ("API key found — the AI Advisor is live"),
- * a real misleading-label bug (flagged directly by the owner). Deliberately
- * NOT making a live paid Anthropic call on every Settings page load the
- * way Weather/Supabase do (those are free); "connected" here means
- * "configured, and this integration has a real, tested implementation" —
- * the AI Advisor itself is the actual live-verification surface.
- */
+/** Configuration alone does not verify the provider; the Advisor performs the live call. */
 function getAIProviderStatus(): IntegrationCard {
   const configured = isIntegrationConfigured("aiProvider");
   return {
     key: "aiProvider",
     name: "AI Provider",
     description: "Powers the AI Advisor's answers.",
-    status: configured ? "connected" : "not_connected",
+    status: configured ? "needs_setup" : "not_connected",
     statusDetail: configured
-      ? "API key configured — the AI Advisor is live. Ask it a real question to confirm right now; this badge reflects configuration, not a fresh test call."
+      ? "API key configured; connectivity is unverified. Ask it a real question to confirm right now; this badge reflects configuration, not a fresh test call."
       : "No credentials found in the environment.",
   };
 }
@@ -191,19 +156,19 @@ export async function getIntegrationCards(): Promise<IntegrationCard[]> {
       "quickbooks",
       "QuickBooks",
       "Accounting: invoices, payments, expenses, and financial reporting.",
-      "Client credentials found — OAuth connection flow isn't implemented yet.",
+      "Client credentials found. Use the dedicated OAuth card above to authorize and verify.",
     ),
     credentialOnlyCard(
       "zapier",
       "Zapier (general automation)",
-      "Outbound automation FROM Jarvis to other tools — unrelated to the Homeworks sync above, which already works and doesn't need this.",
+      "Outbound automation FROM Jarvis to other tools — unrelated to the Homeworks sync above, which is configured separately.",
       "Webhook URL found — no automations have been wired up yet.",
     ),
     credentialOnlyCard(
       "googleCalendar",
       "Google Calendar",
-      "Two-way sync for the job schedule.",
-      "Client credentials found — OAuth connection flow isn't implemented yet.",
+      "Read-only calendar preview, kept separate from Homeworks jobs.",
+      "Client credentials found. Use the dedicated OAuth card above to authorize and verify.",
     ),
     weather,
     credentialOnlyCard(

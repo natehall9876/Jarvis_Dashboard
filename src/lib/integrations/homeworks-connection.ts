@@ -68,13 +68,13 @@ export async function saveConnection(tokens: TokenResponse, userId: string | nul
 
   const supabase = createSupabaseAdminClient();
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  // Single-row table: clear any prior connection before inserting the new
-  // one, rather than trying to upsert against a key that doesn't mean
-  // anything here.
-  const { error: deleteError } = await supabase.from("homeworks_oauth_connection").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-  if (deleteError) return { ok: false, message: `Couldn't clear the previous connection: ${deleteError.message}` };
+  // Preserve the prior connection if this atomic replacement fails.
+  const { data: existing, error: lookupError } = await supabase.from("homeworks_oauth_connection").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (lookupError) return { ok: false, message: "Could not read the previous connection before saving." };
 
-  const { error: insertError } = await supabase.from("homeworks_oauth_connection").insert({
+  const { error: insertError } = await supabase.from("homeworks_oauth_connection").upsert({
+    id: existing?.id ?? "00000000-0000-4000-8000-000000000001",
+    updated_at: new Date().toISOString(),
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: expiresAt,
@@ -98,28 +98,44 @@ export type ConnectionStatus =
  * button to seem to vanish (2026-09-18).
  */
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
-  const auth = await requireAuthenticatedUser();
-  if (!auth.ok) return { connected: false, error: null };
+  try {
+    const auth = await requireAuthenticatedUser();
+    if (!auth.ok) return { connected: false, error: null };
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("homeworks_oauth_connection")
-    .select("created_at, scope")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) return { connected: false, error: error.message };
-  if (!data) return { connected: false, error: null };
-  return { connected: true, connectedAt: data.created_at, scope: data.scope };
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("homeworks_oauth_connection")
+      .select("created_at, scope")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return { connected: false, error: error.message };
+    if (!data) return { connected: false, error: null };
+    return { connected: true, connectedAt: data.created_at, scope: data.scope };
+  } catch (error) {
+    return { connected: false, error: error instanceof Error ? error.message : "Could not read connection status." };
+  }
 }
 
 export type ValidTokenResult = { ok: true; accessToken: string } | { ok: false; reason: "not_connected" | "refresh_failed" | "auth"; message: string };
 
 /** Returns a definitely-valid access token, refreshing first if the stored one is expired or about to be. */
+// Coalesce parallel reads in this server process; no token is cached after completion.
+let tokenRequest: Promise<ValidTokenResult> | null = null;
+
 export async function getValidAccessToken(): Promise<ValidTokenResult> {
   const auth = await requireAuthenticatedUser();
   if (!auth.ok) return { ok: false, reason: "auth", message: "You must be signed in." };
 
+  if (!tokenRequest) {
+    tokenRequest = readAndRefreshToken()
+      .catch((): ValidTokenResult => ({ ok: false, reason: "refresh_failed", message: "Could not access the OAuth token store. Check server configuration and retry." }))
+      .finally(() => { tokenRequest = null; });
+  }
+  return tokenRequest;
+}
+
+async function readAndRefreshToken(): Promise<ValidTokenResult> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("homeworks_oauth_connection")
@@ -139,7 +155,7 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
     return { ok: false, reason: "refresh_failed", message: refreshed.message };
   }
   const newExpiresAt = new Date(Date.now() + refreshed.data.expires_in * 1000).toISOString();
-  await supabase
+  const { data: saved, error: saveError } = await supabase
     .from("homeworks_oauth_connection")
     .update({
       access_token: refreshed.data.access_token,
@@ -147,7 +163,10 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
       expires_at: newExpiresAt,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", data.id);
+    .eq("id", data.id)
+    .select("id")
+    .maybeSingle();
+  if (saveError || !saved) return { ok: false, reason: "refresh_failed", message: "Could not save refreshed tokens. The connection is not verified; retry or reconnect from Settings." };
   return { ok: true, accessToken: refreshed.data.access_token };
 }
 

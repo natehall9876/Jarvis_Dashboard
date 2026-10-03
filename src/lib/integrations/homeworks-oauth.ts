@@ -1,3 +1,4 @@
+import { readTokenResponse, tokenEndpointError } from "@/lib/integrations/oauth-token-response";
 import { randomBytes, createHash } from "crypto";
 import { homeworksOAuthEnv } from "@/lib/env.server";
 
@@ -69,6 +70,8 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
   try {
     response = await fetch(TOKEN_ENDPOINT, {
       method: "POST",
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(body).toString(),
     });
@@ -77,8 +80,7 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
   }
   if (!response.ok) {
     const text = await response.text();
-    return { ok: false, message: `Homeworks token endpoint returned ${response.status}: ${text.slice(0, 300)}` };
+    return { ok: false, message: tokenEndpointError("Homeworks", response.status, text) };
   }
-  const json = (await response.json()) as TokenResponse;
-  return { ok: true, data: json };
+  return readTokenResponse<TokenResponse>(response, "Homeworks", { requireRefresh: true, requireRefreshExpiry: false });
 }

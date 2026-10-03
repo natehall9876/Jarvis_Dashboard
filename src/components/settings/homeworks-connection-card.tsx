@@ -146,7 +146,7 @@ export function HomeworksConnectionCard({
         {urlMessage?.status === "connected" ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            Connected — click Verify below to confirm real data comes back.
+            Authorization saved - click Verify below to confirm real data comes back.
           </p>
         ) : null}
         {statusError ? (
@@ -162,7 +162,7 @@ export function HomeworksConnectionCard({
           <p className="text-xs text-[var(--color-text-muted)]">
             Not configured — <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">HOMEWORKS_OAUTH_CLIENT_ID</code> is missing.
           </p>
-        ) : !connected ? (
+        ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/homeworks/oauth/connect"
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
@@ -234,7 +234,7 @@ export function HomeworksConnectionCard({
               <CheckCircle2 className="h-3.5 w-3.5" />
               {preview.totalHomeworksCustomers} real customer{preview.totalHomeworksCustomers === 1 ? "" : "s"} found in Homeworks
               {preview.hitPageCap ? " (stopped at the pagination safety cap — there may be more)" : ""}, across {preview.pageCount} page
-              {preview.pageCount === 1 ? "" : "s"}. {preview.upcomingJobCount} job{preview.upcomingJobCount === 1 ? "" : "s"} scheduled in the next 7 days.
+              {preview.pageCount === 1 ? "" : "s"}. {preview.upcomingJobCount === null ? "Upcoming schedule unavailable; no job count is verified." : `${preview.upcomingJobCount} job(s) scheduled in the next 7 days.`}
             </p>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="rounded-md bg-[var(--color-surface-2)] p-2">
@@ -275,7 +275,7 @@ export function HomeworksConnectionCard({
                 ))}
               </ul>
             </details>
-            {preview.wouldCreate + preview.wouldUpdate > 0 ? (
+            {!preview.hitPageCap && preview.wouldCreate + preview.wouldUpdate > 0 ? (
               <Button type="button" onClick={runImport} disabled={importPending} className="w-full justify-center">
                 {importPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Confirm import — write {preview.wouldCreate + preview.wouldUpdate} record(s) to Jarvis

@@ -1,3 +1,5 @@
+> Current integration/schema evidence: [October 3, 2026 audit](INTEGRATION_AUDIT_2026-10-03.md). Earlier observations below are historical; they do not override that audit.
+
 # Decisions
 
 Why things are built the way they are — so a future change doesn't

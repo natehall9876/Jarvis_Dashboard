@@ -30,10 +30,13 @@ export async function saveConnection(tokens: QuickBooksTokenResponse, realmId: s
   const accessExpiresAt = new Date(now + tokens.expires_in * 1000).toISOString();
   const refreshExpiresAt = new Date(now + tokens.x_refresh_token_expires_in * 1000).toISOString();
 
-  const { error: deleteError } = await supabase.from("quickbooks_oauth_connection").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-  if (deleteError) return { ok: false, message: `Couldn't clear the previous connection: ${deleteError.message}` };
+  // Preserve the prior connection if this atomic replacement fails.
+  const { data: existing, error: lookupError } = await supabase.from("quickbooks_oauth_connection").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (lookupError) return { ok: false, message: "Could not read the previous connection before saving." };
 
-  const { error: insertError } = await supabase.from("quickbooks_oauth_connection").insert({
+  const { error: insertError } = await supabase.from("quickbooks_oauth_connection").upsert({
+    id: existing?.id ?? "00000000-0000-4000-8000-000000000001",
+    updated_at: new Date().toISOString(),
     realm_id: realmId,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
@@ -51,28 +54,44 @@ export type ConnectionStatus =
   | { connected: true; connectedAt: string; realmId: string; refreshExpiresAt: string };
 
 export async function getConnectionStatus(): Promise<ConnectionStatus> {
-  const auth = await requireAuthenticatedUser();
-  if (!auth.ok) return { connected: false, error: null };
+  try {
+    const auth = await requireAuthenticatedUser();
+    if (!auth.ok) return { connected: false, error: null };
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("quickbooks_oauth_connection")
-    .select("created_at, realm_id, refresh_token_expires_at")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) return { connected: false, error: error.message };
-  if (!data) return { connected: false, error: null };
-  return { connected: true, connectedAt: data.created_at, realmId: data.realm_id, refreshExpiresAt: data.refresh_token_expires_at };
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("quickbooks_oauth_connection")
+      .select("created_at, realm_id, refresh_token_expires_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return { connected: false, error: error.message };
+    if (!data) return { connected: false, error: null };
+    return { connected: true, connectedAt: data.created_at, realmId: data.realm_id, refreshExpiresAt: data.refresh_token_expires_at };
+  } catch (error) {
+    return { connected: false, error: error instanceof Error ? error.message : "Could not read connection status." };
+  }
 }
 
 export type ValidTokenResult = { ok: true; accessToken: string; realmId: string } | { ok: false; reason: "not_connected" | "refresh_failed" | "reauth_required" | "auth"; message: string };
 
 /** Returns a definitely-valid access token, refreshing first if expired or about to be. */
+// Coalesce parallel reads in this server process; no token is cached after completion.
+let tokenRequest: Promise<ValidTokenResult> | null = null;
+
 export async function getValidAccessToken(): Promise<ValidTokenResult> {
   const auth = await requireAuthenticatedUser();
   if (!auth.ok) return { ok: false, reason: "auth", message: "You must be signed in." };
 
+  if (!tokenRequest) {
+    tokenRequest = readAndRefreshToken()
+      .catch((): ValidTokenResult => ({ ok: false, reason: "refresh_failed", message: "Could not access the OAuth token store. Check server configuration and retry." }))
+      .finally(() => { tokenRequest = null; });
+  }
+  return tokenRequest;
+}
+
+async function readAndRefreshToken(): Promise<ValidTokenResult> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("quickbooks_oauth_connection")
@@ -94,7 +113,7 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
   if (!refreshed.ok) return { ok: false, reason: "refresh_failed", message: refreshed.message };
 
   const now = Date.now();
-  await supabase
+  const { data: saved, error: saveError } = await supabase
     .from("quickbooks_oauth_connection")
     .update({
       access_token: refreshed.data.access_token,
@@ -103,7 +122,10 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
       refresh_token_expires_at: new Date(now + refreshed.data.x_refresh_token_expires_in * 1000).toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", data.id);
+    .eq("id", data.id)
+    .select("id")
+    .maybeSingle();
+  if (saveError || !saved) return { ok: false, reason: "refresh_failed", message: "Could not save refreshed tokens. The connection is not verified; retry or reconnect from Settings." };
   return { ok: true, accessToken: refreshed.data.access_token, realmId: data.realm_id };
 }
 

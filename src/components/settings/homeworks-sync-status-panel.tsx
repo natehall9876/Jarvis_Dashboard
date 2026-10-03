@@ -85,7 +85,7 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
           {!s.lastWebhookDeliveryAt ? (
             <p className="flex items-start gap-1.5 text-[var(--color-warning)]">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              No live webhook delivery has ever been recorded. If the Zapier Zap is supposed to be running, check its History tab in Zapier directly — a linked/total count above being non-zero only means SOME sync path (webhook, bulk import, or manual link) has run at some point, not that the live webhook specifically is delivering right now.
+              No delivery with verified webhook provenance is recorded. Older entries may have been manual imports. If the Zapier Zap is supposed to be running, check its History tab in Zapier directly — a linked/total count above being non-zero only means SOME sync path (webhook, bulk import, or manual link) has run at some point, not that the live webhook specifically is delivering right now.
             </p>
           ) : null}
           {s.recentActivity.length > 0 ? (

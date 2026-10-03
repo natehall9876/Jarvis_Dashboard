@@ -71,6 +71,7 @@ export default async function SettingsPage({
       <QuickBooksConnectionCard
         connected={quickbooksConnection.connected}
         connectedAt={quickbooksConnection.connected ? quickbooksConnection.connectedAt : null}
+        statusError={!quickbooksConnection.connected ? quickbooksConnection.error : null}
         realmId={quickbooksConnection.connected ? quickbooksConnection.realmId : null}
         configured={isIntegrationConfigured("quickbooks")}
         urlMessage={quickbooksStatus === "connected" || quickbooksStatus === "error" ? { status: quickbooksStatus, message: quickbooksMessage } : null}
@@ -79,6 +80,7 @@ export default async function SettingsPage({
       <GoogleCalendarConnectionCard
         connected={googleCalendarConnection.connected}
         connectedAt={googleCalendarConnection.connected ? googleCalendarConnection.connectedAt : null}
+        statusError={!googleCalendarConnection.connected ? googleCalendarConnection.error : null}
         selectedCalendarId={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarId : null}
         selectedCalendarSummary={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarSummary : null}
         configured={isIntegrationConfigured("googleCalendar")}
@@ -129,8 +131,7 @@ export default async function SettingsPage({
             Copy <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-xs">.env.local.example</code> to{" "}
             <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-xs">.env.local</code> and fill in the values
             for whichever integrations you&apos;re ready to connect. Supabase is required for the app to show any data; the rest are
-            optional and only unlock their respective card once configured and, for OAuth-based integrations, once a real
-            connection flow is built.
+            optional. OAuth flows are implemented: configure the server credentials, authorize once, then use Verify or the read-only preview to check live access.
           </p>
         </CardBody>
       </Card>

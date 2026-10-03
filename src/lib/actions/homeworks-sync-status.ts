@@ -29,9 +29,8 @@ export type HomeworksSyncStatus = {
    * This is the actual evidence that the live webhook has delivered
    * anything recently: syncHomeworksEntity now logs an activity_log row
    * (event_type "homeworks_webhook_sync") on every successful webhook-
-   * triggered upsert (see lib/integrations/homeworks-sync.ts). Null means
-   * exactly what it says — no webhook delivery has ever been recorded —
-   * not "unknown".
+   * triggered upsert (see lib/integrations/homeworks-sync.ts). Null means no delivery with verified version-2 webhook provenance was found;
+   * older events may have been manual imports.
    */
   lastWebhookDeliveryAt: string | null;
   /** Same idea, for the bulk-import endpoint (event_type "homeworks_bulk_import"). */
@@ -53,13 +52,14 @@ const HW_EVENT_TYPES = ["homeworks_linked", "homeworks_enriched", "historical_sy
  * runs on-demand (the owner clicks "Check sync status"), not on page load.
  */
 async function lastEventOf(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, eventType: (typeof HW_EVENT_TYPES)[number]): Promise<string | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("activity_log")
     .select("created_at")
     .eq("event_type", eventType)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (eventType === "homeworks_webhook_sync") query = query.contains("detail", { origin: "webhook", provenance_version: 2 });
+  const { data, error } = await query.maybeSingle();
   if (error || !data) return null;
   return data.created_at;
 }
@@ -98,7 +98,7 @@ export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
 
   const firstError = [clientsLinked, clientsTotal, propertiesLinked, propertiesTotal, jobsLinked, jobsTotal].find((r) => r.error)?.error;
   if (firstError) return { ok: false, message: firstError.message };
-  // activity_log not existing yet is not fatal — the counts above are still real and useful.
+  // Activity history is supplemental to the linked-record counts.
   const activityRows = recentActivity.error ? [] : (recentActivity.data ?? []);
 
   return {

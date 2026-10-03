@@ -8,7 +8,10 @@ function redirectWithStatus(request: Request, status: "connected" | "error", mes
   const url = new URL("/settings", request.url);
   url.searchParams.set("homeworks", status);
   if (message) url.searchParams.set("homeworks_message", message);
-  return NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
+  response.cookies.set("hw_oauth_state", "", { httpOnly: true, secure: true, sameSite: "lax", path: "/api/integrations/homeworks/oauth", maxAge: 0 });
+  response.cookies.set("hw_oauth_verifier", "", { httpOnly: true, secure: true, sameSite: "lax", path: "/api/integrations/homeworks/oauth", maxAge: 0 });
+  return response;
 }
 
 export async function GET(request: Request) {
@@ -45,7 +48,5 @@ export async function GET(request: Request) {
   }
 
   const response = redirectWithStatus(request, "connected");
-  response.cookies.delete("hw_oauth_verifier");
-  response.cookies.delete("hw_oauth_state");
   return response;
 }

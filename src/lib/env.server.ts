@@ -40,14 +40,8 @@
  * assumed to work.
  */
 
-/**
- * The ONE deliberate exception to "no service-role key" in this project.
- * Read ONLY by src/lib/supabase/admin.ts, which is imported ONLY by
- * server-to-server webhook routes and the OAuth connection modules (no
- * logged-in user session exists for a webhook call to authenticate as, so
- * RLS's `to authenticated` policy has nothing to scope against). Never
- * imported by anything reachable from a page, Server Action, or anywhere a
- * browser session drives the request.
+/** Server-only key used by admin.ts for authenticated OAuth token stores
+ * and secret-authenticated Homeworks ingestion. Ordinary business requests use RLS.
  */
 export const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 

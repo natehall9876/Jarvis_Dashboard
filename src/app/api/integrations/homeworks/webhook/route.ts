@@ -91,6 +91,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 503 });
   }
 
-  const result = await syncHomeworksEntity(supabase, body);
+  const result = await syncHomeworksEntity(supabase, body, "webhook");
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }

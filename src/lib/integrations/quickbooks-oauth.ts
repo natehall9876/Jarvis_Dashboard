@@ -1,3 +1,4 @@
+import { readTokenResponse, tokenEndpointError } from "@/lib/integrations/oauth-token-response";
 import { integrationEnv } from "@/lib/env.server";
 
 /**
@@ -18,7 +19,7 @@ const TOKEN_ENDPOINT = "https://oauth.platform.intuit.com/oauth2/v1/tokens/beare
 const REVOKE_ENDPOINT = "https://developer.api.intuit.com/v2/oauth2/tokens/revoke";
 export const QUICKBOOKS_API_BASE = "https://quickbooks.api.intuit.com/v3/company";
 
-// Read-only accounting scope — matches "prepare read-only access", nothing here can write.
+// Intuit accounting scope permits writes; Jarvis implements only read operations.
 const SCOPE = "com.intuit.quickbooks.accounting";
 
 export function buildAuthorizationUrl(params: { redirectUri: string; state: string }): string {
@@ -52,6 +53,8 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
   try {
     response = await fetch(TOKEN_ENDPOINT, {
       method: "POST",
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
       headers: {
         "content-type": "application/x-www-form-urlencoded",
         accept: "application/json",
@@ -64,10 +67,9 @@ async function postTokenRequest(body: Record<string, string>): Promise<TokenResu
   }
   if (!response.ok) {
     const text = await response.text();
-    return { ok: false, message: `QuickBooks token endpoint returned ${response.status}: ${text.slice(0, 300)}` };
+    return { ok: false, message: tokenEndpointError("QuickBooks", response.status, text) };
   }
-  const data = (await response.json()) as QuickBooksTokenResponse;
-  return { ok: true, data };
+  return readTokenResponse<QuickBooksTokenResponse>(response, "QuickBooks", { requireRefresh: true, requireRefreshExpiry: true });
 }
 
 export async function exchangeCodeForToken(params: { code: string; redirectUri: string }): Promise<TokenResult> {

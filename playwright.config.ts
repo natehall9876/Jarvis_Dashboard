@@ -1,14 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-/**
- * Deliberately minimal right now: the tests here don't require a signed-in
- * session (no test Supabase credentials exist in this environment — see
- * docs/TESTING.md), so they cover what's verifiable without one: unauthenticated
- * routing/redirect behavior and that the login page itself renders correctly.
- * Authenticated E2E coverage (Command Center, client/property/job drill-down,
- * Jarvis, actions) is the next thing to add once test credentials exist —
- * don't mistake this file for that suite.
- */
+/** Default isolated integration and browser suite. Live authenticated persistence
+ * uses playwright.persistence.config.ts and dedicated demo records; see docs/TESTING.md. */
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
