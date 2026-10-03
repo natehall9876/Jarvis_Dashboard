@@ -94,7 +94,7 @@ export async function confirmHomeworksImport(): Promise<ImportResult> {
       const email = customer.email?.toLowerCase().trim();
       const isDuplicateEmail = email ? byEmail.get(email) : false;
       if (isDuplicatePhone || isDuplicateEmail) {
-        rows.push({ homeworksId: customer.id, name, outcome: "skipped_duplicate", detail: "Matches an existing client by phone/email with no homeworks_id — review manually." });
+        rows.push({ homeworksId: customer.id, name, outcome: "skipped_duplicate", detail: "Matches another client by phone/email — review manually." });
         continue;
       }
     }
@@ -112,6 +112,11 @@ export async function confirmHomeworksImport(): Promise<ImportResult> {
       continue;
     }
 
+    byHomeworksId.add(customer.id);
+    const syncedPhone = normalizePhone(customer.phone || customer.cell);
+    if (syncedPhone) byPhone.set(syncedPhone, true);
+    if (customer.email) byEmail.set(customer.email.toLowerCase().trim(), true);
+    const propertyErrors: string[] = [];
     for (const property of customer.properties as HomeworksCustomerSample["properties"]) {
       const propertyResult = await syncHomeworksEntity(supabase, {
         entity_type: "property",
@@ -124,9 +129,10 @@ export async function confirmHomeworksImport(): Promise<ImportResult> {
         property_name: property.name || undefined,
       });
       if (propertyResult.ok) propertiesSynced++;
+      else propertyErrors.push(propertyResult.error);
     }
 
-    rows.push({ homeworksId: customer.id, name, outcome: isKnownById ? "updated" : "created" });
+    rows.push({ homeworksId: customer.id, name, outcome: propertyErrors.length ? "error" : isKnownById ? "updated" : "created", ...(propertyErrors.length ? { detail: "Customer saved, but " + propertyErrors.length + " property sync(s) failed: " + propertyErrors.join("; ") } : {}) });
   }
 
   revalidatePath("/clients");

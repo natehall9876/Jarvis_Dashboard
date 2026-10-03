@@ -1,3 +1,5 @@
+import { isISODate } from "@/lib/integrations/homeworks-dates";
+import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { extractErrorMessage } from "@/lib/data/shared";
@@ -56,9 +58,9 @@ export type JobPayload = {
   /**
    * Only set when Homeworks' own `hasTime` was true for this event —
    * never invented. An all-day event (hasTime: false) must sync with
-   * scheduled_start_time left unset, not defaulted to a guessed time.
+   * scheduled_start_time explicitly null; omitted time preserves an existing value.
    */
-  scheduled_start_time?: string;
+  scheduled_start_time?: string | null;
   /** The real quoted/invoiced total from Homeworks (Event.total), not an estimate. */
   price?: number;
   /** Already mapped by the caller to a valid Jarvis job status — this function doesn't interpret Homeworks' own EventStatus. */
@@ -85,14 +87,26 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 export function isValidHomeworksSyncPayload(value: unknown): value is HomeworksSyncPayload {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;
   if (!isNonEmptyString(v.entity_type) || !isNonEmptyString(v.homeworks_id)) return false;
-  if (v.entity_type === "job") return isNonEmptyString(v.property_homeworks_id);
-  if (v.entity_type === "property" || v.entity_type === "invoice") {
-    return isNonEmptyString(v.customer_homeworks_id);
+  if (!["customer", "property", "invoice", "job"].includes(v.entity_type)) return false;
+  if (v.entity_type === "job" && !isNonEmptyString(v.property_homeworks_id)) return false;
+  if ((v.entity_type === "property" || v.entity_type === "invoice") && !isNonEmptyString(v.customer_homeworks_id)) return false;
+  const strings = ["first_name", "last_name", "company_name", "email", "phone", "street", "city", "state", "zip", "property_name", "invoice_number", "notes"];
+  if (strings.some(key => v[key] != null && typeof v[key] !== "string")) return false;
+  for (const key of ["total", "amount_paid", "price"]) {
+    if (v[key] != null && (typeof v[key] !== "number" || !Number.isFinite(v[key]) || (v[key] as number) < 0)) return false;
   }
-  return v.entity_type === "customer";
+  for (const key of ["scheduled_date", "due_date", "invoice_date"]) {
+    if (v[key] != null && v[key] !== "" && (typeof v[key] !== "string" || !isISODate(v[key] as string))) return false;
+  }
+  if (v.scheduled_start_time != null && (typeof v.scheduled_start_time !== "string" || !/^([01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(v.scheduled_start_time))) return false;
+  if (v.status != null && v.status !== "") {
+    const statuses: readonly string[] = v.entity_type === "job" ? VALID_JOB_STATUSES : ["draft", "sent", "paid", "void"];
+    if (typeof v.status !== "string" || !statuses.includes(v.status)) return false;
+  }
+  return true;
 }
 
 export type HomeworksDryRunResult =
@@ -201,6 +215,7 @@ export async function syncHomeworksEntity(
   payload: HomeworksSyncPayload,
   origin: "webhook" | "bulk_import" = "bulk_import",
 ): Promise<HomeworksSyncResult> {
+  if (!isValidHomeworksSyncPayload(payload)) return { ok: false, error: "Invalid Homeworks payload: check IDs, field types, dates, amounts and status." };
   try {
     switch (payload.entity_type) {
       case "customer": {
@@ -259,7 +274,6 @@ export async function syncHomeworksEntity(
                 zip: payload.zip,
                 property_name: payload.property_name,
               }),
-              active: true,
             },
             { onConflict: "homeworks_id" },
           )
@@ -281,21 +295,15 @@ export async function syncHomeworksEntity(
           await logSyncFailure(supabase, { origin, reason: "processing_failed", entityType: "invoice", homeworksId: payload.homeworks_id, errorMessage: message, detail: { customer_homeworks_id: payload.customer_homeworks_id } });
           return { ok: false, error: message };
         }
-        const total = typeof payload.total === "number" ? payload.total : 0;
         const { data, error } = await supabase
           .from("invoices")
           .upsert(
             {
               homeworks_id: payload.homeworks_id,
               client_id: client.id,
-              invoice_number: payload.invoice_number ?? null,
-              total,
-              subtotal: total,
-              tax: 0,
-              amount_paid: typeof payload.amount_paid === "number" ? payload.amount_paid : 0,
-              status: payload.status ?? "sent",
-              due_date: payload.due_date ?? null,
-              invoice_date: payload.invoice_date ?? null,
+              ...presentFields({ invoice_number: payload.invoice_number, status: payload.status, due_date: payload.due_date, invoice_date: payload.invoice_date }),
+              ...(typeof payload.total === "number" ? { total: payload.total } : {}),
+              ...(typeof payload.amount_paid === "number" ? { amount_paid: payload.amount_paid } : {}),
             },
             { onConflict: "homeworks_id" },
           )
@@ -323,13 +331,10 @@ export async function syncHomeworksEntity(
             {
               homeworks_id: payload.homeworks_id,
               property_id: property.id,
-              scheduled_date: payload.scheduled_date ?? null,
-              // Deliberately null, never defaulted, when Homeworks didn't
-              // report a specific time (hasTime: false) — an all-day event
-              // has no real start time to invent.
-              scheduled_start_time: payload.scheduled_start_time ?? null,
-              price: typeof payload.price === "number" ? payload.price : null,
-              status: payload.status ?? "scheduled",
+              ...presentFields({ scheduled_date: payload.scheduled_date, status: payload.status }),
+              // An omitted time preserves the existing value; explicit null means all-day.
+              ...(payload.scheduled_start_time !== undefined ? { scheduled_start_time: payload.scheduled_start_time } : {}),
+              ...(typeof payload.price === "number" ? { price: payload.price } : {}),
               // Omitted (not nulled) when absent, so re-syncing never wipes
               // notes the owner added in Jarvis.
               ...presentFields({ notes: payload.notes }),

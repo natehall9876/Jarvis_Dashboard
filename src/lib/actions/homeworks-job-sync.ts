@@ -149,7 +149,7 @@ export async function confirmHomeworksJobImport(range?: DateRange): Promise<JobI
       continue;
     }
     const wasAlreadyPresent = preExistingJobIds.has(job.id);
-    const price = Number(job.total);
+    const price = typeof job.total === "string" && job.total.trim() !== "" ? Number(job.total) : typeof job.total === "number" ? job.total : NaN;
     const result = await syncHomeworksEntity(supabase, {
       entity_type: "job",
       homeworks_id: job.id,
@@ -157,10 +157,10 @@ export async function confirmHomeworksJobImport(range?: DateRange): Promise<JobI
       scheduled_date: job.startDate,
       // Only set when Homeworks itself reported a specific time — never
       // invented for an all-day event.
-      scheduled_start_time: job.hasTime && job.startTime ? job.startTime : undefined,
+      scheduled_start_time: job.hasTime === false ? null : job.hasTime === true ? (job.startTime ?? undefined) : undefined,
       price: Number.isFinite(price) ? price : undefined,
       status: mapStatus(job.status),
-      notes: buildNotes(job),
+      ...(wasAlreadyPresent ? {} : { notes: buildNotes(job) }),
     });
     if (!result.ok) {
       rows.push({ homeworksId: job.id, title: job.title, outcome: "error", detail: result.error });

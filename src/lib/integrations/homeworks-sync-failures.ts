@@ -64,15 +64,16 @@ export type RecentSyncFailure = {
   errorMessage: string;
 };
 
-/** Best-effort read for the Settings sync-status panel — returns [] rather than throwing if the table doesn't exist yet or the query fails. */
-export async function getRecentSyncFailures(supabase: SupabaseClient<Database>, limit = 10): Promise<RecentSyncFailure[]> {
+/** Strict reads are required for verified status; best-effort reads — returns [] rather than throwing if the table doesn't exist yet or the query fails. */
+export async function getRecentSyncFailures(supabase: SupabaseClient<Database>, limit = 10, strict = false): Promise<RecentSyncFailure[]> {
   try {
     const { data, error } = await supabase
       .from("homeworks_sync_failures")
       .select("id, created_at, origin, reason, entity_type, homeworks_id, error_message")
       .order("created_at", { ascending: false })
       .limit(limit);
-    if (error || !data) return [];
+    if (error) throw error;
+    if (!data) return [];
     return data.map((r) => ({
       id: r.id,
       createdAt: r.created_at,
@@ -82,7 +83,8 @@ export async function getRecentSyncFailures(supabase: SupabaseClient<Database>, 
       homeworksId: r.homeworks_id,
       errorMessage: r.error_message,
     }));
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 }

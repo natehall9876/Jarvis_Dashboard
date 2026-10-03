@@ -60,11 +60,13 @@ async function lastEventOf(supabase: Awaited<ReturnType<typeof createSupabaseSer
     .limit(1);
   if (eventType === "homeworks_webhook_sync") query = query.contains("detail", { origin: "webhook", provenance_version: 2 });
   const { data, error } = await query.maybeSingle();
-  if (error || !data) return null;
+  if (error) throw error;
+  if (!data) return null;
   return data.created_at;
 }
 
 export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
+  try {
   const supabase = await createSupabaseServerClient();
   const [
     clientsLinked,
@@ -93,13 +95,12 @@ export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
     lastEventOf(supabase, "historical_sync"),
     lastEventOf(supabase, "homeworks_webhook_sync"),
     lastEventOf(supabase, "homeworks_bulk_import"),
-    getRecentSyncFailures(supabase, 10),
+    getRecentSyncFailures(supabase, 10, true),
   ]);
 
-  const firstError = [clientsLinked, clientsTotal, propertiesLinked, propertiesTotal, jobsLinked, jobsTotal].find((r) => r.error)?.error;
+  const firstError = [clientsLinked, clientsTotal, propertiesLinked, propertiesTotal, jobsLinked, jobsTotal, recentActivity].find((r) => r.error)?.error;
   if (firstError) return { ok: false, message: firstError.message };
-  // Activity history is supplemental to the linked-record counts.
-  const activityRows = recentActivity.error ? [] : (recentActivity.data ?? []);
+  const activityRows = recentActivity.data ?? [];
 
   return {
     ok: true,
@@ -119,4 +120,7 @@ export async function getHomeworksSyncStatus(): Promise<SyncStatusResult> {
       recentFailures,
     },
   };
+  } catch {
+    return { ok: false, message: "Homeworks sync history could not be checked. Freshness is unknown; retry when the database is available." };
+  }
 }
