@@ -154,3 +154,52 @@ READY in Vercel production, with successful GitHub CI and live unauthenticated
 route checks. A local GitHub API-token attempt returned 401; git push and the
 connected GitHub tools still worked, and public CI status was verified without
 credentials. Credential presence must not be treated as credential validity.
+
+## Follow-up reliability pass while Vercel CLI authorization remains pending
+
+The CLI login was not restarted or repeatedly polled. No environment values were
+printed, changed or committed. No customer/business test writes or schema changes
+were made.
+
+Completed in code:
+- Provider response validation, non-cacheable reads, 15-second timeouts and safe
+  error messages. Duplicate Google/QBO rows cannot inflate previews; repeated
+  Google pagination tokens fail without returning a partial success.
+- Token-store outages remain distinct from missing authorization; invalid_grant
+  is a reconnect state. Refresh saves compare the stored updated_at version.
+  Disconnect checks deletion success; an old refresh cannot overwrite a reconnect.
+- Privileged OAuth stores now verify active owner membership using the caller's
+  RLS client before creating an admin client. Live app_members columns, CHECK,
+  owner SELECT policy and existing owner membership were inspected directly.
+- Google list/event pagination holds one access-token snapshot. The listed
+  authorization version travels through UI selection and is checked at save;
+  a calendar from a replaced authorization cannot be selected by a stale tab.
+- Homeworks partial job/invoice deliveries preserve omitted fields; property
+  imports do not implicitly reactivate properties; existing job notes survive
+  direct imports. Same-batch phone/email duplicates and property failures are
+  reported accurately.
+- Homeworks Event schema was fetched publicly with HTTP 200: total is Decimal!,
+  hasTime is Boolean!, startDate is LocalDate!, startTime is nullable LocalTime.
+  Adapter validation rejects null/blank/invalid totals and invalid timing flags
+  before any job write. Unknown history is surfaced as unknown.
+- Dashboard totals and owner summaries now exclude draft overdue invoices,
+  demo payment cash, skipped projected jobs and demo crew/route/attention items.
+  Eastern month boundaries and weeks spanning months are covered. Source errors
+  no longer silently become zero totals or a clean attention report.
+
+Implementation review found the stale calendar-selection race and unsafe source
+price coercion; both were reproduced with failing tests and corrected. Tests
+include positive writes/disconnect/selection cases so fail-closed behavior cannot
+hide a permanently broken success path.
+
+Unattended Homeworks synchronization remains deliberately disabled. Existing
+authenticated actions are not a scheduler identity, per-process coalescing is
+not a distributed refresh lock, and webhook payloads have no reliable source
+version ordering. There is no safe evidence yet for applying source cancellations,
+deletions or conflicts with owner edits automatically. A timer around the current
+upsert loop would not resolve those issues. First restore production inspection
+via the pending Vercel authorization, then verify fresh provider reads and agree
+on conflict policy before enabling unattended writes.
+
+No fresh provider connection was claimed from these isolated tests. Exact final
+test counts, release commits and deployment evidence are in JARVIS_PROGRESS.md.

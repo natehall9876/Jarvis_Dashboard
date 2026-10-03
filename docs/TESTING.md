@@ -52,3 +52,16 @@ A passing mocked provider test proves error handling and request behavior,
 not that real credentials are accepted. A READY deployment proves deployment
 health, not CRM freshness. Record fresh provider verification and database
 observations with timestamps. See INTEGRATION_AUDIT_2026-10-03.md.
+
+## October 3 follow-up coverage
+
+The complete default suite passed 734 tests across Chromium and mobile Safari.
+Typecheck, lint, production build and client-secret scan passed on NatesPC.
+The source scan of changed/new files found no local secret values.
+
+New safety suites cover provider response errors/paging, OAuth refresh versus
+reconnect, disconnect persistence, expired/saved UI states, active-owner access,
+Homeworks partial writes and malformed sources, unknown sync history, Eastern
+financial periods, demo exclusions and incomplete owner summaries. Regression
+failures were observed before fixes. Production provider access and live
+persistence are still separate verification gates.

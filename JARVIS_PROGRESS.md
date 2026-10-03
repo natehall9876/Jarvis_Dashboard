@@ -82,3 +82,34 @@ No test login or designated test job was supplied. Vercel account access to
 
 ## NEXT STEP
 Owner: test voice again (should now show an honest, correct message if on iPhone, or actually navigate on Chrome/Edge/desktop Safari); test photo delete + preview; report back with what the diagnostics panel's "Last thing heard" shows if voice still doesn't do what's expected — that field is new this session and is the fastest way to find any remaining gap precisely.
+
+
+## 2026-10-03 ? Autonomous reliability follow-up while Vercel CLI auth is pending
+
+Canonical NatesPC checkout preserved. No Vercel login retry, environment changes,
+production schema changes or real business test writes. Baseline was 0722a2f.
+
+Completed: provider response validation/timeouts/redacted failures; OAuth
+owner-membership enforcement, refresh/reconnect version checks, truthful
+disconnect errors and saved/live/expired/reconnect states; Google pagination and
+selection account-race protection; Homeworks partial-field preservation,
+malformed event rejection, duplicate import guards and unknown-history handling.
+Dashboard fixes cover Eastern period boundaries, weeks crossing months, draft
+invoices, demo payments/crew/routes/attention, skipped revenue and source outages.
+CURRENT_STATE.md was rewritten to remove obsolete architecture/status claims.
+
+Verified locally: typecheck, lint, 734 Playwright cases (Chromium + mobile Safari,
+no retries; 52.4s), production build, 31 compiled client JS files checked for secret
+references, and 43 changed/new source files checked against local secret values
+with zero matches. Focused red/green tests preceded the fixes. Read-only reviewer
+checked integration behavior and active-owner guards; both concrete findings
+(stale Google selection and malformed Homeworks total coercion) were reproduced
+and fixed. Live membership policy and SQL defaults/FKs were inspected without
+customer details or token values. Deployment evidence will follow the push.
+
+Remaining: production env-name audit requires the pending Vercel CLI approval;
+fresh Homeworks/QBO reads need an authenticated configured Jarvis session;
+Google requires owner setup/consent. Existing QBO authorization is preserved.
+No unattended sync enabled: distributed refresh coordination and source-version/
+owner-edit/cancellation conflict rules are unresolved, so a timer would risk
+business data. No new subscription/platform introduced.

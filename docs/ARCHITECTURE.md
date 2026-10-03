@@ -127,3 +127,18 @@ Homeworks direct OAuth/GraphQL, manual imports/reconciliation and inbound
 webhooks exist. QuickBooks and Google Calendar OAuth and read-only preview
 adapters exist. See INTEGRATION_AUDIT_2026-10-03.md for live evidence, refresh
 limitations, environment requirements and owner-only setup steps.
+
+## Reliability boundaries (October 3 follow-up)
+
+The privileged OAuth stores use integrations/owner-auth.ts to verify an active
+owner through the caller's RLS client before admin access. Token refresh writes
+compare updated_at; Google calendar selections carry that version from the list
+request. This prevents overwriting reconnects but is not a distributed token
+refresh lease. Provider API responses pass through api-response.ts for bounded,
+non-cacheable requests and sanitized failures; malformed envelopes are rejected.
+
+Business Pulse derives calendar periods from America/New_York and fails closed
+when a required source is unavailable. Today's Mission instead retains its jobs
+and names unavailable supporting sections. Owner briefing/attention tools refuse
+to synthesize a complete report from missing source data. Confirmed demo records
+are excluded from operational rollups; raw record pages remain available.
