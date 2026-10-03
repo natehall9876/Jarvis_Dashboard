@@ -75,6 +75,7 @@ Do not deploy an unconditional overwrite loop over real business data.
 
 ## OAuth reliability changes
 
+- Google reconnect clears the prior account calendar selection after successful save.
 - Reconnect upserts the existing connection atomically instead of deleting
   the old row before an insert that might fail.
 - Refresh only returns success after persistence succeeds and affects a row.
@@ -142,9 +143,9 @@ QuickBooks connection already exists.
 
 ## Verification
 
-31 new isolated regression cases were added. They execute real production
+32 new isolated regression cases were added. They execute real production
 modules with external auth/network boundaries replaced; no live business
 data is written. Failing cases were observed before fixes.
-The combined integration/OAuth focused run passed 61 tests.
+The final combined integration/OAuth run passed 124 tests across Chromium and WebKit projects.
 Typecheck, lint, production build and client-secret-reference check passed.
 Full Playwright and final deployment results are recorded in JARVIS_PROGRESS.md.

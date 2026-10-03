@@ -14,7 +14,7 @@ for (const provider of providers) {
       let rows: Record<string, unknown>[] = [{
         id: "11111111-1111-4111-8111-111111111111", access_token: "test-old-access", refresh_token: "test-old-refresh",
         expires_at: "2000-01-01T00:00:00Z", access_token_expires_at: "2000-01-01T00:00:00Z",
-        refresh_token_expires_at: "2099-01-01T00:00:00Z", realm_id: "123", created_at: "2026-09-01T00:00:00Z",
+        refresh_token_expires_at: "2099-01-01T00:00:00Z", realm_id: "123", selected_calendar_id: "old-account-calendar", selected_calendar_summary: "Old account", created_at: "2026-09-01T00:00:00Z",
       }];
       const client = createClient("https://example.supabase.co", "test-key", {
         auth: { persistSession: false, autoRefreshToken: false },
@@ -44,6 +44,14 @@ for (const provider of providers) {
       expect(result.ok).toBe(false);
       expect(f.rows()).toHaveLength(1);
       expect(f.rows()[0].refresh_token).toBe("test-old-refresh");
+    });
+
+    if (provider === "google-calendar") test("reconnecting requires choosing a calendar for the newly authorized account", async () => {
+      const f = fixture();
+      const result = await f.module.saveConnection(tokenResponse, "owner");
+      expect(result.ok).toBe(true);
+      expect(f.rows()[0].selected_calendar_id).toBeNull();
+      expect(f.rows()[0].selected_calendar_summary).toBeNull();
     });
 
     test("a refresh is not reported successful when rotated tokens cannot be saved", async () => {

@@ -38,6 +38,9 @@ export async function saveConnection(tokens: GoogleTokenResponse, userId: string
     refresh_token: tokens.refresh_token,
     access_token_expires_at: expiresAt,
     scope: tokens.scope,
+    // A reconnect may authorize a different Google account; choose its calendar again.
+    selected_calendar_id: null,
+    selected_calendar_summary: null,
     connected_by: userId,
   });
   if (insertError) return { ok: false, message: `Couldn't save the Google Calendar connection: ${insertError.message}` };
