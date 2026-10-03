@@ -90,7 +90,7 @@ export async function getOverdueInvoices(limit = 10): Promise<DataResult<Invoice
 
   return {
     data: result.data
-      .filter((inv) => inv.balance > 0 && inv.days_overdue > 0 && inv.client?.data_source !== "demo")
+      .filter((inv) => inv.status !== "draft" && inv.balance > 0 && inv.days_overdue > 0 && inv.client?.data_source !== "demo")
       .sort((a, b) => b.days_overdue - a.days_overdue)
       .slice(0, limit),
     error: null,

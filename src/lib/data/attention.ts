@@ -46,16 +46,19 @@ export async function getAttentionItems(): Promise<DataResult<AttentionReport>> 
       getEquipment(),
       supabase
         .from("quotes")
-        .select(`*, client:clients(id, first_name, last_name, company_name), items:quote_items(*)`)
+        .select(`*, client:clients(id, first_name, last_name, company_name, data_source), items:quote_items(*)`)
         .eq("status", "sent"),
       supabase
         .from("jobs")
-        .select(`*, property:properties(*, client:clients(id, first_name, last_name, company_name)), service:services(id, name)`)
+        .select(`*, property:properties(*, client:clients(id, first_name, last_name, company_name, data_source)), service:services(id, name)`)
         .lt("scheduled_date", today)
         .in("status", ["scheduled", "in_progress"]),
       getWorkloadSummary(today, lookaheadEnd),
     ]);
 
+    for (const result of [overdueResult, equipmentResult, quotesResp, unfinishedResp, workloadResult]) {
+      if (result.error) throw new Error(typeof result.error === "string" ? result.error : result.error.message);
+    }
     const items: AttentionItem[] = [];
 
     // Overdue invoices — the clearest, most actionable receivables signal.
@@ -75,11 +78,13 @@ export async function getAttentionItems(): Promise<DataResult<AttentionReport>> 
     // rather than relying on PostgREST embedded-resource filter syntax.
     if (overdueInvoices.length > 0) {
       const clientIds = new Set(overdueInvoices.map((i) => i.client?.id).filter((id): id is string => !!id));
-      const { data: upcomingJobs } = await supabase
+      const { data: upcomingJobs, error: upcomingError } = await supabase
         .from("jobs")
         .select(`scheduled_date, property:properties(client_id)`)
         .gte("scheduled_date", today)
-        .neq("status", "cancelled");
+        .lte("scheduled_date", lookaheadEnd)
+        .in("status", ["scheduled", "in_progress"]);
+      if (upcomingError) throw upcomingError;
 
       const nextDateByClient = new Map<string, string>();
       for (const row of (upcomingJobs ?? []) as unknown as { scheduled_date: string | null; property: { client_id: string } | null }[]) {
@@ -107,7 +112,7 @@ export async function getAttentionItems(): Promise<DataResult<AttentionReport>> 
     cutoff.setDate(cutoff.getDate() - QUOTE_FOLLOW_UP_AFTER_DAYS);
     const quotesNeedingFollowUp = ((quotesResp.data ?? []) as unknown as QuoteWithItems[]).filter((q) => {
       const sentAt = q.sent_at ? new Date(q.sent_at) : null;
-      return sentAt !== null && sentAt <= cutoff;
+      return sentAt !== null && sentAt <= cutoff && q.client?.data_source !== "demo";
     });
     for (const q of quotesNeedingFollowUp) {
       const days = q.sent_at ? Math.floor((Date.now() - new Date(q.sent_at).getTime()) / 86_400_000) : null;
@@ -122,7 +127,7 @@ export async function getAttentionItems(): Promise<DataResult<AttentionReport>> 
     // Jobs stuck in the past with no resolution — a real data/ops gap, not
     // just "still scheduled."
     const unfinishedJobs = (unfinishedResp.data ?? []) as unknown as JobWithRelations[];
-    for (const job of unfinishedJobs) {
+    for (const job of unfinishedJobs.filter((job) => job.property?.client?.data_source !== "demo")) {
       items.push({
         severity: "warning",
         category: "unfinished_past_job",

@@ -44,7 +44,7 @@ export default async function CommandCenterPage() {
   return (
     <div className="space-y-6">
       <div className="animate-fade-in">
-        <CommandHero briefing={briefing} dataError={mission.error} />
+        <CommandHero briefing={briefing} dataError={mission.error ?? (mission.data?.unavailableSections?.length ? "Some business data could not be checked. See Today's Mission." : null)} />
       </div>
 
       {/* Explicit grid-cols-1 matters here, not just cosmetic: Tailwind's
@@ -72,7 +72,7 @@ export default async function CommandCenterPage() {
 
       <div className="animate-fade-in" style={{ animationDelay: "40ms" }}>
         <Card>
-          <CardHeader title="Jarvis capabilities" description="What Jarvis is actually connected to today — tap any capability to open it." />
+          <CardHeader title="Jarvis capabilities" description="Open Jarvis tools; check Settings for verified integration status — tap any capability to open it." />
           <CardBody>
             <AgentNetwork />
           </CardBody>

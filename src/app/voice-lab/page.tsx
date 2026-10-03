@@ -69,6 +69,7 @@ const sampleMission: TodaysMissionData = {
   expectedRevenue: sampleJobs.reduce((n, j) => n + (j.price ?? 0), 0),
   budgetedHours: 0,
   crewWorking: [],
+  unavailableSections: [],
   crewCountByJob: {},
   routesRunning: [],
   scheduleChanges: [],

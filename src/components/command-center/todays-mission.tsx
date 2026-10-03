@@ -45,12 +45,13 @@ export function TodaysMission({
       <CardBody>
         <DataStateGate
           error={error}
-          isEmpty={!!data && data.jobCount === 0 && data.priorities.length === 0}
+          isEmpty={!!data && data.jobCount === 0 && data.priorities.length === 0 && !data.unavailableSections?.length}
           emptyTitle="No jobs scheduled today"
           emptyDescription="Nothing on the board yet — check Schedule to add jobs."
         >
           {data ? (
             <div className="space-y-5">
+              {data.unavailableSections?.length ? <p role="alert" className="rounded-md border border-[var(--color-warning)] p-3 text-sm text-[var(--color-warning)]">Could not check {data.unavailableSections.join(", ")}. These results are incomplete; reload to retry.</p> : null}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 <StatTile
                   label="Jobs Today"
@@ -70,7 +71,7 @@ export function TodaysMission({
                 />
                 <StatTile
                   label="Crew Working"
-                  value={data.crewWorking.length}
+                  value={data.unavailableSections?.includes("crew") ? "Unknown" : data.crewWorking.length}
                   sublabel={data.crewWorking.map((c) => c.name).join(", ") || "Unassigned"}
                   icon={<Users className="h-4 w-4" />}
                 />
@@ -111,7 +112,7 @@ export function TodaysMission({
                       <li key={p.label}>
                         <Link
                           href={p.href}
-                          className="flex items-center gap-2.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-3)]"
+                          className="flex flex-wrap items-center gap-2.5 break-words rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-3)]"
                         >
                           <AlertTriangle className={`h-4 w-4 shrink-0 ${severityIconClass[p.severity]}`} />
                           <span className="font-medium text-[var(--color-text-primary)]">{p.label}</span>
@@ -144,7 +145,7 @@ export function TodaysMission({
                 <MissionList
                   title="Quotes Needing Follow-up"
                   icon={<ReceiptText className="h-3.5 w-3.5" />}
-                  emptyText="No stale quotes"
+                  emptyText={data.unavailableSections?.includes("quotes") ? "Quote history unavailable" : "No stale quotes"}
                   href="/quotes"
                 >
                   {data.quotesNeedingFollowUp.map((quote) => (
@@ -162,7 +163,7 @@ export function TodaysMission({
                 <MissionList
                   title="Overdue Invoices"
                   icon={<CircleDollarSign className="h-3.5 w-3.5" />}
-                  emptyText="Nothing overdue"
+                  emptyText={data.unavailableSections?.includes("invoices") ? "Invoice history unavailable" : "Nothing overdue"}
                   href="/invoices"
                 >
                   {data.overdueInvoices.map((inv) => (
@@ -180,7 +181,7 @@ export function TodaysMission({
                 <MissionList
                   title="Equipment Issues"
                   icon={<Wrench className="h-3.5 w-3.5" />}
-                  emptyText="All equipment operational"
+                  emptyText={data.unavailableSections?.includes("equipment") ? "Equipment status unavailable" : "All equipment operational"}
                   href="/equipment"
                 >
                   {data.equipmentIssues.map((eq) => (

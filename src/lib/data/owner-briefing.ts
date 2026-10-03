@@ -37,6 +37,7 @@ export async function getOwnerBriefing(): Promise<DataResult<OwnerBriefing>> {
   if (attentionResult.error !== null) return { data: null, error: attentionResult.error };
 
   const mission = missionResult.data;
+  if (mission.unavailableSections?.length) return { data: null, error: "Owner briefing incomplete: " + mission.unavailableSections.join(", ") + " unavailable." };
 
   return {
     data: {
@@ -48,7 +49,7 @@ export async function getOwnerBriefing(): Promise<DataResult<OwnerBriefing>> {
         crew_working: mission.crewWorking.map((c) => c.name),
         routes_running: mission.routesRunning.length,
         jobs: mission.jobs
-          .filter((j) => j.status !== "cancelled")
+          .filter((j) => j.status !== "cancelled" && j.status !== "skipped" && j.property?.client?.data_source !== "demo")
           .map((j) => ({
             id: j.id,
             client: clientDisplayName(j.property?.client),
