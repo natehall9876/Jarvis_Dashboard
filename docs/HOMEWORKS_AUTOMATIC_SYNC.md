@@ -24,7 +24,7 @@ Native clients, properties, jobs, quotes, invoices, payments, services, employee
 At initial reconciliation: 71 customer records (25 current plus 46 source-deleted), 26 properties, 230 events, 2 estimates, 26 invoices, 7 payments, 6 items and 2 users. Source-deleted records remain visible as history, not duplicate active customers. Invoice and quote projections contain 101 and 2 source line items respectively.
 
 ## Limits and mapping decisions
-Only fields returned by the verified live schema are synchronized. Source descriptions can contain HTML; the UI renders them as inert text. Source event dates/times are kept as local calendar values; timestamp display and invoice due-date conversion use America/New_York.
+Only fields returned by the verified live schema are synchronized. Source descriptions can contain HTML; the UI renders them as inert text. Source event dates/times and invoice calendar due dates are preserved. Homeworks computes invoice due dates from date-only late-fee terms and encodes them at midnight UTC; converting to New York would incorrectly subtract one day. Actual timestamp display uses America/New_York.
 Property-less source calendar events stay visible in /homeworks; a native job property is not fabricated. Full source statuses remain available even where native Jarvis status enums are coarser. Actual work duration, costs, route ordering, attachments/photos and unsupported custom fields are not invented. A hard-deleted object absent from every provider query cannot be proven deleted; history is retained. Soft-deleted/archive partitions are explicitly reconciled. More than 999 nested users/line items fails visibly rather than truncating silently.
 
 ## Reliability and operations

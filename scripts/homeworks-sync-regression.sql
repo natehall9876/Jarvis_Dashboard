@@ -51,3 +51,14 @@ begin
 end $test$;
 select 'PASS: invoice line projection, duplicate replay, unchanged revision, source line removal' as test_result;
 rollback;
+
+begin;
+select public.homeworks_claim_lease('sync','9b2d3404-0000-4000-8000-000000000003',280);
+do $test$ declare source jsonb; parent uuid; begin
+select payload,projected_id into source,parent from homeworks_records where entity='invoices' and payload->>'dueDate' is not null limit 1;
+if source is null then raise exception 'Dated invoice fixture missing'; end if;
+perform public.homeworks_apply_page('9b2d3404-0000-4000-8000-000000000003','test_invoice_date','invoices',jsonb_build_array(source),'{"after":1,"startedAt":"2026-10-06T18:43:00Z","full":true}',true);
+if not exists(select 1 from invoices where id=parent and due_date=(source->>'dueDate')::date) then raise exception 'Business due date shifted'; end if;
+end $test$;
+select 'PASS: Homeworks calendar due date retained across UTC/New York boundary' as test_result;
+rollback;
