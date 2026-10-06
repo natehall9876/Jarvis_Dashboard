@@ -42,7 +42,7 @@ export async function getJobs(filters: JobFilters = {}): Promise<DataResult<JobW
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data ?? []) as unknown as JobWithRelations[];
+    return ((data ?? []) as unknown as JobWithRelations[]).filter(job => job.property?.client?.data_source !== "demo");
   });
 }
 

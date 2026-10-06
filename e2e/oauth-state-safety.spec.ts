@@ -13,6 +13,8 @@ type Store = {
 function fixture(provider: typeof providers[number], options: { missingAdmin?: boolean; lookupError?: boolean; deleteError?: boolean; reauth?: boolean; switched?: boolean; noRow?: boolean } = {}) {
   let row = { id: "11111111-1111-4111-8111-111111111111", access_token: "old-access-test", refresh_token: "old-refresh-test", updated_at: "2026-10-01T00:00:00Z", created_at: "2026-09-01T00:00:00Z", expires_at: "2000-01-01T00:00:00Z", access_token_expires_at: "2000-01-01T00:00:00Z", refresh_token_expires_at: "2099-01-01T00:00:00Z", realm_id: "123" };
   const client = createClient("https://example.supabase.co", "test-key", { auth: { persistSession: false }, global: { fetch: async (input, init) => {
+    if (String(input).includes("/rpc/homeworks_claim_lease")) return Response.json(true);
+    if (String(input).includes("/rpc/homeworks_release_lease")) return new Response(null,{status:204});
     const method = init?.method ?? "GET";
     if (method === "GET") return options.lookupError ? Response.json({ message: "Test database offline" }, { status: 500 }) : Response.json(options.noRow ? [] : [row]);
     if (method === "DELETE") return options.deleteError ? Response.json({ message: "Test delete denied" }, { status: 500 }) : Response.json([row]);

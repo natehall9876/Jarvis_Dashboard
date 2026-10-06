@@ -31,3 +31,14 @@ test("time budget exhaustion preserves the cursor and never reports completion",
   const done = await processStream({ stream, cursor, token: "test", request: async () => { throw new Error("must not fetch"); }, apply: async () => {}, complete: async () => { completed = true; }, shouldContinue: () => false });
   expect(done).toBe(false); expect(completed).toBe(false);
 });
+
+test("a rate-limited source read retries before persisting data", async () => {
+  let calls=0;
+  const rows=await fetchSourcePage(stream,cursor,"test",async()=>++calls===1?new Response(null,{status:429}):Response.json({data:{customers:[{id:41}]}}));
+  expect(calls).toBe(2); expect(rows).toHaveLength(1);
+});
+test("a full reconciliation does not invent an incremental filter for properties",async()=>{
+ let sent: Record<string,unknown>={};
+ await fetchSourcePage({...stream,incremental:false},cursor,"test",async(_url,init)=>{sent=JSON.parse(String(init?.body));return Response.json({data:{customers:[]}});});
+ expect(sent.variables).toEqual({where:{isDeleted:false,id:{gt:40}},take:100});
+});

@@ -12,5 +12,5 @@ export async function GET() {
     db.from("homeworks_sync_state").select("stream,last_success_at,last_error,failure_count"),
   ]);
   if (run.error || changed.error || states.error) return Response.json({ error: "Sync status unavailable" }, { status: 503 });
-  return Response.json({ run: run.data, revision: changed.data?.changed_at ?? null, streams: states.data }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ run: run.data, revision: [changed.data?.changed_at, run.data?.id, run.data?.status].filter(Boolean).join(":") || null, streams: states.data }, { headers: { "cache-control": "no-store" } });
 }

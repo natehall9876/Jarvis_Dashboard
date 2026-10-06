@@ -40,7 +40,7 @@ export async function getInvoices(): Promise<DataResult<InvoiceWithClient[]>> {
     return ((invoices ?? []) as unknown as (Invoice & {
       client: InvoiceWithClient["client"];
       property: InvoiceWithClient["property"];
-    })[]).map(enrichInvoice);
+    })[]).filter(invoice => invoice.client?.data_source !== "demo").map(enrichInvoice);
   });
 }
 
@@ -80,9 +80,7 @@ export async function getInvoiceById(id: string): Promise<DataResult<InvoiceDeta
  * Feeds "what needs attention" summaries (Command Center priorities, the AI
  * Advisor's get_overdue_invoices/get_attention_items tools) — confirmed-demo
  * clients are excluded here so a seed-data invoice never shows up as real
- * money owed. The raw Invoices list page uses getInvoices() directly and
- * intentionally still shows every record (nothing is hidden there, only
- * excluded from "this is real business money" summaries).
+ * money owed. The production Invoices list also excludes confirmed demo records.
  */
 export async function getOverdueInvoices(limit = 10): Promise<DataResult<InvoiceWithClient[]>> {
   const result = await getInvoices();
