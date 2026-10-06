@@ -24,9 +24,13 @@ The event stream reads route stops on every scheduled run because changing a rou
 
 ## Monday owner correction
 
-The owner's October 6 correction was saved as 13 ordered property references. On October 5, Homeworks currently contains 10 corresponding visits. Richard Martin, Richard Carbone and Rayna Foster at 2 Penbryn Avenue have no visit that day.
+The owner's October 6 correction was saved as 13 ordered property references. Homeworks initially contained 10 corresponding October 5 visits. After explicit owner approval, the three missing Grass Maintenance visits were created in Homeworks as OPEN, untimed visits:
 
-Automatic approval review rejected creating these three external visit records. No visits, invoices or customer messages were created. The route preference is saved; missing visits must remain visibly unconfirmed until creation is approved and Homeworks is updated.
+- Richard Martin: event 59236775, $65, 1 budgeted hour.
+- Richard Carbone: event 59236776, $65, 1 budgeted hour.
+- Rayna Foster at 2 Penbryn Avenue: event 59236777, $50, 0.25 budgeted hours.
+
+A fresh source read confirmed there were no duplicate visits before creation. The Homeworks mutation returned the correct customer, property, date, status and totals for all three. No invoices or customer messages were created.
 
 ## Other systems
 
@@ -40,3 +44,7 @@ QuickBooks remains the accounting source. Google Calendar supplies availability 
 - Rollback-only database checks passed for source stop-order projection/removal and complete, atomic route reordering; partial/duplicate payloads left the route unchanged.
 - Full browser suite: 814 passed, 2 mobile voice-control click timeouts. Both failed cases passed when rerun unchanged with one worker. No voice code was changed.
 - Live Homeworks GraphQL read accepted the event route-stop fields and exact-event filter.
+
+- October 6 at 21:45 UTC: the automatic worker completed successfully and projected the three approved Homeworks visits without a manual import. Their source IDs, October 5 dates, prices and labor budgets matched the mirror.
+- Production Monday day view verified after reload: 13 actual appointments, $885 scheduled revenue, no missing-visit warning. Order: Jan Sparfven; Leslie Moreau; Richard Martin; Richard Carbone; Rob Elliot; Lizzie Farrell; Danny Dumican; Alicia Rathbun; Rayna Foster (2 Penbryn); Tara Zelano; Phil Hirons; Frank Sibilia; Roberts Grandma.
+- Production route reordering was exercised through the UI, persisted across reload, restored to the owner order, and remained intact after automatic sync.
