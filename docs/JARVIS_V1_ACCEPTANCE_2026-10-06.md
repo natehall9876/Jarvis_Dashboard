@@ -1,63 +1,56 @@
-# Jarvis V1 acceptance checkpoint — 2026-10-06
-
-Status: **NOT COMPLETE / NOT DEPLOYED**. This records evidence, not a production acceptance claim.
+# Jarvis V1 production acceptance — 2026-10-06
 
 Production: https://jarvis-dashboard-fawn.vercel.app
 
-Production observed commit: `16047eb13727bb6b0ddeb5b8e89df0c901e6af84`.
-Vercel deployment: `dpl_Ej5cvNNLtXwMmndwDU74awtLs4gw`, READY.
-Prepared branch: `fix/jarvis-v1-20261006`, based on that commit.
+The operational dashboard is deployed and personally verified against real production data. **Full V1 acceptance is not complete:** QuickBooks denies production reads, Google Calendar lacks credentials/authorization, and physical iPhone microphone recognition remains unverified. Missing data is explicitly unavailable.
 
-## Prepared changes
+The approved af99a31a1d6114913586d1a368250808399bef9e was published and deployed. Completed Homeworks commits a1fe069c2e8ba9eadf0c9b9929af7778431f4ee4 and 503c75241cd0f66e848055c9269aff52a88e812b were merged without overwriting the parallel task. Combined operating code was verified at 3757b4f29347a75d64c773d2a00b68ef9bad6190, deployment dpl_UMd2HVEQiHPm2BCnmEbSQTgJtc41, READY and aliased to production. This cleanup removes only the temporary authenticated mobile test route and updates this record.
 
-- Owner priorities ranked with links and concrete next actions; weekly jobs, scheduled/completed value, service mix, estimates and lead KPIs.
-- Leads + Sales and Money screens. Missing financial inputs remain unavailable; QuickBooks and Homeworks receivables are separate.
-- Homeworks freshness reads the existing 21-stream status contract. Missing/stale/error streams or expired authentication show a warning.
-- QuickBooks reads real invoices/payments with explicit failure handling. Google Calendar reads selected-calendar events when configured; missing configuration is explicit.
-- Customer summaries propagate database errors. Customer lists/details respect the existing Homeworks deletion flags instead of listing deleted unnamed placeholders.
-- Missing job prices cannot become a verified zero-dollar briefing.
-- Voice commands include Money and Leads navigation. Duplicate final recognition events are ignored per listening session; old recognizer callbacks cannot clear a newer session.
-- AI attention responses retain total issue counts with bounded initial actions/references. Date guidance uses the business timezone. Stale job dates do not establish completed work.
+## Production acceptance
 
-## Checks performed
-
-| Check | Result | Scope/evidence |
+| Check | Result | Evidence / limit |
 |---|---|---|
-| Production URL and existing authenticated owner session | PASS | Dashboard, Settings, Clients and Jan Sparfven detail rendered real data. Fresh credential entry was not tested. |
-| Existing production AI | PASS with defect found | Real attention query returned four overdue invoices totaling $1,025. It dumped 139 unfinished-job references; prepared changes bound this output. |
-| Customer detail/history | PASS on existing deployment | Jan Sparfven: property, $600 invoice balance, dated jobs and 8 completed service-history records. |
-| New V1 production screens | NOT RUN | Publication blocked. Local tests are not substituted for production. |
-| QuickBooks production read | FAIL | Both company-info verification and financial preview returned "QuickBooks denied this read. Check account permissions and app access." Saved authorization/refresh does not establish readable financial data. |
-| Google Calendar production read | BLOCKED | Production and local environment lack GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET. No saved Google connection exists. |
-| Homeworks scheduler/database | OBSERVED CURRENT, not full acceptance | At 18:07:13 UTC, all 21 streams had successful checkpoints between 18:05:02 and 18:05:12 UTC; no stream errors. |
-| Homeworks real change → automatic sync → UI | NOT VERIFIED | Parallel task owns this test. No source-change ID, before/after value, trigger/run ID and live UI evidence were supplied. No manual import or test source mutation was performed by this task. |
-| Typecheck | PASS | Final `npm run typecheck`, exit 0. |
-| Production build | PASS locally | Final `npm run build`, exit 0. This is not a deployment. |
-| Client-secret scan | PASS | Final `npm run verify:no-client-secrets`, 38 client JS files checked. |
-| Modified-file ESLint | PASS | Changed UI/data/voice/AI files checked. Full repo lint separately finds existing purity error in Homeworks-owned page; left untouched. |
-| Voice + V1 tests | PASS | 54 tests across Chromium/mobile Safari after duplicate-command fix; simulated microphone, not a physical iPhone microphone. |
-| Latest customer/financial safety tests | PASS | 64 tests across both projects, including deleted Homeworks customers and missing/error financial sources. |
-| Broader relevant suite | MIXED then targeted checks pass | 205/208 initial pass; three timing-related voice failures passed individually (6/6 both projects). Complete voice suite subsequently passed. |
-| Entire default suite | NOT CLEAN | Earlier local run: 704/772 passed. Browser executable/environment failures plus Homeworks OAuth fixture failures. Homeworks test edits belong to the parallel task. |
-| Production mobile acceptance | NOT VERIFIED | Browser tests use iPhone 14 WebKit dimensions locally. New production screens and physical-device voice remain pending deployment and live acceptance. |
-| New deployment / final smoke test | BLOCKED | Automatic approval review rejected pushing private source to GitHub as an unapproved external disclosure, including a retry after verifying the destination matches the existing PC remote and Vercel Git metadata. No alternate publication path attempted. |
+| Production URL and dashboard | PASS | Root, Schedule, Clients, customer detail, job detail, Leads, Money and Homeworks rendered without fatal errors. |
+| Authentication | PASS, existing-session scope | Owner session survived navigation/reloads without a loop. Anonymous root returned 307 to /login?redirectTo=%2F; status API returned 401. Fresh password entry/recovery was not repeated. |
+| Today | PASS | October 6 has no recorded jobs; verified empty schedule displays zero. |
+| Weekly jobs/revenue | PASS | October 5–11: 15 jobs, $1,170 schedule value, 0 completed, 11.8 budgeted hours. Schedule, dashboard and independent Supabase query agree. |
+| Service mix | PASS | 14 Grass maintenance jobs / $1,050; one Grass job / $120. |
+| Customers/jobs/history | PASS | 25 current customers, excluding deleted placeholders. Jan Sparfven: property, recent jobs, $600 operational balance and eight completed history records. Real $75 job detail loaded on mobile. |
+| Leads/estimates/next actions | PASS with data limit | Native leads table is empty; intake is explicitly unverified. Real estimates: $1,000 draft and $50 won, with next actions. Import timestamp now says Added to Jarvis, not source creation date. |
+| Owner attention | PASS | Highest-value overdue balances, upcoming unassigned work, then draft estimate. One real AI query produced one bounded answer with eight record links. It asks to verify unfinished work rather than assuming completion. |
+| Operational money | PASS | 19 Homeworks/Jarvis outstanding invoices total $5,165; four overdue total $1,025. Independently cross-checked. Explicitly separate from QuickBooks. |
+| QuickBooks money/payments | FAIL — owner access blocker | Saved OAuth authorization can refresh, but company-info, invoice and payment reads return 403. UI records failed-read time and shows unavailable totals. |
+| Google Calendar | BLOCKED — missing configuration | GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET absent from production and existing local environment; no saved connection. Events and calendar conflicts explicitly unavailable. |
+| Homeworks automatic synchronization | PASS with evidence attribution | Parallel task witnessed real source change and revert through automatic runs into the open production UI. This task independently confirmed runs, restored source/native values and merged production UI. Exact evidence below. |
+| Freshness | PASS | All 21 streams successful, no errors. UI checkpoint advanced automatically through 2:25, 2:30, 2:35, 2:40, 2:45 and 2:50 PM ET during acceptance. QBO/Calendar failures separate. |
+| Mobile production | PASS at phone dimensions | Real authenticated pages in a temporary 390×844 frame without fixtures/data overrides: dashboard, customers/history, job detail, day/week Schedule, Leads, Money, Homeworks and conversation. Document width equaled scroll width (378 px excluding frame border/scrollbar); controls reachable. Weekly board intentionally scrolls inside its container. Temporary route removed after testing. Not a physical iPhone test. |
+| Commands/duplication | PASS within scope | One open-money submission produced one navigation response; one attention click produced one answer. Duplicate recognition event regression passed in Chromium/WebKit. |
+| Production microphone | PARTIAL — permission blocked | Start showed Listening / Stop listening; stop returned to idle without an empty command. Cloud browser denied microphone access; clear warning displayed. Physical spoken recognition is not claimed. |
+| Runtime smoke | PASS for sampled flows | No fatal UI failures. Combined-deployment error/fatal log query returned no entries through 18:49:49 UTC; scoped observation, not a guarantee for future requests. |
 
-## Independent database cross-checks
+## Verification and reliability
 
-At 18:07:13 UTC on October 6, excluding confirmed demo and deleted records:
+- Combined-source typecheck and production build: PASS.
+- Latest V1/owner-data tests: 36/36 PASS. Includes unknown prices, demo/deleted records, schedule/database failure, failed crew reads, partial financial sources, stale/missing streams, recent-success-plus-sync-error, provider denial and unavailable Calendar.
+- Prior voice + V1 run: 54/54 across Chromium/mobile Safari, including duplicate final-event prevention. Prior customer/financial run: 64/64. Microphone API is simulated in automated recognition tests.
+- Modified-file ESLint: PASS. Client-secret scan: PASS (31 generated client JavaScript files after schedule correction).
+- Parallel Homeworks task reports 176 targeted sync/OAuth/schedule/data/operations cases passing across Chromium/mobile Safari on its combined source.
+- Earlier broad runs were not clean. A 208-case run had three timing-related voice failures; all six targeted project rechecks passed, then complete voice suite passed. An earlier entire default run had missing-browser/environment and Homeworks fixture failures. Final whole default suite was not rerun and is not claimed clean.
+- Production was not deliberately broken to simulate outages or stale checkpoints. Those cases were verified at application boundaries. Real QBO denial, unconfigured Calendar and anonymous-auth rejection were observed live.
+- Unknown capacity, unavailable lead conversion, complete business revenue/profit and unverified Calendar conflicts remain explicitly unavailable. Scheduled value is not collected cash.
 
-- October 5–11: 15 scheduled jobs, recorded prices total $1,170, no unknown prices.
-- Operational receivables: 19 invoices, $5,165 balance. These are not verified QuickBooks balances.
-- Native leads table: zero records. This does not establish that no inquiries exist outside Jarvis.
-- Customer deletion flags: 46 deleted, including 43 unnamed records. The prepared customer views exclude these.
+## Exact Homeworks automatic change and revert evidence
 
-## Isolation and resumption
+The parallel task recorded this sequence in docs/HOMEWORKS_AUTOMATIC_SYNC.md:
 
-Canonical PC repository was not modified. Its two existing uncommitted files remain owned by the Homeworks task:
-`e2e/homeworks-automatic.spec.ts` and `e2e/oauth-state-safety.spec.ts`.
+1. Existing Homeworks customer **2955966**, Jarvis Integration Test, began with blank description; baseline source update 2026-09-22T17:54:08Z.
+2. Real Homeworks description changed at **2026-10-06T18:30:27Z** to: Jarvis automatic sync acceptance 2026-10-06 — temporary reversible test.
+3. Ordinary five-minute scheduled run **53a1f17a-7f52-4054-8bc4-3a2cb700b069** applied one changed record at **18:35:02.602066Z** and completed **18:35:12.099Z**, success.
+4. Source mirror and native clients.homeworks_notes held the marker. The already-open production /homeworks?entity=customers page displayed it automatically, with **no manual import, explicit sync call, navigation or browser reload**.
+5. Description restored to blank at **18:36:01Z**. Scheduled run **b775f326-10a5-4be5-928b-c96f04de332f** restored both layers at **18:40:02.278531Z**, completed **18:40:07.690Z**, one changed record. The same untouched page automatically removed the marker; counts stayed stable.
 
-Prepared source is also copied to isolated PC worktree `C:\Users\nateh\Jarvis_V1_Verification`.
-Local browser verification used port 3016 and an uncommitted test configuration; environment values remain ignored and were not printed or committed.
-Verification logs in that isolated worktree include `v1-verification.log`, `v1-voice-recheck.log`, `v1-voice-duplicate-red.log`, `v1-voice-final.log`, and `v1-customer-final.log`.
+This task independently queried both run IDs: success, one record each, no error. It confirmed source updatedAt 18:36:01Z, changed_at 18:40:02.278531Z, blank source description and native note, with exactly one native customer. After merging, the live production customer card showed ID 2955966 updated at 2:40:02 PM ET with no marker. At 2:50 PM ET it showed a new successful run and 21 current streams. The source mutation was not duplicated.
 
-Before deployment, obtain explicit publication approval required by the automatic review, fetch current main, integrate any completed Homeworks commit without overwriting its task, and rerun affected checks. Then deploy and personally test root, Leads, Money, customers/jobs, source warnings, mobile navigation and voice command flow. Complete QuickBooks/Google access setup and obtain the exact real-change Homeworks proof before declaring V1 finished.
+## Isolation and publication
+
+Work used branch fix/jarvis-v1-20261006 and isolated PC worktree C:\Users\nateh\Jarvis_V1_Verification. Canonical Homeworks files were inspected read-only. Each publication fetched main and required ancestry; when main advanced, completed Homeworks changes were merged normally. No force push or production business-record writes by this task. The workload relation now includes the existing client provenance field so the parallel task's production-only job filter operates correctly.
