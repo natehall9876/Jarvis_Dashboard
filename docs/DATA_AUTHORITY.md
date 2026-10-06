@@ -36,7 +36,7 @@ QuickBooks remains the accounting source. Google Calendar supplies availability 
 ## Validation
 
 - TypeScript typecheck and production build passed.
-- All 13 focused scheduling regression tests passed.
+- All 14 focused scheduling regression tests passed, including exclusion of archived routes and demo records from scheduling choices.
 - Rollback-only database checks passed for source stop-order projection/removal and complete, atomic route reordering; partial/duplicate payloads left the route unchanged.
 - Full browser suite: 814 passed, 2 mobile voice-control click timeouts. Both failed cases passed when rerun unchanged with one worker. No voice code was changed.
 - Live Homeworks GraphQL read accepted the event route-stop fields and exact-event filter.

@@ -126,3 +126,19 @@ test("source success followed by projection failure is reported as pending sync,
  await expect(f.writer.writeHomeworksSchedule("42",{scheduled_date:"2026-10-12"})).rejects.toThrow(/Saved in Homeworks/);
  expect(f.operations.at(-1)).toBe("release");
 });
+
+test("scheduling choices exclude archived routes and confirmed demo customers/properties",async()=>{
+ const customers=[{id:"real",first_name:"Real",data_source:"homeworks_sync"},{id:"demo",first_name:"Demo",data_source:"demo"}];
+ const db=createClient("https://example.supabase.co","test",{auth:{persistSession:false},global:{fetch:async(input)=>{
+  const url=new URL(String(input));
+  if(url.pathname.endsWith("/routes"))return Response.json(url.searchParams.get("active")==="eq.true"?[{id:"active"}]:[{id:"active"},{id:"archived"}]);
+  if(url.pathname.endsWith("/clients"))return Response.json(customers);
+  return Response.json(customers.map(c=>({id:c.id,client_id:c.id,street:c.id,client:c})));
+ }}});
+ const f=loadServerModule<typeof import("../src/lib/data/options")>("src/lib/data/options.ts",{
+  "@/lib/supabase/server":{createSupabaseServerClient:async()=>db},"@/lib/env":{isSupabaseConfigured:()=>true}
+ });
+ expect((await f.getRouteOptions()).data?.map(r=>r.id)).toEqual(["active"]);
+ expect((await f.getClientOptions()).data?.map(r=>r.id)).toEqual(["real"]);
+ expect((await f.getPropertyOptions()).data?.map(r=>r.id)).toEqual(["real"]);
+});

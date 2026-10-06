@@ -9,10 +9,10 @@ export async function getClientOptions() {
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase
       .from("clients")
-      .select("id, first_name, last_name, company_name")
+      .select("id, first_name, last_name, company_name, data_source, homeworks_deleted")
       .order("first_name");
     if (error) throw error;
-    return (data ?? []).map((c) => ({ id: c.id, label: clientDisplayName(c) }));
+    return (data ?? []).filter(c => c.data_source !== "demo" && !c.homeworks_deleted).map((c) => ({ id: c.id, label: clientDisplayName(c) }));
   });
 }
 
@@ -21,10 +21,10 @@ export async function getPropertyOptions() {
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase
       .from("properties")
-      .select("id, property_name, street, city, state, zip, client_id, client:clients(id, first_name, last_name, company_name)")
+      .select("id, property_name, street, city, state, zip, client_id, homeworks_deleted, client:clients(id, first_name, last_name, company_name, data_source, homeworks_deleted)")
       .order("street");
     if (error) throw error;
-    return (data ?? []).map((p) => ({
+    return (data ?? []).filter(p => !p.homeworks_deleted && p.client?.data_source !== "demo" && !p.client?.homeworks_deleted).map((p) => ({
       id: p.id,
       clientId: p.client_id,
       label: `${propertyAddress(p)} — ${clientDisplayName(p.client as unknown as Parameters<typeof clientDisplayName>[0])}`,
@@ -61,7 +61,7 @@ export async function getEmployeeOptions() {
 export async function getRouteOptions() {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.from("routes").select("id, name, route_day").order("name");
+    const { data, error } = await supabase.from("routes").select("id, name, route_day").eq("active", true).order("name");
     if (error) throw error;
     return data ?? [];
   });
