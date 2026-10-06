@@ -62,6 +62,8 @@ const ROUTES: { words: RegExp; target: NavTarget }[] = [
   { words: /\bjobs\b/, target: { label: "your jobs", href: "/jobs" } },
   { words: /\broutes?\b/, target: { label: "your routes", href: "/routes" } },
   { words: /\b(quotes?|estimates?)\b/, target: { label: "your quotes", href: "/quotes" } },
+  { words: /\b(money|finances|quickbooks)\b/, target: { label: "Money", href: "/money" } },
+  { words: /\b(leads|sales|follow-ups)\b/, target: { label: "Leads and Sales", href: "/leads" } },
   { words: /\binvoices?\b/, target: { label: "your invoices", href: "/invoices" } },
   { words: /\bemployees?|crew\b/, target: { label: "your employees", href: "/employees" } },
   { words: /\bequipment\b/, target: { label: "your equipment", href: "/equipment" } },

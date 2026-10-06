@@ -59,7 +59,8 @@ export function buildBriefing(input: { name?: string; hour: number; jobs: Briefi
 
   const facts: Briefing["facts"] = [];
   if (active.length > 0) {
-    facts.push({ label: "Scheduled revenue", value: `$${scheduledRevenue.toLocaleString("en-US", { maximumFractionDigits: 0 })} (not yet earned)`, tone: "ok" });
+    const missingPrices = input.jobs.some(j => j.status !== "cancelled" && j.status !== "skipped" && j.price == null);
+    facts.push(missingPrices ? { label: "Scheduled revenue", value: "Unavailable — job prices are missing", tone: "warn" } : { label: "Scheduled revenue", value: `$${scheduledRevenue.toLocaleString("en-US", { maximumFractionDigits: 0 })} (not yet earned)`, tone: "ok" });
     facts.push(
       missingHours === active.length
         ? { label: "Budgeted labor", value: "No budgeted hours recorded", tone: "warn" }

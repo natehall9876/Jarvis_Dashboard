@@ -1,3 +1,4 @@
+import { SourceHealthBanner } from "@/components/command-center/source-health";
 import { HomeworksLiveRefresh } from "@/components/homeworks-live-refresh";
 import type { ReactNode } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -29,7 +30,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             panel's last suggested-question chip) doesn't sit under the
             fixed mobile tab bar + Jarvis FAB (mobile) or just the FAB
             (desktop, no tab bar there). */}
-        <main className="flex-1 overflow-x-hidden px-4 pt-6 pb-36 lg:px-8 lg:pt-8 lg:pb-24">{children}</main>
+        <main className="flex-1 overflow-x-hidden px-4 pt-6 pb-36 lg:px-8 lg:pt-8 lg:pb-24"><SourceHealthBanner />{children}</main>
       </div>
       <VoiceDock />
     </div>

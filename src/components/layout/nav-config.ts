@@ -31,6 +31,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Properties", href: "/properties", icon: MapPinned },
   { label: "Jobs", href: "/jobs", icon: Briefcase },
   { label: "Routes", href: "/routes", icon: Route },
+  { label: "Leads + Sales", href: "/leads", icon: Users },
+  { label: "Money", href: "/money", icon: Wallet },
   { label: "Quotes", href: "/quotes", icon: FileText },
   { label: "Invoices", href: "/invoices", icon: Receipt },
   { label: "Employees", href: "/employees", icon: UserSquare2 },

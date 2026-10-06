@@ -37,7 +37,7 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
 
     const clientIds = clients.map((c) => c.id);
 
-    const [{ data: properties }, { data: invoices }] = await Promise.all([
+    const [{ data: properties, error: propertiesError }, { data: invoices, error: invoicesError }] = await Promise.all([
       supabase.from("properties").select("id, client_id").in("client_id", clientIds),
       supabase
         .from("invoices")
@@ -46,6 +46,9 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
         .neq("status", "draft")
         .neq("status", "void"),
     ]);
+
+    if (propertiesError) throw propertiesError;
+    if (invoicesError) throw invoicesError;
 
     const propertyCountByClient = new Map<string, number>();
     for (const p of properties ?? []) {
@@ -94,15 +97,16 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
     const client = await getOrNotFound<Client>(supabase.from("clients").select("*").eq("id", id).maybeSingle());
     if (!client) return null;
 
-    const { data: properties } = await supabase
+    const { data: properties, error: propertiesError } = await supabase
       .from("properties")
       .select("*")
       .eq("client_id", id)
       .order("street");
 
+    if (propertiesError) throw propertiesError;
     const propertyIds = (properties ?? []).map((p) => p.id);
 
-    const [{ data: jobs }, { data: quotes }, { data: invoices }] = await Promise.all([
+    const [{ data: jobs, error: jobsError }, { data: quotes, error: quotesError }, { data: invoices, error: invoicesError }] = await Promise.all([
       propertyIds.length
         ? supabase
             .from("jobs")
@@ -110,11 +114,14 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
             .in("property_id", propertyIds)
             .order("scheduled_date", { ascending: false })
             .limit(50)
-        : Promise.resolve({ data: [] as Job[] }),
+        : Promise.resolve({ data: [] as Job[], error: null }),
       supabase.from("quotes").select("*").eq("client_id", id).order("created_at", { ascending: false }),
       supabase.from("invoices").select("*").eq("client_id", id).order("invoice_date", { ascending: false }),
     ]);
 
+    if (jobsError) throw jobsError;
+    if (quotesError) throw quotesError;
+    if (invoicesError) throw invoicesError;
     const outstandingBalance = (invoices ?? [])
       .filter((inv) => inv.status !== "draft" && inv.status !== "void")
       .reduce((sum, inv) => sum + (inv.total - inv.amount_paid), 0);

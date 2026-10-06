@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { sumKnown } from "@/lib/data/operations-model";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataStateGate } from "@/components/ui/states";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -60,7 +61,7 @@ export function TodaysMission({
                 />
                 <StatTile
                   label="Expected Revenue"
-                  value={formatCurrency(data.expectedRevenue)}
+                  value={sumKnown(data.jobs.filter(j => j.status !== "cancelled" && j.status !== "skipped" && j.property?.client?.data_source !== "demo")) == null ? <span className="text-base">Unavailable</span> : formatCurrency(data.expectedRevenue)}
                   icon={<CircleDollarSign className="h-4 w-4" />}
                   tone="accent"
                 />

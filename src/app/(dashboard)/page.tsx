@@ -1,6 +1,9 @@
+import { OperationalReceivables } from "@/components/command-center/operational-receivables";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { CommandHero } from "@/components/command-center/command-hero";
-import { AgentNetwork } from "@/components/command-center/agent-network";
+import { Suspense } from "react";
+import { OwnerOperations } from "@/components/command-center/owner-operations";
+import { QuickBooksMoney, CalendarAgenda } from "@/components/command-center/live-integrations";
 import { TasksCard } from "@/components/command-center/tasks-card";
 import { getOpenTasks } from "@/lib/data/notes-tasks";
 import { BRAND } from "@/components/layout/nav-config";
@@ -8,9 +11,8 @@ import { buildBriefing, hourInZone } from "@/lib/jarvis/briefing";
 import { addDaysISO, todayInZone } from "@/lib/integrations/homeworks-dates";
 import { TodaysMission } from "@/components/command-center/todays-mission";
 import { UpcomingWork } from "@/components/command-center/upcoming-work";
-import { BusinessPulse } from "@/components/command-center/business-pulse";
 import { WeatherCard } from "@/components/command-center/weather-card";
-import { getTodaysMission, getBusinessPulse } from "@/lib/data/command-center";
+import { getTodaysMission } from "@/lib/data/command-center";
 import { getWorkloadSummary } from "@/lib/data/jobs";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +23,7 @@ export default async function CommandCenterPage() {
   const tomorrow = addDaysISO(today, 1);
   const weekOut = addDaysISO(today, 7);
 
-  const [mission, pulse, upcoming, tasks] = await Promise.all([getTodaysMission(), getBusinessPulse(), getWorkloadSummary(tomorrow, weekOut), getOpenTasks()]);
+  const [mission, upcoming, tasks] = await Promise.all([getTodaysMission(), getWorkloadSummary(tomorrow, weekOut), getOpenTasks()]);
 
   // The briefing is built only from today's real job rows; confirmed demo
   // records are excluded exactly as they are from the mission totals.
@@ -70,22 +72,16 @@ export default async function CommandCenterPage() {
         </Card>
       </div>
 
-      <div className="animate-fade-in" style={{ animationDelay: "40ms" }}>
-        <Card>
-          <CardHeader title="Jarvis capabilities" description="Open Jarvis tools; check Settings for verified integration status — tap any capability to open it." />
-          <CardBody>
-            <AgentNetwork />
-          </CardBody>
-        </Card>
-      </div>
+      <Suspense fallback={<p role="status">Checking owner priorities and this week&apos;s work…</p>}><OwnerOperations /></Suspense>
+      <Suspense fallback={<p role="status">Loading recorded receivables…</p>}><OperationalReceivables /></Suspense>
+      <Suspense fallback={<p role="status">Reading QuickBooks…</p>}><QuickBooksMoney /></Suspense>
+      <Suspense fallback={<p role="status">Checking Google Calendar…</p>}><CalendarAgenda /></Suspense>
 
       <div className="animate-fade-in" style={{ animationDelay: "60ms" }}>
         <UpcomingWork data={upcoming.data} error={upcoming.error} />
       </div>
 
-      <div className="animate-fade-in" style={{ animationDelay: "80ms" }}>
-        <BusinessPulse data={pulse.data} error={pulse.error} />
-      </div>
+
     </div>
   );
 }

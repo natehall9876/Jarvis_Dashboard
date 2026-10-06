@@ -5,6 +5,7 @@ import { Wifi, WifiOff, LogOut } from "lucide-react";
 import { signOut } from "@/app/(auth)/login/actions";
 
 const today = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
   weekday: "long",
   month: "long",
   day: "numeric",
@@ -28,7 +29,7 @@ export async function Topbar() {
       <div className="flex items-center gap-3">
         <Badge tone={configured ? "accent" : "warning"}>
           {configured ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          {configured ? "Supabase Connected" : "Supabase Not Configured"}
+          {configured ? "Database configured" : "Supabase Not Configured"}
         </Badge>
         {userEmail ? (
           <form action={signOut} className="flex items-center gap-2 border-l border-[var(--color-border)] pl-3">

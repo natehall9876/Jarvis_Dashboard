@@ -14,9 +14,16 @@ export async function fetchApiJson<T>(provider: string, url: string, init: Reque
   try {
     const response = await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(15_000) });
     if (!response.ok) {
-      await response.body?.cancel();
+      let diagnostic = '';
+      if (provider === 'QuickBooks' && response.status === 403) {
+        const body: unknown = await response.json().catch(() => null);
+        const fault = isRecord(body) && isRecord(body.Fault) ? body.Fault : null;
+        const errors = fault && Array.isArray(fault.Error) ? fault.Error : [];
+        const code = errors.find(isRecord)?.code;
+        if (typeof code === 'string' && (/^\d{2,6}$/.test(code) || code === 'ApplicationAuthorizationFailed')) diagnostic = ` (Intuit code ${code})`;
+      } else await response.body?.cancel();
       if (response.status === 401) return { ok: false, reason: "reauth_required", message: provider + " rejected the saved authorization. Reconnect from Settings." };
-      if (response.status === 403) return { ok: false, reason: "forbidden", message: provider + " denied this read. Check account permissions and app access." };
+      if (response.status === 403) return { ok: false, reason: "forbidden", message: provider + " denied this read" + diagnostic + ". Check account permissions and app access." };
       if (response.status === 429) return { ok: false, reason: "throttled", retryable: true, message: provider + " is rate-limiting requests. Try again shortly." };
       return { ok: false, reason: "error", retryable: response.status >= 500, message: provider + " API returned HTTP " + response.status + ". Try again; no partial result was used." };
     }
