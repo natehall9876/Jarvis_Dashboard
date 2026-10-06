@@ -80,3 +80,26 @@ test('briefing does not describe missing prices as zero-dollar work',()=>{
 });
 
 for(const [command,href] of [['open money','/money'],['show me leads','/leads']]) test(command+' uses deterministic navigation',()=>{expect(parseNavigationIntent(command)).toMatchObject({kind:'route',target:{href}});});
+
+test('attention answers keep total issue counts but limit the first response and record links',async()=>{
+  const items=Array.from({length:139},(_,i)=>({severity:'warning',category:'unfinished_past_job',summary:'Verify this job happened',reference:{type:'job',id:String(i),label:'Job '+i}}));
+  const api=loadServerModule<{attentionTools:{name:string;execute:()=>Promise<{data:{items:unknown[];warning_count:number;omitted_count:number};references:unknown[]}>}[]}>('src/lib/ai/tools/attention.ts',{
+    '@/lib/data/attention':{getAttentionItems:async()=>({error:null,data:{items,critical_count:0,warning_count:139,info_count:0}})},
+  });
+  const result=await api.attentionTools.find(t=>t.name==='get_attention_items')!.execute();
+  expect(result.data.warning_count).toBe(139);
+  expect(result.data.items).toHaveLength(8);
+  expect(result.data.omitted_count).toBe(131);
+  expect(result.references).toHaveLength(8);
+});
+
+test('customer list consumes Homeworks deletion flags without showing deleted placeholders',async()=>{
+  const db=createClient('https://example.supabase.co','key',{auth:{persistSession:false},global:{fetch:async input=>{
+    const url=new URL(String(input)); const table=url.pathname.split('/').at(-1);
+    const rows=table==='clients'?[{id:'real',first_name:'Real',data_source:'homeworks_sync',homeworks_deleted:false},{id:'deleted',first_name:'',data_source:'homeworks_sync',homeworks_deleted:true}]:[];
+    return Response.json(url.searchParams.get('homeworks_deleted')==='eq.false'?rows.filter(r=>!r.homeworks_deleted):rows);
+  }}});
+  const api=loadServerModule<{getClients:()=>Promise<{data:{id:string}[];error:string|null}>}>('src/lib/data/clients.ts',{'@/lib/env':{isSupabaseConfigured:()=>true},'@/lib/supabase/server':{createSupabaseServerClient:async()=>db}});
+  const result=await api.getClients();
+  expect(result.error).toBeNull(); expect(result.data.map(c=>c.id)).toEqual(['real']);
+});

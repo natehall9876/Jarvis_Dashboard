@@ -91,8 +91,8 @@ export default async function ClientDetailPage({
                 {formatCurrency(outstanding_balance)}
               </div>
             ) : (
-              <div className="mt-1 text-sm font-semibold text-[var(--color-text-muted)]" title="Synced from Homeworks — invoices aren't synced yet, so the real balance isn't known.">
-                Not synced
+              <div className="mt-1 text-sm font-semibold text-[var(--color-text-muted)]" title="No invoice history is available for this customer. The balance is not verified.">
+                Not verified
               </div>
             )}
           </CardBody>

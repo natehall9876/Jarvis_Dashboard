@@ -504,21 +504,8 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
     if (loadingRef.current || recognitionRef.current) return;
     const Ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Ctor) {
-      // The previous message claimed Safari was supported — true on macOS,
-      // false on iOS/iPadOS: Apple has never shipped SpeechRecognition
-      // (neither prefixed nor unprefixed) in mobile Safari, which is also
-      // the engine every other iOS browser (Chrome, Edge) is forced to use,
-      // so this is a real platform gap, not just "wrong browser" — and a
-      // very plausible actual cause for "voice commands aren't working" on
-      // an iPhone specifically, which a lawn-care owner testing in the
-      // field is realistically doing. Typing still works either way — see
-      // the text input right below the mic in the panel.
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-      reportVoiceError(
-        isIOS
-          ? "Voice input isn't available on iPhone/iPad — Apple doesn't support it in any iOS browser yet. Type your question or command instead; everything voice can do, typing can too."
-          : "Voice input isn't supported in this browser. Use Chrome or Edge, or type instead.",
-      );
+      reportVoiceError("Voice input isn't available in this browser session. Type your command, or use your keyboard's dictation microphone in the question field.");
+      setPanelOpen(true);
       return;
     }
     stopSpeaking(); // barge-in: talking over Jarvis interrupts it
@@ -527,8 +514,12 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
     recognition.lang = "en-US";
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+    let finalSubmitted = false;
 
     recognition.onresult = (event) => {
+      // Some engines repeat final results. A listening session may dispatch
+      // exactly one command, including synchronous navigation commands.
+      if (finalSubmitted || recognitionRef.current !== recognition) return;
       let interimText = "";
       let finalText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -537,6 +528,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
         else interimText += r[0].transcript;
       }
       if (finalText.trim()) {
+        finalSubmitted = true;
         setInterim("");
         setLastTranscript(finalText.trim());
         setLastTranscriptAt(new Date().toISOString());
@@ -546,6 +538,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       }
     };
     recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) return;
       // Some engines skip onend after an error; release the slot ourselves.
       recognitionRef.current = null;
       setListening(false);
@@ -561,6 +554,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       }
     };
     recognition.onend = () => {
+      if (recognitionRef.current !== recognition) return;
       recognitionRef.current = null;
       if (mountedRef.current) {
         setListening(false);

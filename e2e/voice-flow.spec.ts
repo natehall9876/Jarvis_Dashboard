@@ -103,6 +103,24 @@ const mounts = (page: Page) => page.evaluate(() => (window as unknown as { __lab
 const mic = (page: Page) => page.getByLabel("Jarvis voice").getByRole("button", { name: /Talk to Jarvis|Stop listening|Stop speaking/ });
 
 test.describe("voice flow (simulated microphone)", () => {
+  test("duplicate final speech events execute a navigation command only once", async ({ page }) => {
+    const requests = await setup(page, { answer: "unused" });
+    await page.goto("/voice-lab");
+    await mic(page).click();
+    await page.evaluate(() => {
+      const w = window as unknown as { __sr: { onresult: (event: unknown) => void; onend: () => void } };
+      const recognition = w.__sr;
+      const event = { resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: "Open my schedule" } } } };
+      recognition.onresult(event);
+      recognition.onresult(event);
+      recognition.onend();
+    });
+    await expect(page).toHaveURL(/\/voice-lab\/schedule$/);
+    await page.getByRole("button", { name: "Open Jarvis conversation" }).click();
+    await expect(page.getByText("Open my schedule", { exact: true })).toHaveCount(1);
+    expect(requests).toHaveLength(0);
+  });
+
   test("tapping the mic listens, shows interim text, submits the final transcript with page context, shows and speaks the answer", async ({ page }) => {
     const requests = await setup(page, { answer: "You have 10 jobs today. The first is Jan Sparfven.", toolsUsed: ["get_today_snapshot"] });
     await page.goto("/voice-lab");

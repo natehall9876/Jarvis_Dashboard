@@ -1,6 +1,10 @@
-import { getAttentionItems } from "@/lib/data/attention";
+import { getAttentionItems, type AttentionReport } from "@/lib/data/attention";
 import { getOwnerBriefing } from "@/lib/data/owner-briefing";
 import { unwrap, type ToolSpec } from "@/lib/ai/tool-types";
+
+function firstActions(report: AttentionReport) {
+  return { ...report, items: report.items.slice(0, 8), omitted_count: Math.max(0, report.items.length - 8) };
+}
 
 export const attentionTools: ToolSpec[] = [
   {
@@ -11,11 +15,11 @@ export const attentionTools: ToolSpec[] = [
     execute: async () => {
       const result = await getOwnerBriefing();
       return unwrap(result, (briefing) => ({
-        data: briefing,
+        data: { ...briefing, attention: firstActions(briefing.attention) },
         references: [
           ...briefing.today.jobs.map((j) => ({ type: "job" as const, id: j.id, label: j.client })),
-          ...briefing.attention.items.flatMap((i) => (i.reference ? [i.reference] : [])),
-        ],
+          ...briefing.attention.items.slice(0, 8).flatMap((i) => (i.reference ? [i.reference] : [])),
+        ].slice(0, 12),
       }));
     },
   },
@@ -27,8 +31,8 @@ export const attentionTools: ToolSpec[] = [
     execute: async () => {
       const result = await getAttentionItems();
       return unwrap(result, (report) => ({
-        data: report,
-        references: report.items.flatMap((i) => (i.reference ? [i.reference] : [])),
+        data: firstActions(report),
+        references: report.items.slice(0, 8).flatMap((i) => (i.reference ? [i.reference] : [])),
       }));
     },
   },

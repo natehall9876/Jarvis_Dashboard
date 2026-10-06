@@ -10,6 +10,8 @@ import type {
   Quote,
 } from "@/types/domain";
 
+// homeworks_deleted is supplied by the deployed automatic-sync migration;
+// use the column filter until the parallel task regenerates Database types.
 export async function getClients(search?: string): Promise<DataResult<ClientWithBalance[]>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
@@ -18,6 +20,7 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
       .from("clients")
       .select("*")
       .neq("data_source", "demo")
+      .filter("homeworks_deleted", "eq", false)
       .order("first_name", { ascending: true });
     if (error) throw error;
 
@@ -38,10 +41,11 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
     const clientIds = clients.map((c) => c.id);
 
     const [{ data: properties, error: propertiesError }, { data: invoices, error: invoicesError }] = await Promise.all([
-      supabase.from("properties").select("id, client_id").in("client_id", clientIds),
+      supabase.from("properties").select("id, client_id").filter("homeworks_deleted", "eq", false).in("client_id", clientIds),
       supabase
         .from("invoices")
         .select("client_id, total, amount_paid, status")
+        .filter("homeworks_deleted", "eq", false)
         .in("client_id", clientIds)
         .neq("status", "draft")
         .neq("status", "void"),
@@ -69,8 +73,8 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
       properties_count: propertyCountByClient.get(client.id) ?? 0,
       outstanding_balance: balanceByClient.get(client.id) ?? 0,
       // A homeworks_sync client with zero Jarvis invoice rows has an
-      // unknown real balance, not a verified $0 — invoices aren't synced
-      // from Homeworks yet, so that $0 is an artifact of nothing to sum,
+      // unknown real balance, not a verified $0 — no invoice history for
+      // this customer is recorded, so that $0 is an artifact of nothing to sum,
       // not evidence the customer is paid up. Any other data_source (or a
       // homeworks_sync client that does have at least one real invoice
       // row already) keeps the computed figure as genuinely verified.
@@ -94,13 +98,14 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const client = await getOrNotFound<Client>(supabase.from("clients").select("*").eq("id", id).maybeSingle());
+    const client = await getOrNotFound<Client>(supabase.from("clients").select("*").filter("homeworks_deleted", "eq", false).eq("id", id).maybeSingle());
     if (!client) return null;
 
     const { data: properties, error: propertiesError } = await supabase
       .from("properties")
       .select("*")
       .eq("client_id", id)
+      .filter("homeworks_deleted", "eq", false)
       .order("street");
 
     if (propertiesError) throw propertiesError;
@@ -111,12 +116,13 @@ export async function getClientById(id: string): Promise<DataResult<ClientDetail
         ? supabase
             .from("jobs")
             .select("*")
+            .filter("homeworks_deleted", "eq", false)
             .in("property_id", propertyIds)
             .order("scheduled_date", { ascending: false })
             .limit(50)
         : Promise.resolve({ data: [] as Job[], error: null }),
-      supabase.from("quotes").select("*").eq("client_id", id).order("created_at", { ascending: false }),
-      supabase.from("invoices").select("*").eq("client_id", id).order("invoice_date", { ascending: false }),
+      supabase.from("quotes").select("*").filter("homeworks_deleted", "eq", false).eq("client_id", id).order("created_at", { ascending: false }),
+      supabase.from("invoices").select("*").filter("homeworks_deleted", "eq", false).eq("client_id", id).order("invoice_date", { ascending: false }),
     ]);
 
     if (jobsError) throw jobsError;

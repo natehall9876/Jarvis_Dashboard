@@ -4,6 +4,7 @@ import { isProposedAction, type ProposedAction } from "@/lib/ai/action-types";
 import type { AICompletionResult, AIMessage, AIContentBlock } from "@/lib/ai/provider";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { PageContext } from "@/lib/ai/page-context";
+import { todayInZone, addDaysISO } from "@/lib/integrations/homeworks-dates";
 
 const provider = new AnthropicProvider();
 
@@ -13,18 +14,17 @@ const provider = new AnthropicProvider();
 const MAX_TOOL_ITERATIONS = 6;
 
 function buildSystemPrompt(): string {
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const weekdayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+  const todayIso = todayInZone();
+  const now = new Date(todayIso + 'T12:00:00Z');
+  const weekdayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: 'America/New_York' });
 
   // A deterministic weekday -> ISO date lookup for the next 14 days, computed
   // here rather than left to the model, so "this Friday" / "next Monday"
   // resolve from real arithmetic instead of a guess that can drift by a day.
   const upcoming: string[] = [];
   for (let i = 0; i < 14; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + i);
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const iso = addDaysISO(todayIso, i);
+    const d = new Date(iso + 'T12:00:00Z');
     const label = i === 0 ? "today" : i === 1 ? "tomorrow" : weekdayFormatter.format(d);
     upcoming.push(`${label} = ${iso}`);
   }
@@ -51,6 +51,7 @@ Confidence required before proposing: you must have a single, exact target id (j
 Nothing else is possible yet — no invoicing, no payments, no messages to customers, no deletions. If asked for one of those, say so plainly and offer the closest thing you can actually do (usually just the relevant information).
 
 HOW TO ANSWER
+For attention questions, give at most five prioritized actions. Group repeated stale jobs into one issue and state omitted counts when the tool reports them. A past scheduled date does not prove that work was completed: ask the owner to verify what happened before proposing status changes. Never recommend batch-closing jobs merely to clean up metrics. Homeworks/Jarvis invoice balances are operational records, not verified QuickBooks balances. No financial tool here proves complete accounting profit or total business revenue; disclose incomplete coverage. A fresh database read alone does not prove that its upstream integration is current.
 For a simple lookup ("what's on the schedule today", "who owes money"), just answer directly and briefly — no need for headers or structure.
 For an analysis or recommendation, keep the underlying facts and your judgment visibly separate so the owner can trust which is which: state the real numbers from your tools first, then say plainly what you'd do and why, in one or two sentences. Don't pad this into an essay, and don't present your own judgment as if it were a database fact.
 Always ground a recommendation in the specific numbers behind it (e.g. "Friday has 11.2 budgeted hours against a 3-person crew while Saturday only has 3.4" — not just "Friday looks busy").

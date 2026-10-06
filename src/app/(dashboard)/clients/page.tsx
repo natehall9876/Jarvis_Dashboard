@@ -66,8 +66,8 @@ export default async function ClientsPage({
         c.balance_verified ? (
           <span className={c.outstanding_balance > 0 ? "text-[var(--color-warning)]" : undefined}>{formatCurrency(c.outstanding_balance)}</span>
         ) : (
-          <span className="text-[var(--color-text-muted)]" title="Synced from Homeworks — invoices aren't synced yet, so the real balance isn't known.">
-            Not synced
+          <span className="text-[var(--color-text-muted)]" title="No invoice history is available for this customer. The balance is not verified.">
+            Not verified
           </span>
         ),
     },
