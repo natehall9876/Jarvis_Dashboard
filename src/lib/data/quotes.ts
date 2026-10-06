@@ -16,7 +16,7 @@ export async function getQuotes(): Promise<DataResult<QuoteWithItems[]>> {
       .select(QUOTE_SELECT)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data ?? []) as unknown as QuoteWithItems[];
+    return ((data ?? []) as unknown as QuoteWithItems[]).filter(quote => quote.client?.data_source !== "demo");
   });
 }
 
