@@ -35,7 +35,7 @@ export function VoiceDiagnostics() {
       <div className="space-y-1.5 border-t border-[var(--color-border)] px-3 py-2 text-[var(--color-text-secondary)]">
         <Row
           label="Voice input (speech-to-text)"
-          value={voiceSupported ? "Supported in this browser" : "Not supported — try Chrome or Edge (iOS/iPadOS doesn't support voice input in any browser; typing still works)"}
+          value={voiceSupported ? "Supported in this browser" : "Speech recognition is unavailable in this browser. Type your command in Jarvis instead."}
         />
         <Row label="Spoken replies (text-to-speech)" value={speechOutputSupported ? "Supported in this browser" : "Not supported in this browser"} />
         <Row label="Microphone permission" value={MIC_PERMISSION_LABEL[micPermission] ?? micPermission} />

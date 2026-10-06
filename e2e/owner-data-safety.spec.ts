@@ -28,6 +28,32 @@ function fixture(rows: Record<string, Row[]> = {}, failTable?: string) {
 }
 const job = (id: string, date: string, price: number, status = "completed") => ({ id, scheduled_date: date, price, status, property_id: "real-property", actual_hours: 1 });
 
+test("upcoming workload excludes confirmed demo, skipped and deleted jobs and preserves missing prices", async () => {
+  const f = fixture({jobs:[
+    {...job("real", "2026-10-08", 120), property:{client:{data_source:"homeworks_sync"}}},
+    {...job("demo", "2026-10-10", 99), property:{client:{data_source:"demo"}}},
+    {...job("deleted", "2026-10-09", 500), homeworks_deleted:true},
+    job("skipped", "2026-10-09", 500, "skipped"),
+    {...job("unpriced", "2026-10-09", 0), price:null},
+  ]});
+  const api = loadServerModule<typeof import('../src/lib/data/jobs')>('src/lib/data/jobs.ts', f.mocks);
+  const result = await api.getWorkloadSummary("2026-10-07", "2026-10-13");
+  expect(result.error).toBeNull();
+  expect(result.data?.total_job_count).toBe(2);
+  expect(result.data?.days.map(d=>d.date)).toEqual(["2026-10-08","2026-10-09"]);
+  expect(result.data?.days[0].expected_revenue).toBe(120);
+  expect(result.data?.total_expected_revenue).toBeNull();
+  expect(f.requests.find(u=>u.pathname.endsWith('/jobs'))?.searchParams.get('select')).toContain('data_source');
+});
+
+test("upcoming workload surfaces failed crew reads instead of calling every job unassigned", async () => {
+  const f = fixture({jobs:[job("real", "2026-10-08", 120)]}, "job_employees");
+  const api = loadServerModule<typeof import('../src/lib/data/jobs')>('src/lib/data/jobs.ts', f.mocks);
+  const result = await api.getWorkloadSummary("2026-10-07", "2026-10-13");
+  expect(result.data).toBeNull();
+  expect(result.error).toBeTruthy();
+});
+
 test("weekly revenue includes prior-month jobs while monthly revenue stays in its month", async () => {
   const f = fixture({ jobs: [job("sep", "2026-09-28", 100), job("oct", "2026-10-01", 200), job("future", "2026-10-05", 400)] });
   const result = await f.pulse.getBusinessPulse(new Date("2026-10-01T16:00:00Z"));

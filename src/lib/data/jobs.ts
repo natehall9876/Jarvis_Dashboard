@@ -14,7 +14,7 @@ import type {
 
 const JOB_RELATIONS_SELECT = `
   *,
-  property:properties(*, client:clients(id, first_name, last_name, company_name)),
+  property:properties(*, client:clients(id, first_name, last_name, company_name, data_source)),
   service:services(id, name)
 `;
 
@@ -151,7 +151,7 @@ export type WorkloadDayJob = {
 export type WorkloadDay = {
   date: string;
   job_count: number;
-  expected_revenue: number;
+  expected_revenue: number | null;
   budgeted_hours: number;
   crew_assigned: string[];
   jobs: WorkloadDayJob[];
@@ -162,16 +162,14 @@ export type WorkloadSummary = {
   to: string;
   days: WorkloadDay[];
   total_job_count: number;
-  total_expected_revenue: number;
+  total_expected_revenue: number | null;
   total_budgeted_hours: number;
 };
 
 /**
- * Cancelled jobs are excluded from workload math — they consume no crew
- * time and generate no revenue, so counting them would overstate the day.
- * Skipped jobs stay in (still real, unfinished obligations) and completed
- * jobs stay in too (this is a schedule/workload view across whatever range
- * is asked for, past or future, not just "what's left to do").
+ * Cancelled, skipped, deleted and confirmed demo jobs do not contribute
+ * workload or revenue. Completed jobs stay in for historical date ranges.
+ * Unknown prices remain unknown; failed crew reads cannot mean unassigned.
  */
 export async function getWorkloadSummary(from: string, to: string): Promise<DataResult<WorkloadSummary>> {
   return withDataResult(async () => {
@@ -187,15 +185,17 @@ export async function getWorkloadSummary(from: string, to: string): Promise<Data
       .order("scheduled_start_time", { ascending: true, nullsFirst: true });
     if (error) throw error;
 
-    const jobList = (jobs ?? []) as unknown as JobWithRelations[];
+    const jobList = ((jobs ?? []) as unknown as (JobWithRelations & { homeworks_deleted?: boolean })[])
+      .filter(job => job.property?.client?.data_source !== "demo" && !job.homeworks_deleted && job.status !== "skipped");
     const jobIds = jobList.map((j) => j.id);
 
-    const { data: jobEmployees } = jobIds.length
+    const { data: jobEmployees, error: crewError } = jobIds.length
       ? await supabase
           .from("job_employees")
           .select("job_id, employee:employees(id, first_name, last_name)")
           .in("job_id", jobIds)
-      : { data: [] };
+      : { data: [], error: null };
+    if (crewError) throw crewError;
 
     const crewByJob = new Map<string, string[]>();
     for (const je of jobEmployees ?? []) {
@@ -215,7 +215,7 @@ export async function getWorkloadSummary(from: string, to: string): Promise<Data
       const date = job.scheduled_date ?? "unscheduled";
       const day = dayMap.get(date) ?? { date, job_count: 0, expected_revenue: 0, budgeted_hours: 0, crew_assigned: [], jobs: [] };
       day.job_count += 1;
-      day.expected_revenue += job.price ?? 0;
+      day.expected_revenue = day.expected_revenue === null || job.price === null ? null : day.expected_revenue + job.price;
       day.budgeted_hours += job.budgeted_hours ?? 0;
       for (const name of crewByJob.get(job.id) ?? []) {
         if (!day.crew_assigned.includes(name)) day.crew_assigned.push(name);
@@ -239,7 +239,7 @@ export async function getWorkloadSummary(from: string, to: string): Promise<Data
       to,
       days,
       total_job_count: jobList.length,
-      total_expected_revenue: days.reduce((sum, d) => sum + d.expected_revenue, 0),
+      total_expected_revenue: days.some(d => d.expected_revenue === null) ? null : days.reduce((sum, d) => sum + (d.expected_revenue ?? 0), 0),
       total_budgeted_hours: days.reduce((sum, d) => sum + d.budgeted_hours, 0),
     };
   });

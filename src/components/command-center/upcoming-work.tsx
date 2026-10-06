@@ -44,7 +44,7 @@ export function UpcomingWork({ data, error }: { data: WorkloadSummary | null; er
                   <li key={day.date}>
                     <Link
                       href={`/schedule?view=day&date=${day.date}`}
-                      className="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-[var(--color-surface-2)]"
+                      className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-[var(--color-surface-2)]"
                     >
                       <CalendarDays className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
                       <span className="w-24 shrink-0 text-[var(--color-text-primary)]">{parsed ? shortDateFormatter.format(parsed) : day.date}</span>
@@ -53,7 +53,7 @@ export function UpcomingWork({ data, error }: { data: WorkloadSummary | null; er
                         {day.crew_assigned.length > 0 ? ` · ${day.crew_assigned.join(", ")}` : " · Unassigned"}
                       </span>
                       <span className="shrink-0 text-xs text-[var(--color-text-muted)]">{formatHours(day.budgeted_hours)}</span>
-                      <span className="shrink-0 font-medium text-[var(--color-accent)]">{formatCurrency(day.expected_revenue)}</span>
+                      <span className="shrink-0 font-medium text-[var(--color-accent)]">{day.expected_revenue === null ? "Revenue unavailable" : formatCurrency(day.expected_revenue)}</span>
                     </Link>
                   </li>
                 );

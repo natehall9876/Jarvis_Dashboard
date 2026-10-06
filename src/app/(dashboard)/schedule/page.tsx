@@ -76,13 +76,17 @@ export default async function SchedulePage({
   const rangeStart = view === "day" ? anchor : startOfWeek(anchor);
   const rangeEnd = view === "day" ? anchor : addDays(rangeStart, 6);
 
-  const [{ data: jobs, error }, properties, services, routes, employees] = await Promise.all([
+  const [{ data: rawJobs, error }, properties, services, routes, employees] = await Promise.all([
     getJobs({ from: toISODate(rangeStart), to: toISODate(rangeEnd) }),
     isNew ? getPropertyOptions() : Promise.resolve({ data: [] }),
     isNew ? getServiceOptions() : Promise.resolve({ data: [] }),
     isNew ? getRouteOptions() : Promise.resolve({ data: [] }),
     isNew ? getEmployeeOptions() : Promise.resolve({ data: [] }),
   ]);
+
+  // The schedule's totals must use the same production-only records as the owner KPIs.
+  const jobs = rawJobs?.filter(job => job.property?.client?.data_source !== "demo" &&
+    !(job as typeof job & { homeworks_deleted?: boolean }).homeworks_deleted) ?? null;
 
   const crewByJob = await getCrewNamesByJob((jobs ?? []).map((j) => j.id));
   const jobsByDate = new Map<string, JobWithRelations[]>();
@@ -132,14 +136,14 @@ export default async function SchedulePage({
         }
       />
 
-      <DaySummaryAndFilters
+      {!error && <DaySummaryAndFilters
         view={view}
         anchorStr={toISODate(anchor)}
         active={statusFilter}
         summary={summarizeJobs(
           (jobs ?? []).map((j) => ({ status: j.status, price: j.price, budgeted_hours: j.budgeted_hours, scheduled_start_time: j.scheduled_start_time, crewCount: crewByJob[j.id]?.length ?? 0 })),
         )}
-      />
+      />}
 
       <DataStateGate error={error} isEmpty={false}>
         {/* No page-level empty state: each day already renders its own
@@ -287,7 +291,7 @@ function DaySummaryAndFilters({
       <dl className="tabular grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[
           [view === "week" ? "Jobs this week" : "Jobs", String(summary.jobs), "text-[var(--color-text-primary)]"],
-          ["Scheduled revenue", formatCurrency(summary.scheduledRevenue), "text-[var(--color-accent)]"],
+          ["Scheduled revenue", summary.scheduledRevenue === null ? "Unavailable" : formatCurrency(summary.scheduledRevenue), "text-[var(--color-accent)]"],
           ["Known labor", summary.missingHours === summary.jobs && summary.jobs > 0 ? "None recorded" : `${summary.budgetedHours.toFixed(1)} hr`, summary.missingHours ? "text-[var(--color-warning)]" : "text-[var(--color-text-primary)]"],
           ["No set time", String(summary.unscheduledTime), "text-[var(--color-text-secondary)]"],
           ["Unassigned", String(summary.unassigned), summary.unassigned ? "text-[var(--color-warning)]" : "text-[var(--color-text-primary)]"],

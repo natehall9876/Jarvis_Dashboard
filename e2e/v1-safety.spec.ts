@@ -40,6 +40,25 @@ test('weekly operations use Monday through Sunday across month boundaries',()=>{
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
+
+for (const failure of [false, true]) test(`schedule renders trustworthy totals with database failure=${failure}`,async()=>{
+  const api=loadServerModule<{default:(p:{searchParams:Promise<{view:string}>})=>Promise<ReactElement>}>('src/app/(dashboard)/schedule/page.tsx',{
+    '@/lib/integrations/homeworks-dates':{todayInZone:()=> '2026-10-06'},
+    '@/lib/data/jobs':{
+      getJobs:async()=>failure?{data:null,error:'Schedule database unavailable'}:{error:null,data:[
+        {id:'real',scheduled_date:'2026-10-08',status:'scheduled',price:120,property:{client:{data_source:'homeworks_sync'}}},
+        {id:'demo',scheduled_date:'2026-10-08',status:'scheduled',price:99,property:{client:{data_source:'demo'}}},
+        {id:'deleted',scheduled_date:'2026-10-08',status:'scheduled',price:900,homeworks_deleted:true},
+      ]},
+      getCrewNamesByJob:async()=>({}),
+    },
+    '@/lib/data/options':{}, '@/lib/actions/jobs':{}, '@/components/jobs/job-form':{},
+  });
+  const html=renderToStaticMarkup(await api.default({searchParams:Promise.resolve({view:'week'})}));
+  if(failure){expect(html).toContain('Schedule database unavailable');expect(html).not.toContain('Scheduled revenue');expect(html).not.toContain('$0');}
+  else {expect(html).toContain('$120');expect(html).not.toContain('$219');expect(html).not.toContain('/jobs/demo');expect(html).not.toContain('/jobs/deleted');}
+});
+
 test('live money view keeps invoice balances separate from payments and excludes future payments',async()=>{
   const api=loadServerModule<{QuickBooksMoney:(p:{full:boolean})=>Promise<ReactElement>}>('src/components/command-center/live-integrations.tsx',{
     '@/lib/integrations/homeworks-dates':{todayInZone:()=> '2026-10-06'},
