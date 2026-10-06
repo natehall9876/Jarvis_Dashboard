@@ -1,3 +1,4 @@
+import { HomeworksLiveRefresh } from "@/components/homeworks-live-refresh";
 import type { ReactNode } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -18,6 +19,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     // client-side navigation — that is what makes the conversation, microphone
     // and speech output persist while moving between pages.
     <JarvisProvider>
+    <HomeworksLiveRefresh />
     <div className="min-h-screen w-full lg:pl-60">
       <Sidebar />
       <div className="flex min-h-screen flex-col">

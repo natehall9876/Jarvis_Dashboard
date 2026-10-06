@@ -17,6 +17,7 @@ export async function getClients(search?: string): Promise<DataResult<ClientWith
     const { data: allClients, error } = await supabase
       .from("clients")
       .select("*")
+      .neq("data_source", "demo")
       .order("first_name", { ascending: true });
     if (error) throw error;
 

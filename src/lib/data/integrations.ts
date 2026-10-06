@@ -96,7 +96,7 @@ async function getWeatherStatus(): Promise<IntegrationCard> {
 /** Webhook delivery evidence is distinct from direct API/manual import counts. */
 async function getHomeworksStatus(): Promise<IntegrationCard> {
   const name = "Homeworks (webhook sync)";
-  const description = "Receives configured Homeworks events. Direct API imports and job reconciliation remain manual; a stored customer count does not prove automatic delivery.";
+  const description = "Optional event receiver. Automatic API synchronization runs separately every 5 minutes; see Homeworks live for current checkpoints and errors.";
   const missing = [!homeworksWebhookEnv.secret && "HOMEWORKS_WEBHOOK_SECRET", !supabaseServiceRoleKey && "SUPABASE_SERVICE_ROLE_KEY"].filter(Boolean);
   if (missing.length) return { key: "homeworks", name, description, status: "not_connected", statusDetail: "Missing " + missing.join(" and ") + "." };
   try {

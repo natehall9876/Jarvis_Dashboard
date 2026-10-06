@@ -28,6 +28,8 @@ const STATIC_DIR = join(process.cwd(), ".next", "static");
 const FORBIDDEN = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "HOMEWORKS_WEBHOOK_SECRET",
+  "HOMEWORKS_SYNC_SECRET",
+  "homeworks_claim_lease",
   "HOMEWORKS_API_KEY",
   "ZAPIER_WEBHOOK_URL",
   "oauth.platform.intuit.com",

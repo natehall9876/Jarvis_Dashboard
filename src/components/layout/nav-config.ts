@@ -25,6 +25,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", href: "/", icon: Home },
+  { label: "Homeworks live", href: "/homeworks", icon: CalendarDays },
   { label: "Schedule", href: "/schedule", icon: CalendarDays },
   { label: "Clients", href: "/clients", icon: Users },
   { label: "Properties", href: "/properties", icon: MapPinned },

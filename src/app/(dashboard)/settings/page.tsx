@@ -60,6 +60,8 @@ export default async function SettingsPage({
         description="Connection status for every system Jarvis can talk to. Nothing here is marked Connected unless it's been verified."
       />
 
+      <Card><CardBody><h2 className="font-semibold">Automatic Homeworks synchronization</h2><p>Server-side sync every 5 minutes, with daily full reconciliation. No manual import is needed.</p><Link className="text-green-400" href="/homeworks">View live Homeworks records and verified sync status →</Link></CardBody></Card>
+
       <HomeworksConnectionCard
         connected={homeworksConnection.connected}
         connectedAt={homeworksConnection.connected ? homeworksConnection.connectedAt : null}

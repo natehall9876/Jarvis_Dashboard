@@ -2,6 +2,8 @@ import { requireIntegrationOwner } from "@/lib/integrations/owner-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { refreshAccessToken, type TokenResponse } from "@/lib/integrations/homeworks-oauth";
 import { isExpiringWithin } from "@/lib/integrations/token-expiry";
+import { randomUUID } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * homeworks_oauth_connection holds live bearer tokens for an external
@@ -135,6 +137,11 @@ export async function getValidAccessToken(): Promise<ValidTokenResult> {
 
 async function readAndRefreshToken(): Promise<ValidTokenResult> {
   const supabase = createSupabaseAdminClient();
+  const db = supabase as unknown as SupabaseClient;
+  const owner = randomUUID();
+  const lease = await db.rpc("homeworks_claim_lease", { p_name: "oauth_refresh", p_owner: owner, p_seconds: 45 });
+  if (lease.error || lease.data !== true) return { ok: false, reason: "refresh_failed", message: "Homeworks token refresh is busy or unavailable. Retry shortly." };
+  try {
   const { data, error } = await supabase
     .from("homeworks_oauth_connection")
     .select("id, updated_at, access_token, refresh_token, expires_at")
@@ -168,6 +175,16 @@ async function readAndRefreshToken(): Promise<ValidTokenResult> {
     .maybeSingle();
   if (saveError || !saved) return { ok: false, reason: "refresh_failed", message: "Could not save refreshed tokens. The connection is not verified; retry or reconnect from Settings." };
   return { ok: true, accessToken: refreshed.data.access_token };
+  } finally {
+    await db.rpc("homeworks_release_lease", { p_name: "oauth_refresh", p_owner: owner });
+  }
+}
+
+/** Server-only worker entry point. Called exclusively after scheduler-secret
+ * authentication and a distributed sync lease; never exposed as a Server Action. */
+export async function getHomeworksSyncAccessToken(): Promise<ValidTokenResult> {
+  try { return await readAndRefreshToken(); }
+  catch { return { ok: false, reason: "refresh_failed", message: "Could not access the Homeworks token store." }; }
 }
 
 export async function disconnectHomeworks(): Promise<SaveConnectionResult> {

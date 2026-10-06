@@ -19,6 +19,8 @@ for (const provider of providers) {
       const client = createClient("https://example.supabase.co", "test-key", {
         auth: { persistSession: false, autoRefreshToken: false },
         global: { fetch: async (_url, init) => {
+          if (String(_url).includes("/rpc/homeworks_claim_lease")) return Response.json(true);
+          if (String(_url).includes("/rpc/homeworks_release_lease")) return new Response(null,{status:204});
           const method = init?.method ?? "GET";
           if (method === "GET") return Response.json(rows);
           if (method === "DELETE") { rows = []; return new Response(null, { status: 204 }); }
