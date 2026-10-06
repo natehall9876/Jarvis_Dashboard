@@ -1,3 +1,4 @@
+import { getJobsForDate } from "@/lib/data/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { addDaysISO, todayInZone } from "@/lib/integrations/homeworks-dates";
 import { withDataResult } from "@/lib/data/shared";
@@ -66,12 +67,8 @@ export async function getTodaysMission(): Promise<DataResult<TodaysMission>> {
     const supabase = await createSupabaseServerClient();
     const today = todayInZone();
 
-    const { data: jobs, error: jobsError } = await supabase
-      .from("jobs")
-      .select(JOB_RELATIONS_SELECT)
-      .eq("scheduled_date", today)
-      .order("scheduled_start_time", { ascending: true, nullsFirst: true });
-    if (jobsError) throw jobsError;
+    const { data: jobs, error: jobsError } = await getJobsForDate(today);
+    if (jobsError) throw new Error(jobsError);
 
     const todaysJobs = (jobs ?? []) as unknown as JobWithRelations[];
     // Confirmed-demo jobs still render in the raw job list (so nothing looks

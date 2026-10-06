@@ -4,7 +4,7 @@ import type { DataResult, Route, RouteWithStops, ServiceAgreement } from "@/type
 
 const STOPS_SELECT = `
   *,
-  property:properties(*, client:clients(id, first_name, last_name, company_name))
+  property:properties(*, client:clients(id, first_name, last_name, company_name, data_source))
 `;
 
 /**
@@ -31,7 +31,7 @@ async function loadRouteWithStops(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   routeQuery: { column: "id"; value: string } | null,
 ): Promise<RouteWithStops[]> {
-  let query = supabase.from("routes").select("*").order("route_day");
+  let query = supabase.from("routes").select("*").eq("active", true).order("route_day");
   if (routeQuery) query = supabase.from("routes").select("*").eq(routeQuery.column, routeQuery.value);
 
   const { data: routes, error } = await query;
@@ -40,11 +40,13 @@ async function loadRouteWithStops(
 
   const routeIds = routes.map((r) => r.id);
 
-  const [{ data: stops }, { data: agreements }] = await Promise.all([
+  const [{ data: stops, error: stopsError }, { data: agreements, error: agreementsError }] = await Promise.all([
     supabase.from("route_stops").select(STOPS_SELECT).in("route_id", routeIds),
     supabase.from("service_agreements").select("*").in("route_id", routeIds).eq("active", true),
   ]);
 
+  if (stopsError) throw stopsError;
+  if (agreementsError) throw agreementsError;
   const stopsByRoute = new Map<string, typeof stops>();
   for (const stop of stops ?? []) {
     const list = stopsByRoute.get(stop.route_id) ?? [];
@@ -53,7 +55,7 @@ async function loadRouteWithStops(
   }
 
   return routes.map((route) => {
-    const rawStops = (stopsByRoute.get(route.id) ?? []) as unknown as RouteWithStops["stops"];
+    const rawStops = ((stopsByRoute.get(route.id) ?? []) as unknown as RouteWithStops["stops"]).filter(s => s.property?.client?.data_source !== "demo");
     const withEconomics = attachStopEconomics(rawStops, agreements ?? []);
     return {
       ...route,
@@ -82,17 +84,14 @@ export async function getRouteById(id: string): Promise<DataResult<RouteWithStop
 
 /** Persists a new stop order for a route — the drag-and-drop save path. */
 export async function updateRouteStopOrder(
+  routeId: string,
   updates: { id: string; stop_order: number }[],
 ): Promise<DataResult<true>> {
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
-    for (const update of updates) {
-      const { error } = await supabase
-        .from("route_stops")
-        .update({ stop_order: update.stop_order })
-        .eq("id", update.id);
-      if (error) throw error;
-    }
+    const { error } = await (supabase as unknown as import("@supabase/supabase-js").SupabaseClient)
+      .rpc("save_route_stop_order", {p_route_id: routeId, p_stops: updates});
+    if (error) throw error;
     return true as const;
   });
 }

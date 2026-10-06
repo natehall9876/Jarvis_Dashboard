@@ -78,6 +78,7 @@ export function JobDetailView({
         }
       />
 
+      {formError && !isEditing ? <p role="alert" className="text-sm text-[var(--color-critical)]">{formError}</p> : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Price" value={formatCurrency(job.price)} tone="accent" />
         <StatTile label="Budgeted Hours" value={formatHours(job.budgeted_hours)} />

@@ -1,5 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { writeHomeworksSchedule } from "@/lib/integrations/homeworks-schedule-write";
+
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, optionalNumber, requiredNumber, withError, runMutation } from "./shared";
@@ -63,20 +66,40 @@ export async function insertJob(fields: JobInsert, employeeIds: string[]): Promi
 
 export async function updateJobFields(jobId: string, fields: JobUpdate, employeeIds?: string[]): Promise<void> {
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("jobs").update(fields).eq("id", jobId);
-  if (error) throw error;
-  if (employeeIds !== undefined) await syncJobCrew(supabase, jobId, employeeIds);
+  const { data: current, error: readError } = await supabase.from("jobs").select("*").eq("id", jobId).maybeSingle();
+  if (readError) throw readError;
+  if (!current) throw new Error("Job not found; nothing was saved.");
+  const changes = Object.fromEntries(Object.entries(fields).filter(([key,value]) => {
+    const before = (current as unknown as Record<string,unknown>)[key];
+    if (key === "scheduled_start_time") return String(value ?? "").slice(0,5) !== String(before ?? "").slice(0,5);
+    return value !== before;
+  })) as JobUpdate;
+  if (current.homeworks_id) {
+    const allowed = ["scheduled_date","scheduled_start_time","status","notes","completion_notes","actual_hours"];
+    for (const key of Object.keys(changes)) if (!allowed.includes(key)) throw new Error(key.replaceAll("_"," ")+" is managed in Homeworks. Update it there so the change persists.");
+    if (employeeIds !== undefined) {
+      const assigned = await supabase.from("job_employees").select("employee_id").eq("job_id",jobId);
+      if (assigned.error) throw assigned.error;
+      if (JSON.stringify((assigned.data??[]).map(e=>e.employee_id).sort()) !== JSON.stringify([...new Set(employeeIds)].sort())) throw new Error("Crew assignments are managed in Homeworks.");
+    }
+    const sourcePatch = Object.fromEntries(Object.entries(changes).filter(([key])=>["scheduled_date","scheduled_start_time","status"].includes(key)));
+    if (Object.keys(sourcePatch).length) await writeHomeworksSchedule(current.homeworks_id,sourcePatch);
+    delete changes.scheduled_date; delete changes.scheduled_start_time; delete changes.status;
+  }
+  if (!current.homeworks_id && changes.status === "in_progress") changes.started_at = new Date().toISOString();
+  if (!current.homeworks_id && changes.status === "completed") changes.completed_at = new Date().toISOString();
+  if (Object.keys(changes).length) {
+    const { data:saved, error } = await supabase.from("jobs").update(changes).eq("id",jobId).select("id").maybeSingle();
+    if (error) throw error;
+    if (!saved) throw new Error("Job changed or could not be saved. Refresh and retry.");
+  }
+  if (!current.homeworks_id && employeeIds !== undefined) await syncJobCrew(supabase,jobId,employeeIds);
+  revalidatePath("/schedule"); revalidatePath("/"); revalidatePath("/jobs"); revalidatePath("/jobs/"+jobId);
 }
 
 export async function updateJobStatus(jobId: string, status: string): Promise<void> {
   if (!(VALID_JOB_STATUSES as readonly string[]).includes(status)) throw new Error("Invalid status.");
-  const patch: JobUpdate = { status };
-  const nowIso = new Date().toISOString();
-  if (status === "in_progress") patch.started_at = nowIso;
-  if (status === "completed") patch.completed_at = nowIso;
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("jobs").update(patch).eq("id", jobId);
-  if (error) throw error;
+  await updateJobFields(jobId, {status});
 }
 
 export async function createJob(formData: FormData) {
@@ -122,8 +145,7 @@ export type FirstJobTodayResult = { ok: true; job: { id: string; label: string }
  * Backs the voice command "open the first job" (see
  * lib/jarvis/voice-utils.ts's FIRST_JOB intent). Resolves against the EXACT
  * same query and ordering the Schedule page itself uses for its day view
- * (getJobsForDate -> getJobs, ordered by scheduled_date then
- * scheduled_start_time, nulls first) — "first" means whatever a human
+ * (getJobsForDate -> getJobs, using source or saved route order) — "first" means whatever a human
  * looking at today's Schedule page would call the first job, not a
  * separate, possibly-inconsistent definition. `job: null` (not an error)
  * when today genuinely has no jobs — never invents one.

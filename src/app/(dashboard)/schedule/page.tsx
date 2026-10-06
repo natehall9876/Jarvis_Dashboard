@@ -1,3 +1,5 @@
+import { getRoutes } from "@/lib/data/routes";
+import { weekdayForDate } from "@/lib/scheduling/order";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
@@ -76,12 +78,13 @@ export default async function SchedulePage({
   const rangeStart = view === "day" ? anchor : startOfWeek(anchor);
   const rangeEnd = view === "day" ? anchor : addDays(rangeStart, 6);
 
-  const [{ data: rawJobs, error }, properties, services, routes, employees] = await Promise.all([
+  const [{ data: rawJobs, error }, properties, services, routes, employees, routePlans] = await Promise.all([
     getJobs({ from: toISODate(rangeStart), to: toISODate(rangeEnd) }),
     isNew ? getPropertyOptions() : Promise.resolve({ data: [] }),
     isNew ? getServiceOptions() : Promise.resolve({ data: [] }),
     isNew ? getRouteOptions() : Promise.resolve({ data: [] }),
     isNew ? getEmployeeOptions() : Promise.resolve({ data: [] }),
+    getRoutes(),
   ]);
 
   // The schedule's totals must use the same production-only records as the owner KPIs.
@@ -110,7 +113,7 @@ export default async function SchedulePage({
     <div className="space-y-6">
       <PageHeader
         title="Schedule"
-        description="Day and week views of every job on the board."
+        description="Homeworks visits with saved route order. Missing route visits are flagged below."
         action={
           <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex items-center gap-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-0.5">
@@ -145,6 +148,7 @@ export default async function SchedulePage({
         )}
       />}
 
+      {routePlans.error ? <p role="alert" className="text-sm text-[var(--color-warning)]">Route preferences could not be checked: {routePlans.error}</p> : null}
       <DataStateGate error={error} isEmpty={false}>
         {/* No page-level empty state: each day already renders its own
             "Nothing scheduled" card, which keeps the date header in view
@@ -154,6 +158,9 @@ export default async function SchedulePage({
           {days.map((day) => {
             const dateStr = toISODate(day);
             const dayJobs = jobsByDate.get(dateStr) ?? [];
+            const plannedRoutes = (routePlans.data ?? []).filter(r => r.active && r.route_day?.toLowerCase() === weekdayForDate(dateStr).toLowerCase());
+            const recordedProperties = new Set((jobs ?? []).filter(j=>j.scheduled_date===dateStr).map(j=>j.property_id));
+            const missingStops = plannedRoutes.flatMap(r=>r.stops.filter(s=>!recordedProperties.has(s.property_id)).map(s=>({...s,routeName:r.name})));
             const isToday = dateStr === todayInZone();
             const conflicts = detectScheduleConflicts(
               dayJobs.map((j) => ({ id: j.id, label: j.service?.name ?? "Job", crew: crewByJob[j.id] ?? [], scheduledStartTime: j.scheduled_start_time, budgetedHours: j.budgeted_hours })),
@@ -181,6 +188,20 @@ export default async function SchedulePage({
                     </Link>
                   </div>
                 </div>
+                {plannedRoutes.map(route => (
+                  <Link key={route.id} href={`/routes/${route.id}`} className="mb-2 block text-xs text-[var(--color-accent)]">
+                    {route.name}: {route.stops.length} saved stops · Edit order
+                  </Link>
+                ))}
+                {missingStops.length > 0 ? (
+                  <div role="status" className="mb-3 rounded-md border border-[var(--color-warning)]/40 bg-[var(--color-surface-1)] p-3 text-xs">
+                    <p className="font-semibold text-[var(--color-warning)]">{missingStops.length} route stops have no recorded visit on this date</p>
+                    <p className="mt-1 text-[var(--color-text-muted)]">These are route preferences, not confirmed appointments. They are excluded from job and revenue totals.</p>
+                    <ul className="mt-2 space-y-1">
+                      {missingStops.map(stop => <li key={stop.id}>#{stop.stop_order} {clientDisplayName(stop.property?.client)} · {propertyAddress(stop.property)}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   {dayJobs.length === 0 ? (
                     <Card>

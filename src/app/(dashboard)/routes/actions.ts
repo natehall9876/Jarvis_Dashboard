@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { updateRouteStopOrder } from "@/lib/data/routes";
 
 export async function moveRouteStop(routeId: string, stops: { id: string; stop_order: number }[]) {
-  const result = await updateRouteStopOrder(stops);
+  const result = await updateRouteStopOrder(routeId, stops);
   if (result.error) throw new Error(result.error);
   revalidatePath(`/routes/${routeId}`);
   revalidatePath("/routes");
+  revalidatePath("/schedule");
+  revalidatePath("/");
 }

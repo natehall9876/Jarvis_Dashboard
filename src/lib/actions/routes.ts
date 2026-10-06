@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, optionalNumber, checkbox, withError, runMutation } from "./shared";
@@ -24,6 +25,7 @@ export async function createRoute(formData: FormData) {
     return data.id as string;
   });
 
+  if (result.ok) { revalidatePath("/schedule"); revalidatePath("/routes"); revalidatePath("/"); }
   if (!result.ok) redirect(withError("/routes?new=1", result.message));
   redirect(`/routes/${result.data}`);
 }
@@ -36,6 +38,7 @@ export async function updateRoute(routeId: string, formData: FormData) {
     if (error) throw error;
   });
 
+  if (result.ok) { revalidatePath("/schedule"); revalidatePath("/routes"); revalidatePath("/"); }
   if (!result.ok) redirect(withError(`/routes/${routeId}?edit=1`, result.message));
   redirect(`/routes/${routeId}`);
 }
@@ -47,6 +50,7 @@ export async function archiveRoute(routeId: string) {
     if (error) throw error;
   });
 
+  if (result.ok) { revalidatePath("/schedule"); revalidatePath("/routes"); revalidatePath("/"); }
   if (!result.ok) redirect(withError(`/routes/${routeId}`, result.message));
   redirect(`/routes/${routeId}`);
 }
@@ -62,13 +66,14 @@ export async function addRouteStop(routeId: string, formData: FormData) {
     const { error } = await supabase.from("route_stops").insert({
       route_id: routeId,
       property_id: requiredString(formData, "property_id"),
-      stop_order: count ?? 0,
+      stop_order: (count ?? 0) + 1,
       estimated_minutes: optionalNumber(formData, "estimated_minutes"),
       notes: optionalString(formData, "notes"),
     });
     if (error) throw error;
   });
 
+  if (result.ok) { revalidatePath("/schedule"); revalidatePath("/routes"); revalidatePath("/"); }
   if (!result.ok) redirect(withError(`/routes/${routeId}?addStop=1`, result.message));
   redirect(`/routes/${routeId}`);
 }
@@ -80,6 +85,7 @@ export async function removeRouteStop(routeId: string, stopId: string) {
     if (error) throw error;
   });
 
+  if (result.ok) { revalidatePath("/schedule"); revalidatePath("/routes"); revalidatePath("/"); }
   if (!result.ok) redirect(withError(`/routes/${routeId}`, result.message));
   redirect(`/routes/${routeId}`);
 }

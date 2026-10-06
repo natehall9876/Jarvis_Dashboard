@@ -16,7 +16,7 @@ export type Capability = {
 };
 
 export const CAPABILITIES: Capability[] = [
-  { id: "schedule", label: "Schedule", href: "/schedule", status: "connected", detail: "Homeworks jobs sync by event ID; Monday 9/21 reconciled 10 of 10. Jarvis reads the schedule by voice." },
+  { id: "schedule", label: "Schedule", href: "/schedule", status: "connected", detail: "Homeworks visits sync automatically. Source route order and saved owner preferences determine stop order; missing visits are flagged." },
   { id: "customers", label: "Customers", href: "/clients", status: "connected", detail: "25 Homeworks customers linked by ID. Jarvis can search and summarize clients." },
   { id: "properties", label: "Properties", href: "/properties", status: "connected", detail: "Properties linked to Homeworks property IDs. Jarvis can search and inspect them." },
   { id: "jobs", label: "Jobs", href: "/jobs", status: "connected", detail: "Jobs sync from Homeworks; Jarvis can read jobs and propose confirmed changes." },

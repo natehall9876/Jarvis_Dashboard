@@ -29,7 +29,7 @@ export async function fetchSourcePage(stream: Stream, cursor: Cursor, token: str
     for (const row of rows) {
       if (!row || !Number.isSafeInteger(row.id) || row.id <= previous) throw new Error(`Homeworks ${stream.key}: duplicate or out-of-order IDs`);
       previous = row.id;
-      for (const field of ["lineItems", "users"]) if (Array.isArray(row[field]) && row[field].length >= 1000) throw new Error(`Homeworks ${stream.key}: nested ${field} reached API page limit`);
+      for (const field of ["lineItems", "users", "routeStops"]) if (Array.isArray(row[field]) && row[field].length >= 1000) throw new Error(`Homeworks ${stream.key}: nested ${field} reached API page limit`);
     }
     return rows;
   }

@@ -1,3 +1,4 @@
+import { orderScheduleJobs, type ScheduleRouteStop } from "@/lib/scheduling/order";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getOrNotFound, withDataResult } from "@/lib/data/shared";
 import { clientDisplayName, propertyAddress } from "@/lib/format";
@@ -38,11 +39,14 @@ export async function getJobs(filters: JobFilters = {}): Promise<DataResult<JobW
     if (filters.status) query = query.eq("status", filters.status);
     if (filters.from) query = query.gte("scheduled_date", filters.from);
     if (filters.to) query = query.lte("scheduled_date", filters.to);
-    if (filters.routeId) query = query.eq("route_id", filters.routeId);
 
     const { data, error } = await query;
     if (error) throw error;
-    return ((data ?? []) as unknown as JobWithRelations[]).filter(job => job.property?.client?.data_source !== "demo");
+    const { data: stops, error: stopsError } = await supabase.from("route_stops")
+      .select("id, property_id, route_id, stop_order, route:routes!inner(id, active, route_day)").eq("route.active", true);
+    if (stopsError) throw stopsError;
+    const ordered = orderScheduleJobs((data ?? []) as unknown as JobWithRelations[], (stops ?? []) as unknown as ScheduleRouteStop[]);
+    return filters.routeId ? ordered.filter(job => job.route_id === filters.routeId) : ordered;
   });
 }
 
@@ -175,18 +179,9 @@ export async function getWorkloadSummary(from: string, to: string): Promise<Data
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const { data: jobs, error } = await supabase
-      .from("jobs")
-      .select(JOB_RELATIONS_SELECT)
-      .gte("scheduled_date", from)
-      .lte("scheduled_date", to)
-      .neq("status", "cancelled")
-      .order("scheduled_date", { ascending: true })
-      .order("scheduled_start_time", { ascending: true, nullsFirst: true });
-    if (error) throw error;
-
-    const jobList = ((jobs ?? []) as unknown as (JobWithRelations & { homeworks_deleted?: boolean })[])
-      .filter(job => job.property?.client?.data_source !== "demo" && !job.homeworks_deleted && job.status !== "skipped");
+    const { data: jobs, error } = await getJobs({from, to});
+    if (error) throw new Error(error);
+    const jobList = (jobs ?? []).filter(job => job.status !== "cancelled" && job.status !== "skipped");
     const jobIds = jobList.map((j) => j.id);
 
     const { data: jobEmployees, error: crewError } = jobIds.length

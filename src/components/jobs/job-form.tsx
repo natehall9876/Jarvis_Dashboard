@@ -21,14 +21,16 @@ export function JobForm({
   defaultDate?: string;
   error?: string;
 }) {
+  const sourceManaged = Boolean(job?.homeworks_id);
   const assignedIds = new Set((job?.crew ?? []).map((c) => c.id));
 
   return (
     <form action={action} className="space-y-4">
       <FormError message={error} />
+      {sourceManaged ? <p className="text-sm text-[var(--color-text-secondary)]">Date and time changes save to Homeworks first. Customer, service, price, labor budget and crew are managed in Homeworks. Notes and actual hours stay in Jarvis.</p> : null}
 
       <Field label="Property" htmlFor="property_id" required>
-        <Select id="property_id" name="property_id" required defaultValue={job?.property_id ?? ""}>
+        <Select id="property_id" name="property_id" disabled={sourceManaged} required defaultValue={job?.property_id ?? ""}>
           <option value="" disabled>
             Select a property...
           </option>
@@ -42,7 +44,7 @@ export function JobForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Service" htmlFor="service_id">
-          <Select id="service_id" name="service_id" defaultValue={job?.service_id ?? ""}>
+          <Select id="service_id" name="service_id" disabled={sourceManaged} defaultValue={job?.service_id ?? ""}>
             <option value="">None</option>
             {services.map((s) => (
               <option key={s.id} value={s.id}>
@@ -52,7 +54,7 @@ export function JobForm({
           </Select>
         </Field>
         <Field label="Route" htmlFor="route_id">
-          <Select id="route_id" name="route_id" defaultValue={job?.route_id ?? ""}>
+          <Select id="route_id" name="route_id" disabled={sourceManaged} defaultValue={job?.route_id ?? ""}>
             <option value="">Unassigned</option>
             {routes.map((r) => (
               <option key={r.id} value={r.id}>
@@ -74,7 +76,7 @@ export function JobForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Status" htmlFor="status">
-          <Select id="status" name="status" defaultValue={job?.status ?? "scheduled"}>
+          <Select id="status" name="status" disabled={sourceManaged} defaultValue={job?.status ?? "scheduled"}>
             <option value="scheduled">Scheduled</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
@@ -83,19 +85,19 @@ export function JobForm({
           </Select>
         </Field>
         <Field label="Price" htmlFor="price" required>
-          <TextInput id="price" name="price" type="number" step="0.01" min="0" defaultValue={job?.price ?? ""} required />
+          <TextInput id="price" name="price" disabled={sourceManaged} type="number" step="0.01" min="0" defaultValue={job?.price ?? ""} required />
         </Field>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         <Field label="Budgeted Hours" htmlFor="budgeted_hours">
-          <TextInput id="budgeted_hours" name="budgeted_hours" type="number" step="0.1" min="0" defaultValue={job?.budgeted_hours ?? ""} />
+          <TextInput id="budgeted_hours" name="budgeted_hours" disabled={sourceManaged} type="number" step="0.1" min="0" defaultValue={job?.budgeted_hours ?? ""} />
         </Field>
         <Field label="Actual Hours" htmlFor="actual_hours">
           <TextInput id="actual_hours" name="actual_hours" type="number" step="0.1" min="0" defaultValue={job?.actual_hours ?? ""} />
         </Field>
         <Field label="Crew Size" htmlFor="crew_size">
-          <TextInput id="crew_size" name="crew_size" type="number" step="1" min="0" defaultValue={job?.crew_size ?? ""} />
+          <TextInput id="crew_size" name="crew_size" disabled={sourceManaged} type="number" step="1" min="0" defaultValue={job?.crew_size ?? ""} />
         </Field>
       </div>
 
@@ -108,6 +110,7 @@ export function JobForm({
               <label key={e.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-3)]">
                 <input
                   type="checkbox"
+                  disabled={sourceManaged}
                   name="employee_ids"
                   value={e.id}
                   defaultChecked={assignedIds.has(e.id)}
@@ -128,6 +131,10 @@ export function JobForm({
         <Textarea id="completion_notes" name="completion_notes" rows={2} defaultValue={job?.completion_notes ?? ""} />
       </Field>
 
+      {sourceManaged && job ? <>
+        {(["property_id","service_id","route_id","status","price","budgeted_hours","crew_size"] as const).map(name=><input key={name} type="hidden" name={name} value={job[name] ?? ""} />)}
+        {job.crew.map(member=><input key={member.id} type="hidden" name="employee_ids" value={member.id} />)}
+      </> : null}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit">{job ? "Save Changes" : "Create Job"}</Button>
       </div>

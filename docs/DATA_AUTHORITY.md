@@ -1,71 +1,42 @@
-# Data Authority
+# Data authority — verified October 6, 2026
 
-Who is allowed to be the source of truth for what — today, and the intended
-direction as real integrations get built.
+Homeworks is the operational source of truth for synced customers, properties, dated visits, visit status, service prices, labor budgets and crew assignments. Supabase mirrors those records through the existing automatic worker; Jarvis reads that mirror. It must not substitute a hard-coded customer schedule.
 
-## Today
+## Schedule and route order
 
-**Supabase is the system of record.** Every table in
-`src/types/database.types.ts` is written to by this app: human forms in
-`src/lib/actions/*`, Jarvis-confirmed actions in
-`src/lib/ai/actions/execute.ts`, or the Homeworks sync path below.
-`integration_mappings` still exists for a future need but isn't used —
-Homeworks sync instead uses a direct `homeworks_id` column on
-`clients`/`properties`/`invoices`, since it's the one integration actually
-built so far and a generic mapping table wasn't worth the indirection yet.
+- Homeworks supplies actual visit membership and dates, including cancellations and deletions.
+- An explicit Homeworks route stop for the visit date wins for visit order.
+- When Homeworks has no explicit route order, the owner's persisted, active weekday route preference supplies order by property ID. This only orders visits that exist. It never fabricates appointments or revenue.
+- A saved route stop without a visit is shown as a missing-visit notice and excluded from confirmed workload/revenue.
+- Deterministic fallback: date, effective stop order, appointment time, stable job ID. The Schedule, today's mission, workload and first-job lookup use the same read function.
+- Demo routes are archived; confirmed demo and Homeworks-deleted jobs are excluded from operations.
+- There is no runtime customer-name list or auto-generation of recurring jobs.
 
-**Homeworks** is a *partial* exception, via two separate paths:
-1. Push: `clients`/`properties`/`invoices` can be upserted from Homeworks
-   via a Zapier-triggered webhook (`src/app/api/integrations/homeworks/
-   webhook`) or an owner-run bulk import (`admin-import`), matched by
-   `homeworks_id`.
-2. Pull: a real OAuth 2.1 + PKCE connection to Homeworks' own GraphQL API
-   (`api.home.works`, verified live 2026-09-18 — see `JARVIS_PROGRESS.md`
-   for the full verification trail), via `lib/integrations/homeworks-
-   oauth.ts` / `homeworks-connection.ts` / `homeworks-api.ts`. As of this
-   writing this is read-only (a sample-customers query only, wired to a
-   Verify button on Settings) — no sync into Supabase tables via this path
-   yet, and the owner hasn't completed the authorization step.
+## Writes
 
-Both are one-directional (Homeworks → Jarvis) and neither writes back to
-Homeworks.
+Date/time and supported status edits to an existing Homeworks visit write to Homeworks first, then project the verified source response while holding the same sync lease as the background worker. A source failure must not save a conflicting local schedule. A projection failure after source success explicitly says the source saved and automatic sync must catch up.
 
-**Every client record carries a `data_source`** (`demo` | `homeworks_sync`
-| `owner_verified` | `unverified`) so the app can tell confirmed
-demonstration data apart from real business records without ever deleting
-anything. `homeworks_sync` is stamped automatically by the sync path above;
-`owner_verified` is stamped when the owner manually creates a client
-through the app; `demo` is only ever set deliberately, with documented
-evidence (see the migration file). `unverified` — the default for
-pre-existing rows of unknown origin — is NOT the same thing as `demo` and
-must never be treated as fake. Command Center's revenue/AR totals and the
-AI Advisor's `get_overdue_invoices` exclude `demo`; nothing else currently
-filters on it.
+Homeworks-owned service, property, price, budget and crew edits are blocked locally and must be made in Homeworks. Jarvis owns internal notes, completion notes and actual-hours enrichment. Local-only jobs retain local editing.
 
-## Intended direction (not yet built)
+Saved route preferences use an owner-authorized, RLS-scoped atomic database function. Stale membership and partial reorder payloads are rejected. Save failures remain visible in the route editor.
 
-| System | Authoritative for | Jarvis's relationship to it |
-|---|---|---|
-| **QuickBooks Online** | Accounting, general ledger, reconciled financial state | Reads financial data, turns it into operating intelligence — never writes accounting entries |
-| **Homeworks** | Whatever operational/customer/invoice/SMS workflows it already handles reliably | Reads for context; does not duplicate working Homeworks functionality just to say Jarvis can do it |
-| **Google Calendar** | Owner availability, personal/business timing constraints | Reads for scheduling context |
-| **Weather provider** (currently National Weather Service, `src/lib/integrations/weather.ts`) | Weather facts | Reads facts; Jarvis (not the weather API) makes the business-risk judgment from those facts |
-| **Jarvis / Supabase** | Operational intelligence, recommendation history, enriched property data, internal notes, activity history | The synthesis layer above every other system |
+The event stream reads route stops on every scheduled run because changing a route alone need not advance an event's updatedAt timestamp. Other entity stream logic, OAuth, checkpoints, locks, retries, cron and billing projections remain as implemented by the Homeworks integration task.
 
-## The rule that must not be violated
+## Monday owner correction
 
-No two systems should ever both consider themselves the writer of the same
-field. When a real integration is eventually built, it needs an explicit
-answer to "who wins if Homeworks and Jarvis disagree about this job's
-status" before the sync code is written — not as an afterthought. Until an
-integration has that answer, it stays read-only.
+The owner's October 6 correction was saved as 13 ordered property references. On October 5, Homeworks currently contains 10 corresponding visits. Richard Martin, Richard Carbone and Rayna Foster at 2 Penbryn Avenue have no visit that day.
 
-## Why `integration_mappings` exists but is unused
+Automatic approval review rejected creating these three external visit records. No visits, invoices or customer messages were created. The route preference is saved; missing visits must remain visibly unconfirmed until creation is approved and Homeworks is updated.
 
-The table (`system_name`, `entity_type`, `internal_id`, `external_id`,
-`last_synced_at`, `metadata`) was designed as the eventual place to record
-"this Jarvis job corresponds to this Homeworks job" without stuffing a
-`homeworks_id` column onto `jobs` directly (and then a `quickbooks_id`
-column, and so on, for every future integration). It's there so the first
-real integration doesn't have to invent this pattern under time pressure —
-it isn't there because an integration is imminent.
+## Other systems
+
+QuickBooks remains the accounting source. Google Calendar supplies availability when connected. Neither overrides Homeworks job dates. This scheduling change does not alter those integrations.
+
+
+## Validation
+
+- TypeScript typecheck and production build passed.
+- All 13 focused scheduling regression tests passed.
+- Rollback-only database checks passed for source stop-order projection/removal and complete, atomic route reordering; partial/duplicate payloads left the route unchanged.
+- Full browser suite: 814 passed, 2 mobile voice-control click timeouts. Both failed cases passed when rerun unchanged with one worker. No voice code was changed.
+- Live Homeworks GraphQL read accepted the event route-stop fields and exact-event filter.

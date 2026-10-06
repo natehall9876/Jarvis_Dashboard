@@ -13,6 +13,7 @@ type Stop = RouteWithStops["stops"][number];
 export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop[] }) {
   const [ordered, setOrdered] = useState(stops);
   const [prevStops, setPrevStops] = useState(stops);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Re-sync local reorder state when the server gives us a new stop list
@@ -27,13 +28,14 @@ export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop
     const target = index + direction;
     if (target < 0 || target >= ordered.length) return;
 
+    setSaveError(null);
     const next = [...ordered];
     [next[index], next[target]] = [next[target], next[index]];
     setOrdered(next);
 
-    const updates = next.map((stop, i) => ({ id: stop.id, stop_order: i }));
+    const updates = next.map((stop, i) => ({ id: stop.id, stop_order: i + 1 }));
     startTransition(() => {
-      moveRouteStop(routeId, updates).catch(() => setOrdered(stops));
+      moveRouteStop(routeId, updates).catch((error: unknown) => { setOrdered(stops); setSaveError(error instanceof Error ? error.message : "Route order was not saved. Try again."); });
     });
   }
 
@@ -49,6 +51,8 @@ export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop
   }
 
   return (
+    <>
+    {saveError ? <p role="alert" className="text-sm text-[var(--color-critical)]">{saveError}</p> : null}
     <ul className="divide-y divide-[var(--color-border)]">
       {ordered.map((stop, i) => (
         <li key={stop.id} className="flex items-center gap-3 py-2.5">
@@ -104,5 +108,6 @@ export function RouteStopList({ routeId, stops }: { routeId: string; stops: Stop
         </li>
       ))}
     </ul>
+    </>
   );
 }
