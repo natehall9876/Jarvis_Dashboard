@@ -52,7 +52,7 @@ do not blindly rerun them or loosen owner restrictions.
 
 | Provider | Implemented behavior | Verification |
 | --- | --- | --- |
-| Homeworks | Direct OAuth PKCE + GraphQL; automatic five-minute projection, read-only reconciliation and verified schedule write-through | Legacy imports/webhook upserts are retired in the pending ownership release; see docs/CURRENT_STATE.md |
+| Homeworks | Direct OAuth PKCE + GraphQL; automatic five-minute projection, read-only reconciliation and verified schedule write-through | Legacy imports/webhook upserts are retired in the October 7 ownership release; see docs/CURRENT_STATE.md |
 | QuickBooks | OAuth, refresh, company/customer/invoice/payment reads and financial preview | Verify company info; existing production authorization on file as of Oct 3 |
 | Google Calendar | OAuth, calendar selection and paginated read-only event preview | No authorization on file as of Oct 3; owner setup/consent needed |
 | Weather | National Weather Service | Live location lookup |

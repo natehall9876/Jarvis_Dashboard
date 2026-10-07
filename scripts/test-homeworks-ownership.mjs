@@ -6,7 +6,7 @@ const read = (file) => fs.readFileSync(new URL('../' + file, import.meta.url), '
 try {
   await db.exec(read('scripts/fixtures/homeworks-production-schema-20261007.sql'));
   if (!process.argv.includes('--baseline')) {
-    await db.exec(read('supabase/migrations/20261007023608_homeworks_ownership_guards.sql'));
+    await db.exec(read('supabase/migrations/20261007030921_homeworks_ownership_guards.sql'));
   }
   const results = await db.exec(read('scripts/homeworks-ownership-regression.sql'));
   for (const result of results) for (const row of result.rows ?? []) {

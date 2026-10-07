@@ -1,9 +1,9 @@
 # Homeworks automatic production synchronization
 
 The worker described here is already in production. The October 7 ownership
-guards and legacy-writer retirement are working-tree changes pending deployment
-and migration; see [current state](CURRENT_STATE.md). Earlier verification below
-is timestamped evidence of the worker, not a claim that the new guards are live.
+guards and legacy-writer retirement are also deployed; see [current state](CURRENT_STATE.md)
+and the [October 7 acceptance report](HOMEWORKS_OWNERSHIP_ACCEPTANCE_2026-10-07.md). Earlier verification below
+is timestamped evidence of the worker, separate from the new guard verification.
 
 ## Root cause
 The previous integration had working OAuth/API reads, owner-invoked imports/reconciliation, and a webhook receiver. It had no production scheduled worker and no verified Homeworks event subscription delivering the required object coverage. A successful connection/API check therefore did not advance operational data. At diagnosis, production contained 48 linked jobs last updated September 25 and no linked Homeworks invoices.
@@ -14,7 +14,7 @@ Homeworks GraphQL -> Supabase pg_cron every five minutes -> pg_net POST to the V
 The named cron job is jarvis-homeworks-sync, schedule */5 * * * *. Each timestamp-capable stream uses updatedAt with a five-minute overlap and id keyset pagination. Every stream receives a full scan at least daily. Properties, items and users are scanned each run because their filter schema does not support the same incremental timestamp. Events are also scanned each run so route-stop changes are observed even when event updatedAt does not advance. 21 explicit archive/deletion partitions avoid provider default filters hiding records.
 
 Automatic operation does not depend on inbound webhook delivery. The October 7
-working tree retires the old webhook/import endpoints with HTTP 410 after
+release retires the old webhook/import endpoints with HTTP 410 after
 authentication and removes the competing manual import/enrichment writers.
 No sufficient native webhook subscription interface was found in the live
 Homeworks GraphQL schema used by this connection.

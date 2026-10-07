@@ -145,3 +145,16 @@ DateFilter, whose gte/lte/lt operands are Date. The existing Date! query
 variables are correct. events supports where/orderBy/take/skip as implemented.
 This schema read does not authenticate to the business account or verify data
 freshness. No speculative query rewrite was made.
+
+
+## 2026-10-07 — Homeworks ownership enforcement released
+
+Implementation: `b7368ac78612fd95139594ca328b948ddea55ca9`, fast-forward from `3466b8a`; no force push. Vercel deployment `dpl_HAmZkwosgHayxgxZYbgt1W8zx9jd` READY with production alias and no alias errors. Installed non-destructive migration `20261007030921_homeworks_ownership_guards.sql` at 03:09:21 UTC; repository version aligned with server-assigned migration history.
+
+All 12 ownership triggers enabled with RLS retained and ordinary-role TRUNCATE/TRIGGER/REFERENCES removed. Guard fingerprints match isolated-tested definitions, original projector unchanged. The next normal scheduled run completed at 03:10:06 UTC; all 21 streams advanced successfully, no errors, zero changed source records. Public login/routing smoke checks passed. No real Homeworks mutation or production business fixture was used for testing; no drift was repaired.
+
+Read-only audit found zero drift across 373 projections and 103 line items, no local payments on source invoices, no local jobs on source properties or other divergent source-parent children. Post-release scalar comparison still found zero mismatches.
+
+Typecheck/build/changed-file lint/client-secret checks and real isolated PostgreSQL ownership/sync/schedule regressions pass. Full desktop/mobile suite: 950/952; two voice click timeouts, with the same failure independently reproduced on unchanged baseline (5/6 focused cases passed in both branches). Full lint retains baseline Date.now purity error in homeworks/page.tsx and unused constant warning in command-center.ts. All ownership, billing, customer/job, schedule and AI cases passed; no all-green full-suite claim.
+
+Full evidence, exact files, known limits and next task: `docs/HOMEWORKS_OWNERSHIP_ACCEPTANCE_2026-10-07.md`. Writer inventory: `docs/HOMEWORKS_WRITERS.md`. Future agents should use current authority/architecture docs instead of the historical no-worker/manual-import guidance.

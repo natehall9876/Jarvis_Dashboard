@@ -41,7 +41,7 @@ real microphone's behavior on the owner's phone.
 
 `npm run test:ownership:db` uses PGlite (real PostgreSQL semantics in an isolated
 in-memory database) and a schema-only snapshot captured read-only from production.
-It applies `20261007023608_homeworks_ownership_guards.sql`, executes synthetic
+It applies `20261007030921_homeworks_ownership_guards.sql`, executes synthetic
 rollback fixtures, verifies rollback, then runs the existing sync and schedule SQL
 against synthetic source records. No Supabase connection or production business
 rows are used. `npm run test:ownership:db -- --baseline` deliberately skips the guard

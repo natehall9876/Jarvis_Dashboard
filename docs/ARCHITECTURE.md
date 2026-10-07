@@ -1,12 +1,12 @@
 # Architecture — October 7, 2026
 
-This describes the current working tree. **The ownership guard migration and corresponding application changes are pending production rollout.** [Current state](CURRENT_STATE.md) records that boundary; the [October 7 read-only audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) records observed production behavior before the migration.
+This describes the deployed ownership architecture. **Application commit `b7368ac` and ownership migration `20261007030921` are live.** [Current state](CURRENT_STATE.md) records that boundary; the [October 7 read-only audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) records observed production behavior before the migration.
 
 ## Application layers
 
 | Layer | Implementation and responsibility |
 | --- | --- |
-| Database | Supabase/Postgres, active-owner RLS, retained source records/projections; pending ownership triggers protect source fields and operational children |
+| Database | Supabase/Postgres, active-owner RLS, retained source records/projections; ownership triggers protect source fields and operational children |
 | Reads | `src/lib/data/*`, shared domain types, calculation/formatting helpers |
 | Human mutations | `src/lib/actions/*`, session client, ownership/parent guards, explicit native-field allowlists |
 | UI | Dashboard routes and components; owned-record views show “Managed in Homeworks” guidance and expose native forms where implemented |
@@ -68,4 +68,4 @@ QuickBooks and Google Calendar OAuth/read adapters do not write Homeworks projec
 
 ## Verification surfaces
 
-[HOMEWORKS_WRITERS.md](HOMEWORKS_WRITERS.md) enumerates every relevant source/native/retired writer, including direct quote conversion and worksheet-photo paths. `scripts/test-homeworks-ownership.mjs` loads a schema-only production snapshot into isolated PGlite, applies the pending migration and runs rollback ownership plus existing sync/schedule SQL with synthetic fixtures. The separate production drift script uses a read-only transaction, reports identifiers/counts for discrepancies, and never repairs them. Test outcomes and production rollout must have explicit records; a schema snapshot or successful build is not deployment evidence.
+[HOMEWORKS_WRITERS.md](HOMEWORKS_WRITERS.md) enumerates every relevant source/native/retired writer, including direct quote conversion and worksheet-photo paths. `scripts/test-homeworks-ownership.mjs` loads a schema-only production snapshot into isolated PGlite, applies the ownership migration and runs rollback ownership plus existing sync/schedule SQL with synthetic fixtures. The separate production drift script uses a read-only transaction, reports identifiers/counts for discrepancies, and never repairs them. Test outcomes and production rollout must have explicit records; a schema snapshot or successful build is not deployment evidence.

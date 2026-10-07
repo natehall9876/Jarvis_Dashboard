@@ -2,7 +2,7 @@
 
 Production: https://jarvis-dashboard-fawn.vercel.app. Vercel deploys `origin/main`; release SHAs and deployment evidence belong in `JARVIS_PROGRESS.md`.
 
-**The Homeworks ownership changes are implemented in the working tree. Production application deployment and migration `20261007023608_homeworks_ownership_guards.sql` are pending.** The production baseline inspected for this task was `3466b8a`. Do not report the new protection as live until migration and deployment have their own verification record.
+**The Homeworks ownership boundary is live.** Application commit `b7368ac` reached production READY; migration `20261007030921_homeworks_ownership_guards.sql` was applied at 03:09:21 UTC. Read-only verification found all 12 guards enabled, RLS retained, dangerous ordinary-role privileges removed, and exact tested guard fingerprints. The 03:10 scheduled run succeeded across all 21 streams with no errors. See [acceptance and release evidence](HOMEWORKS_OWNERSHIP_ACCEPTANCE_2026-10-07.md).
 
 ## Existing production behavior
 
@@ -12,7 +12,7 @@ Automatic Homeworks synchronization is already running. Supabase `pg_cron` invok
 
 Linked Homeworks visit date/time and supported status changes already use verified source-first write-through. Schedule reads and route preferences preserve the existing source-order-first behavior described in [data authority](DATA_AUTHORITY.md). This task does not redesign the worker, projector, schedule ordering, or propose/confirm architecture.
 
-## Ownership changes in this working tree
+## Enforced ownership
 
 Homeworks-owned operational data is treated as a read-only projection. Source markers, retained projection pointers and operational parent lineage determine ownership. Independent local records and intentional native overlays remain valid Jarvis workflows.
 
@@ -41,10 +41,10 @@ No production DDL/DML, fixture tests, source mutations or repairs were performed
 
 ## Validation and release boundary
 
-`scripts/test-homeworks-ownership.mjs` runs real PostgreSQL semantics in an isolated PGlite database using a schema-only snapshot captured read-only from production. It applies the pending migration, runs rollback-only ownership fixtures, checks fixture rollback, and exercises the existing sync/schedule regression SQL using synthetic source records. `npm run test:ownership:db` is the standard entry point; `--baseline` skips the guard migration to show that the old schema fails the ownership assertion.
+`scripts/test-homeworks-ownership.mjs` runs real PostgreSQL semantics in an isolated PGlite database using a schema-only snapshot captured read-only from production. It applies the ownership migration, runs rollback-only ownership fixtures, checks fixture rollback, and exercises the existing sync/schedule regression SQL using synthetic source records. `npm run test:ownership:db` is the standard entry point; `--baseline` skips the guard migration to show that the old schema fails the ownership assertion.
 
 `scripts/homeworks-production-drift-audit.sql` is a separate repeatable-read, read-only diagnostic and performs no mutation tests. Do not run the ownership regression against production.
 
-Record actual typecheck, lint, build, isolated database and relevant application/browser results in the final implementation/release record. These docs describe available tests and observed production evidence; they do not predeclare a complete test pass or a production rollout.
+The [acceptance report](HOMEWORKS_OWNERSHIP_ACCEPTANCE_2026-10-07.md) records actual typecheck, lint, build, isolated database, application/browser results and production rollout evidence. The ownership checks passed. Two unchanged baseline lint findings and a reproduced pre-existing mobile voice timeout remain explicitly identified; the full repository suite is not claimed all-green.
 
 Remaining product work includes QuickBooks financial matching, calendar-to-job matching, route-level paid-hour profitability and employee-facing views. Source completeness and missing demand/capacity must be reported honestly rather than filled with fabricated records.

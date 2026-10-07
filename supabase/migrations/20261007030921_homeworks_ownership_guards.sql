@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
 -- Homeworks-owned records are read-only projections inside Jarvis.
 -- No business data is repaired or deleted. Existing RLS and sync RPCs are retained.
 -- SECURITY INVOKER throughout: neither caller-supplied JWT claims nor a custom

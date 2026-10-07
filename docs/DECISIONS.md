@@ -1,6 +1,6 @@
 # Decisions — October 7, 2026
 
-These decisions describe current code and the pending ownership migration. [Current state](CURRENT_STATE.md) distinguishes the working tree from production; [data authority](DATA_AUTHORITY.md) defines field ownership. The October 3 integration audit is historical and does not override the newer automatic-sync implementation or October 7 production evidence.
+These decisions describe current code and the deployed ownership migration. [Current state](CURRENT_STATE.md) records production release evidence; [data authority](DATA_AUTHORITY.md) defines field ownership. The October 3 integration audit is historical and does not override the newer automatic-sync implementation or October 7 production evidence.
 
 ## Homeworks owns operational records; Jarvis owns explicit extensions
 
@@ -10,9 +10,9 @@ Independent local records remain supported. They cannot create new jobs, billing
 
 ## Enforce ownership in the database as well as the application
 
-Hiding a button or guarding one action cannot protect direct authenticated REST calls, stale actions, child-table mutations, foreign-key cascades or concurrent parent linking. Migration `20261007023608_homeworks_ownership_guards.sql` checks source markers, retained projection identity and old/new parent lineage, with parent locks. It protects 12 tables and removes ordinary-role `TRUNCATE`, `TRIGGER` and `REFERENCES` privileges. Source identity cannot be forged or removed by normal callers.
+Hiding a button or guarding one action cannot protect direct authenticated REST calls, stale actions, child-table mutations, foreign-key cascades or concurrent parent linking. Migration `20261007030921_homeworks_ownership_guards.sql` checks source markers, retained projection identity and old/new parent lineage, with parent locks. It protects 12 tables and removes ordinary-role `TRUNCATE`, `TRIGGER` and `REFERENCES` privileges. Source identity cannot be forged or removed by normal callers.
 
-The migration is additive enforcement, not data repair. It does not rewrite the existing projector and performs no business-row updates/deletes. Its production application is pending until explicitly recorded.
+The migration is additive enforcement, not data repair. It does not rewrite the existing projector and performs no business-row updates/deletes. It was applied in production as version `20261007030921`; the following scheduled run succeeded.
 
 ## Use a narrow trusted server-role boundary
 

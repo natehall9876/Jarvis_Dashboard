@@ -38,3 +38,5 @@
 - Read-only production audit complete: zero current drift across 373 records and 103 lines, no repairs.
 - Database and existing sync/schedule regressions, typecheck, production build and secret checks passed. Full suite: 950/952; two mobile voice timeouts, with the same conversation-button failure reproduced on unchanged baseline. Changed-file lint passes; full lint has two unchanged baseline findings.
 - Detailed acceptance and release evidence: `../../HOMEWORKS_OWNERSHIP_ACCEPTANCE_2026-10-07.md`.
+
+- Released implementation `b7368ac` to production; installed migration version `20261007030921`; verified all 12 guard fingerprints/privileges and the successful 03:10 scheduled run. Final docs and migration filename are aligned with observed production history.

@@ -1,6 +1,6 @@
 # Homeworks projection writer inventory — October 7, 2026
 
-Scope: all production code in `src`, plus SQL and scripts in `supabase` and `scripts`, starting from production baseline `3466b8a` and updated for this working tree. **Application deployment and migration `20261007023608_homeworks_ownership_guards.sql` are pending.** Production still had the legacy enforcement gap at the [read-only audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md).
+Scope: all production code in `src`, plus SQL and scripts in `supabase` and `scripts`, starting from production baseline `3466b8a`. **Application commit `b7368ac` and migration `20261007030921_homeworks_ownership_guards.sql` are deployed.** Production still had the legacy enforcement gap at the [read-only audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md).
 
 **Homeworks-owned records are read-only projections inside Jarvis.** Only automatic source projection and verified Homeworks write-through may change their source-owned fields. A writer can remain **LEGITIMATE for Jarvis-native data** while being **BLOCKED for source-owned data**. Independent local records are not another authority for an existing source record or its operational children.
 
@@ -31,7 +31,7 @@ Projection and lease RPCs are `SECURITY INVOKER`, callable by `service_role` rat
 
 ## Session writers — LEGITIMATE only within native ownership
 
-All paths below use `createSupabaseServerClient`, not an admin client. The action layer rejects source ownership before divergent writes. The pending database guard is the final boundary for direct REST, stale state, source-pointer-only ownership, child operations and races.
+All paths below use `createSupabaseServerClient`, not an admin client. The action layer rejects source ownership before divergent writes. The deployed database guard is the final boundary for direct REST, stale state, source-pointer-only ownership, child operations and races.
 
 | File and exact functions | Tables written; ownership classification |
 | --- | --- |
@@ -94,8 +94,8 @@ Former affordances were in `components/settings/homeworks-connection-card.tsx`, 
 
 | Surface | Classification and treatment |
 | --- | --- |
-| Ordinary authenticated direct REST/SQL against the 12 protected relations | **BLOCK** source operational mutations at the trigger boundary after migration; **LEGITIMATE** explicit native overlays/independent local records under existing owner RLS. Current production protection is pending. |
-| `supabase/migrations/20261007023608_homeworks_ownership_guards.sql::{homeworks_row_is_owned,enforce_homeworks_ownership}` | Explicit ownership checks and guard, not a projection writer. Dynamic SQL installs triggers/revokes dangerous ordinary-role privileges. It does not copy/repair business data. |
+| Ordinary authenticated direct REST/SQL against the 12 protected relations | **BLOCK** source operational mutations at the trigger boundary after migration; **LEGITIMATE** explicit native overlays/independent local records under existing owner RLS. Protection is installed in production. |
+| `supabase/migrations/20261007030921_homeworks_ownership_guards.sql::{homeworks_row_is_owned,enforce_homeworks_ownership}` | Explicit ownership checks and guard, not a projection writer. Dynamic SQL installs triggers/revokes dangerous ordinary-role privileges. It does not copy/repair business data. |
 | Source markers, retained projection pointers, old/new parent lineage | Cover ID-clearing/spoofing, local children under source parents, moves between parents and retained source identity after marker drift. Parent locks prevent concurrent source-linking races. |
 | Cascading/set-null foreign keys | Source child triggers also guard service deletion clearing source job/item service links, employee deletion cascading source crew, and property/invoice/quote/service-agreement cascades. Do not assume guarding the parent form alone covers these writes. |
 | `supabase/rls-policies.sql` dynamic policy loop | Historical broad authenticated policies; not a business DML writer and not the full live policy set. October 7 live RLS also included restrictive active-owner checks, but no field ownership boundary. Do not replay this file as current ownership enforcement. |
@@ -117,4 +117,4 @@ OAuth connection modules for Homeworks, QuickBooks and Google Calendar use servi
 
 The production audit at 2026-10-07 02:38:01–02:42:56 UTC found zero current source-field/child/pointer/reference/route/crew drift, zero local operational children on source parents, 373 top-level projections and 103 source line items. Eight historical enrichment log entries do not establish current drift or updater identity. Production had no ownership triggers at that snapshot. See the [full sourced report](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) for exact counts, runtime function fingerprints and caveats. No production repair or mutation regression was run.
 
-Deployment and migration are separate pending steps. After rollout, verify the actual installed guards/grants, a normal scheduled run and the relevant authenticated UI/source-write-through behavior. A clean retained-source comparison, a local PostgreSQL pass and a build each establish different facts; none alone proves the production boundary is installed.
+Deployment and migration were separately verified: all 12 guards are enabled, tested guard fingerprints match, unsafe ordinary-role privileges are absent, and the 03:10 scheduled run succeeded. The [acceptance report](HOMEWORKS_OWNERSHIP_ACCEPTANCE_2026-10-07.md) separates production checks from isolated UI/source-write-through tests. A clean retained-source comparison, a local PostgreSQL pass and a build each establish different facts; none alone proves the production boundary is installed.

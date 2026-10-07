@@ -1,6 +1,6 @@
 # Homeworks verification — October 7, 2026
 
-Use [current state](CURRENT_STATE.md) for release status, [data authority](DATA_AUTHORITY.md) for the ownership contract, and the [October 7 production audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) for timestamped read-only evidence. The automatic worker is already deployed; the ownership migration/application changes are pending rollout. A stored OAuth authorization, a recent worker run and an independent provider read establish different facts.
+Use [current state](CURRENT_STATE.md) for release status, [data authority](DATA_AUTHORITY.md) for the ownership contract, and the [October 7 production audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) for timestamped read-only evidence. The automatic worker is already deployed; the ownership migration/application changes are deployed, with evidence in the acceptance report. A stored OAuth authorization, a recent worker run and an independent provider read establish different facts.
 
 ## Read-only operational checks
 
@@ -14,7 +14,7 @@ The October 7 audit found zero current drift across 373 top-level source project
 
 ## Legacy endpoints are retired
 
-After the ownership application deployment, `/api/integrations/homeworks/webhook` and `/import` preserve missing-secret 503/wrong-secret 401 and return 410 after successful secret authentication. `/admin-import` requires a session and then returns 410. These responses mean the old write path is retired, not that a delivery succeeded. Do not send real customer payloads, confirm manual imports, or create a test webhook record to verify the new architecture.
+After the October 7 ownership deployment, `/api/integrations/homeworks/webhook` and `/import` preserve missing-secret 503/wrong-secret 401 and return 410 after successful secret authentication. `/admin-import` requires a session and then returns 410. These responses mean the old write path is retired, not that a delivery succeeded. Do not send real customer payloads, confirm manual imports, or create a test webhook record to verify the new architecture.
 
 Isolated tests in `e2e/homeworks-webhook.spec.ts` and `homeworks-write-safety.spec.ts` exercise correct/incorrect auth, malformed and valid legacy payloads, stale confirms and the shared retired sink without database/source access. Historical webhook-labelled activity may also have originated from manual imports; preserve that ambiguity rather than relabelling old history.
 

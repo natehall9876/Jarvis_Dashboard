@@ -2,7 +2,7 @@
 
 **Homeworks-owned records are read-only projections inside Jarvis.** Homeworks owns their operational state; Jarvis displays the projection and separately stores intentional native notes, hours and supporting data. A source-owned change must be saved in Homeworks and verified before Jarvis projects it.
 
-The ownership changes and migration `20261007023608_homeworks_ownership_guards.sql` are implemented in the working tree. **Production deployment and application of this migration are pending.** The October 7 read-only audit found no current projection drift, but production did not yet have ownership triggers. Do not confuse a clean data snapshot with enforced write protection. See [current state](CURRENT_STATE.md), the [writer inventory](HOMEWORKS_WRITERS.md), and the [production audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md).
+**The ownership changes and migration `20261007030921_homeworks_ownership_guards.sql` are deployed.** The October 7 read-only audit found no drift before enforcement. Separate release verification then confirmed all 12 guards, exact tested function fingerprints and a successful subsequent scheduled run. See [current state](CURRENT_STATE.md), the [writer inventory](HOMEWORKS_WRITERS.md), and the [production audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md).
 
 ## Ownership
 

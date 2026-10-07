@@ -2,11 +2,11 @@
 
 ## 1. Result
 
-Implementation and independent review complete. Release verification is in progress; production status below is authoritative.
+**PASS — ownership enforcement implemented, independently reviewed, deployed and migrated.** Pre-existing lint and mobile voice failures remain explicitly documented below; this is not a claim that every repository check is green.
 
 ## 2. What changed
 
-- `supabase/migrations/20261007023608_homeworks_ownership_guards.sql`: invoker-rights triggers across 12 projected/child tables; ownership from source markers, retained identity and old/new parent lineage; actual service-role exception; native-field allowlist; unsafe ordinary-role privileges revoked. No business rows repaired or deleted.
+- `supabase/migrations/20261007030921_homeworks_ownership_guards.sql`: invoker-rights triggers across 12 projected/child tables; ownership from source markers, retained identity and old/new parent lineage; actual service-role exception; native-field allowlist; unsafe ordinary-role privileges revoked. No business rows repaired or deleted.
 - `src/lib/actions/homeworks-ownership.ts`, guarded client/property/job/employee/quote/invoice actions, and `src/lib/homeworks-ownership.ts`: fail closed on missing ownership, validate parents and item IDs before writes, protect source schedule/crew/financial fields, preserve native notes/hours/staffing fields.
 - Detail pages, forms and photo worksheet controls: display source ownership, hide invalid actions and creation options, preserve notes-only forms; inherited ownership is handled even without a source ID. Linked job schedule/status retains existing verified write-through.
 - AI types, tools, executor, confirmation card and voice references: remove create-job/assign-employee; reject stale/forged retired requests before mutation. Keep propose/confirm/action_requests and five legitimate actions.
@@ -72,13 +72,23 @@ The guarded session actions remain legitimate only for native fields/independent
 
 ## 7. Production status
 
-PENDING: application deployment and ownership migration have not yet been performed. Pre-release recheck at 02:59:37 UTC still found zero ownership triggers and the unchanged projector fingerprint `485e73e84f4620b7845ed3949fad9066`. Latest scheduled run at that point completed successfully at 02:55:06 UTC.
+Application implementation commit: `b7368ac78612fd95139594ca328b948ddea55ca9`, fast-forwarded from verified baseline `3466b8a` to `main` and pushed without force. Vercel production deployment `dpl_HAmZkwosgHayxgxZYbgt1W8zx9jd` reached READY with `jarvis-dashboard-fawn.vercel.app` attached and no alias error.
+
+Applied validated, non-destructive migration through Supabase at **03:09:21 UTC**, project `pmxzldcltkfjkmtatvlu`, recorded version **`20261007030921`** / `homeworks_ownership_guards`. The repository filename was aligned with the server-assigned version; 5-second lock and 30-second statement timeouts bounded DDL lock waiting. No business-row DML or drift repair was included.
+
+Read-only post-migration verification at **03:09:38 UTC**: all 12 triggers enabled, RLS still enabled, zero PUBLIC/anon/authenticated TRUNCATE/TRIGGER/REFERENCES grants on protected tables. Ordinary roles are not superusers, cannot create roles or bypass RLS, and are not service-role members. Both guard functions are SECURITY INVOKER and exactly match the isolated-tested function fingerprints:
+
+- `enforce_homeworks_ownership`: `7135b4a388ca3c174e5cc777b44a50b9`
+- `homeworks_row_is_owned`: `8184f3c418277d8581a2687cf9ea8c9e`
+- Original projector unchanged: `485e73e84f4620b7845ed3949fad9066`
+
+The next ordinary scheduled run began at **03:10:01 UTC** and completed successfully at **03:10:06 UTC**, with all 21 streams advancing and zero errors. It reported zero changed records. This proves normal scheduled ingestion remains healthy; source mutation/reprojection behavior was exercised with synthetic records in isolated PostgreSQL. No live business mutation was made as a test. Public smoke checks returned `/login` 200 and `/`, `/settings`, `/invoices`, `/jobs` 307 to the correct login destination. A read-only post-release scalar comparison at 03:12:22 UTC again found zero field/pointer/reference differences across all 373 projections. The final migration-path/timeout adjustment was rechecked with `npm run test:ownership:db`: all regressions passed.
 
 ## 8. Risks / blockers
 
 - Baseline lint findings listed above remain outside this ownership change.
 - Mobile Safari voice conversation-button timeout is pre-existing: reproduced on unchanged `3466b8a`. Neither the voice component nor these test cases changed. The ownership suite passed; the full suite is not claimed all-green.
-- Production rollout verification pending.
+- No unresolved ownership release blocker. Baseline lint/voice issues remain, as recorded above.
 - No real Homeworks visit was changed as a test. Schema-only isolated regression and actual post-release read-only checks must not be described as a live provider mutation test.
 
 ## 9. Next action
@@ -87,6 +97,7 @@ Add scheduled read-only drift detection using the committed audit logic, with an
 
 ## Exact changed-file manifest
 
+- `JARVIS_PROGRESS.md`
 - `README.md`
 - `docs/AI_GUARDRAILS.md`
 - `docs/ARCHITECTURE.md`
@@ -174,4 +185,4 @@ Add scheduled read-only drift detection using the committed audit logic, with an
 - `src/mock/sample-data.ts`
 - `src/types/database.types.ts`
 - `src/types/domain.ts`
-- `supabase/migrations/20261007023608_homeworks_ownership_guards.sql`
+- `supabase/migrations/20261007030921_homeworks_ownership_guards.sql`

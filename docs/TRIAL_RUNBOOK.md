@@ -1,6 +1,6 @@
 # Trial Runbook — how to open and test Jarvis
 
-Use this guide for local checks. See CURRENT_STATE.md for pending ownership rollout, HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md for read-only production evidence, and TESTING.md for automated/authenticated test boundaries.
+Use this guide for local checks. See CURRENT_STATE.md for ownership release evidence, HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md for read-only production evidence, and TESTING.md for automated/authenticated test boundaries.
 
 ## 1. Prerequisites
 
@@ -137,7 +137,7 @@ delete records merely because older documentation called them seeded.
 
 ## 10. Known limitations
 
-- Homeworks sync runs automatically every five minutes. Manual imports/linking/enrichment and legacy webhook upserts are retired in the pending ownership release; reconciliation is read-only.
+- Homeworks sync runs automatically every five minutes. Manual imports/linking/enrichment and legacy webhook upserts are retired in the October 7 ownership release; reconciliation is read-only.
 - Existing provider authorization needs a fresh Verify call before claiming
   live connectivity. Google Calendar has no authorization on file in the
   October 3 audit.
