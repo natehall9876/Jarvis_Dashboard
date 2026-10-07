@@ -81,7 +81,12 @@ export async function getJobById(id: string): Promise<DataResult<JobDetail | nul
   return withDataResult(async () => {
     const supabase = await createSupabaseServerClient();
 
-    const job = await getOrNotFound(supabase.from("jobs").select(JOB_RELATIONS_SELECT).eq("id", id).maybeSingle());
+    // Detail controls need parent ownership markers; keep shared schedule reads unchanged.
+    const job = await getOrNotFound(supabase.from("jobs").select(`
+      *,
+      property:properties(*, client:clients(id, first_name, last_name, company_name, data_source, homeworks_id, homeworks_status, homeworks_deleted)),
+      service:services(id, name)
+    `).eq("id", id).maybeSingle());
     if (!job) return null;
 
     const [

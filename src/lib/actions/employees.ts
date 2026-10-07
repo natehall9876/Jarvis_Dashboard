@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, optionalNumber, checkbox, withError, runMutation } from "./shared";
 import type { EmployeeInsert } from "@/types/domain";
+import { getOwnershipRecord, isRecordHomeworksOwned, rejectOwnershipFields, requireLocalRecord, requireNativeChanges, submittedFields } from "./homeworks-ownership";
 
-function employeeFieldsFromForm(formData: FormData): EmployeeInsert {
+function employeeFieldsFromForm(formData: FormData, currentFirstName?: string): EmployeeInsert {
   return {
-    first_name: requiredString(formData, "first_name"),
+    first_name: formData.has("first_name") ? requiredString(formData, "first_name") : currentFirstName ?? requiredString(formData, "first_name"),
     last_name: optionalString(formData, "last_name"),
     phone: optionalString(formData, "phone"),
     email: optionalString(formData, "email"),
@@ -23,6 +24,7 @@ function employeeFieldsFromForm(formData: FormData): EmployeeInsert {
 export async function createEmployee(formData: FormData) {
   const fields = employeeFieldsFromForm(formData);
   const result = await runMutation(async () => {
+    rejectOwnershipFields(formData);
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.from("employees").insert(fields).select("id").single();
     if (error) throw error;
@@ -34,9 +36,20 @@ export async function createEmployee(formData: FormData) {
 }
 
 export async function updateEmployee(employeeId: string, formData: FormData) {
-  const fields = employeeFieldsFromForm(formData);
   const result = await runMutation(async () => {
+    rejectOwnershipFields(formData);
     const supabase = await createSupabaseServerClient();
+    const current = await getOwnershipRecord(supabase, "employees", employeeId);
+    let fields = submittedFields(formData, employeeFieldsFromForm(formData, current.first_name));
+    if (await isRecordHomeworksOwned(supabase, "employees", current)) {
+      const allowed = ["notes", "hourly_rate", "role", "has_drivers_license", "hire_date"];
+      requireNativeChanges(current, fields, allowed);
+      fields = Object.fromEntries(Object.entries(fields).filter(([key]) => allowed.includes(key)));
+    } else {
+      fields.active = checkbox(formData, "active");
+      fields.has_drivers_license = checkbox(formData, "has_drivers_license");
+    }
+    if (!Object.keys(fields).length) return;
     const { error } = await supabase.from("employees").update(fields).eq("id", employeeId);
     if (error) throw error;
   });
@@ -48,6 +61,7 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
 export async function archiveEmployee(employeeId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "employees", employeeId);
     const { error } = await supabase.from("employees").update({ active: false }).eq("id", employeeId);
     if (error) throw error;
   });

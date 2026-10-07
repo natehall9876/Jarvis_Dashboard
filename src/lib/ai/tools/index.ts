@@ -20,9 +20,9 @@ import type { ToolSpec } from "@/lib/ai/tool-types";
  * there is no service-role bypass and no separate data path) and returns a
  * compact, model-shaped projection rather than raw table rows.
  *
- * The `actionTools` (propose_reschedule_job, propose_update_job_status,
- * propose_assign_employee, propose_create_job) are the only tools that touch
- * writes at all, and even they never call .insert()/.update()/.delete()
+ * The `actionTools` (reschedule and status) and the proposal tools in
+ * `taskTools` (job notes and owner tasks) prepare the only supported writes.
+ * They never call .insert()/.update()/.delete()
  * themselves — each one only reads the current record and returns a
  * ProposedAction (see lib/ai/action-types.ts). The advisor loop detects that
  * shape and stops the model from taking further action that turn; the real

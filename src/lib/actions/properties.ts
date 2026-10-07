@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, optionalNumber, requiredString, checkbox, withError, runMutation } from "./shared";
 import type { PropertyInsert } from "@/types/domain";
+import { getOwnershipRecord, isRecordHomeworksOwned, rejectOwnershipFields, requireLocalRecord, requireNativeChanges, submittedFields } from "./homeworks-ownership";
 
-function propertyFieldsFromForm(formData: FormData): PropertyInsert {
+function propertyFieldsFromForm(formData: FormData, currentClientId?: string | null): PropertyInsert {
   return {
-    client_id: requiredString(formData, "client_id"),
+    client_id: formData.has("client_id") ? requiredString(formData, "client_id") : currentClientId !== undefined ? currentClientId : requiredString(formData, "client_id"),
     property_name: optionalString(formData, "property_name"),
     street: optionalString(formData, "street"),
     city: optionalString(formData, "city"),
@@ -24,8 +25,11 @@ function propertyFieldsFromForm(formData: FormData): PropertyInsert {
 export async function createProperty(formData: FormData) {
   const fields = propertyFieldsFromForm(formData);
   const result = await runMutation(async () => {
+    rejectOwnershipFields(formData);
     if (!fields.street) throw new Error("Street address is required.");
+    if (!fields.client_id) throw new Error("A client is required.");
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "clients", fields.client_id);
     const { data, error } = await supabase.from("properties").insert(fields).select("id").single();
     if (error) throw error;
     return data.id as string;
@@ -36,9 +40,19 @@ export async function createProperty(formData: FormData) {
 }
 
 export async function updateProperty(propertyId: string, formData: FormData) {
-  const fields = propertyFieldsFromForm(formData);
   const result = await runMutation(async () => {
+    rejectOwnershipFields(formData);
     const supabase = await createSupabaseServerClient();
+    const current = await getOwnershipRecord(supabase, "properties", propertyId);
+    let fields = submittedFields(formData, propertyFieldsFromForm(formData, current.client_id));
+    if (await isRecordHomeworksOwned(supabase, "properties", current)) {
+      requireNativeChanges(current, fields, ["access_notes", "service_notes"]);
+      fields = submittedFields(formData, { access_notes: optionalString(formData, "access_notes"), service_notes: optionalString(formData, "service_notes") });
+    } else {
+      if (fields.client_id) await requireLocalRecord(supabase, "clients", fields.client_id);
+      fields.active = checkbox(formData, "active");
+    }
+    if (!Object.keys(fields).length) return;
     const { error } = await supabase.from("properties").update(fields).eq("id", propertyId);
     if (error) throw error;
   });
@@ -50,6 +64,7 @@ export async function updateProperty(propertyId: string, formData: FormData) {
 export async function archiveProperty(propertyId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "properties", propertyId);
     const { error } = await supabase.from("properties").update({ active: false }).eq("id", propertyId);
     if (error) throw error;
   });

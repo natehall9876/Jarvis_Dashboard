@@ -1,101 +1,50 @@
-# Current state — October 3, 2026
+# Current state — October 7, 2026
 
-Canonical repo: C:\Users\nateh\OneDrive\Documents\Jarvis_Dashboard.
-Production: https://jarvis-dashboard-fawn.vercel.app.
-Vercel deploys origin/main automatically. Exact release SHAs and test/deployment
-results are recorded in JARVIS_PROGRESS.md. The timestamped
-[Integration audit](INTEGRATION_AUDIT_2026-10-03.md) separates database evidence
-from actual provider verification.
+Production: https://jarvis-dashboard-fawn.vercel.app. Vercel deploys `origin/main`; release SHAs and deployment evidence belong in `JARVIS_PROGRESS.md`.
 
-## Completed
+**The Homeworks ownership changes are implemented in the working tree. Production application deployment and migration `20261007023608_homeworks_ownership_guards.sql` are pending.** The production baseline inspected for this task was `3466b8a`. Do not report the new protection as live until migration and deployment have their own verification record.
 
-Jarvis is an owner dashboard on Next.js 16, React, Supabase Auth/Postgres and
-Vercel. Homeworks remains the customer/property/job system; QuickBooks is
-accounting; Google Calendar is a separate read-only event preview. The AI
-advisor reads through the same data layer as the dashboard. Its four job
-write operations require explicit confirmation and reject stale/repeated actions.
+## Existing production behavior
 
-Homeworks direct OAuth/GraphQL, customer/property import, date-range job import,
-linking, enrichment, historical backfill, reconciliation and inbound webhook
-handling are implemented. Partial deliveries preserve omitted fields.
-Malformed source totals/timing flags are rejected before import. Existing job
-notes and inactive properties are preserved; duplicate phone/email matches in
-one batch are blocked. Partial property failures are reported as errors.
+Jarvis is an owner dashboard built with Next.js 16, React, Supabase Auth/Postgres and Vercel. Homeworks is the operational source; Supabase holds its retained source records and native projections. QuickBooks and Google Calendar have separate OAuth/read adapters.
 
-All three OAuth stores preserve existing authorization if reconnect fails,
-check refresh persistence, coalesce refreshes within one process and use
-updated_at comparisons to prevent an in-flight refresh overwriting a reconnect.
-Privileged OAuth access requires an active owner membership, matching live
-business-table RLS. Invalid grants require reconnect; database/network failures
-do not masquerade as disconnection. Disconnect reports persistence failure.
+Automatic Homeworks synchronization is already running. Supabase `pg_cron` invokes the secret-protected scheduled route every five minutes through `pg_net`. The server worker coordinates source/OAuth leases, reads 21 archive/deletion streams, applies transactional pages through `homeworks_apply_page`, and records checkpoints/runs/errors. Browser refresh only refreshes displayed data. The earlier October 3 statement that no unattended worker existed is historical and has been superseded.
 
-QuickBooks and Google status distinguish saved authorization from an actual
-successful API read. QuickBooks refresh expiry is shown separately. Google
-calendar selection is bound to the authorization version used to list calendars,
-so a stale tab cannot select an old account's calendar after reconnect.
-Provider reads validate response shapes, bound pagination, deduplicate records,
-use timeouts and suppress raw error bodies.
+Linked Homeworks visit date/time and supported status changes already use verified source-first write-through. Schedule reads and route preferences preserve the existing source-order-first behavior described in [data authority](DATA_AUTHORITY.md). This task does not redesign the worker, projector, schedule ordering, or propose/confirm architecture.
 
-Business totals use Rhode Island calendar dates. Weekly revenue spans month
-boundaries correctly; monthly cash/hours exclude future dates; demo payments,
-skipped projected jobs and draft overdue invoices are excluded. Failed reads
-cannot silently produce successful zero-dollar totals. Today's Mission retains
-jobs while identifying unavailable supporting sections. Attention/AI summaries
-exclude confirmed demo records and report incomplete source data.
+## Ownership changes in this working tree
 
-## Verified live
+Homeworks-owned operational data is treated as a read-only projection. Source markers, retained projection pointers and operational parent lineage determine ownership. Independent local records and intentional native overlays remain valid Jarvis workflows.
 
-Supabase direct read-only inspection succeeded. OAuth stores, owner membership,
-restrictive owner policies, business tables, Homeworks unique ID indexes,
-activity/failure history and the private photo bucket exist. The active owner
-membership and its SELECT policy were checked, not assumed. No migration or
-customer-data write was performed during this audit.
+The new database guard covers clients, properties, jobs, quotes, invoices, payments, services, employees, invoice/quote items, job employees, and service agreements. It checks old and new ownership, prevents source-ID spoofing/removal, blocks local children on source-owned parents, and permits only explicit native fields on protected rows. The actual database service role remains trusted for automatic projection and verified write-through; ordinary authentication alone is insufficient. RLS remains enabled and browser-role truncate/trigger/reference privileges are removed. The migration does not repair or delete business data.
 
-The last audit found 25 linked clients, 26 linked properties and 48 linked jobs.
-Most recent job changes were September 25; linked future jobs extended to
-October 12. Homeworks and QuickBooks each have one saved authorization;
-Google has none. These counts and stored tokens do not prove current API access.
+Server actions enforce the same distinction and source-owned UI controls show “Managed in Homeworks.” Explicit native notes/hours/payroll fields and independent local records remain permitted. Source-owned and inherited-owned invoices/quotes expose notes-only editing; their update actions reject changed source fields, including forged submissions, and write only submitted native notes. Child-item mutation must be scoped by both parent and child ID. Worksheet-photo job creation uses the guarded local-job helper; quote-to-job and quote-to-invoice conversions must verify their own local source/parent relationships.
 
-Deployment health, expected Git SHA and unauthenticated route protection can
-be verified through connected Vercel tools without CLI authorization. See the
-release log for the latest verified READY commit.
+Legacy manual imports, linking, enrichment, historical sync and the `syncHomeworksEntity` sink now fail closed before reads/writes. Old webhook and exported-file import endpoints return 410 after their existing secret check; the owner import endpoint returns 410 after session verification. Their disabled controls do not create a replacement manual sync trigger. Read-only previews/reconciliation remain separate from ingestion.
 
-## Implemented but not freshly verified live
+The confirmed AI allowlist now contains five actions: `reschedule_job`, `update_job_status`, `add_job_note`, `create_task`, `complete_task`. Job creation and employee assignment proposals/executors are removed. Schedule/status actions use the same protected action helpers as the UI; notes/tasks remain native. The execution route and executor both reject retired action types before mutation. Confirmation, stale checks and `action_requests` remain in place.
 
-Homeworks and QuickBooks API access, token refresh against the real providers,
-and authenticated owner workflows need a signed-in Jarvis session/configuration
-check. Google code has isolated regression coverage but no owner authorization.
-Tests use synthetic records and mocked external boundaries; they do not establish
-that production credentials work.
+See [the complete writer inventory](HOMEWORKS_WRITERS.md) for every surviving/retired path and allowed native fields in [data authority](DATA_AUTHORITY.md).
 
-Homeworks legacy webhook-labeled activity was also produced by manual imports.
-Only explicit origin=webhook and provenance_version=2 qualifies as new delivery
-evidence. An unreadable history reports unknown, not Never/no failures.
+## Production read-only evidence
 
-## Blocked by owner action
+The [October 7 production audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md), observed at 02:38:01–02:42:56 UTC, found:
 
-Vercel CLI authorization is pending. Do not restart/repeatedly retry its login.
-After authorization, inspect production environment variable NAMES/presence,
-not values. Local omissions do not establish production omissions.
+- Zero local payments on source invoices/clients, local jobs on source properties, local source-parent billing/properties, or local source-parent line items/service agreements.
+- Zero source-field, line-item, projection-pointer, source-reference, route-order or crew mismatches against retained payloads.
+- 373 top-level projections: 71 clients, 26 properties, 233 jobs, 2 quotes, 26 invoices, 7 payments, 6 services and 2 employees; 103 source line items.
+- Eight historical owner-labelled enrichment events. Their current projected fields match retained source; the log is not evidence of current drift or a complete row-change history.
+- All 21 streams healthy at the structural snapshot, and 136 successful runs with no other run statuses in the preceding 24-hour window.
+- Active-owner RLS existed, but no ownership triggers existed. Owners could still independently mutate source fields; protection was a real gap despite zero observed drift.
 
-Local missing configuration: SUPABASE_SERVICE_ROLE_KEY, QUICKBOOKS_CLIENT_ID,
-QUICKBOOKS_CLIENT_SECRET, GOOGLE_CALENDAR_CLIENT_ID,
-GOOGLE_CALENDAR_CLIENT_SECRET and ZAPIER_WEBHOOK_URL.
-A QuickBooks authorization already exists: do not reconnect Intuit unless a
-live check actually requires it. Google needs its existing/new Web OAuth client
-configuration and one owner consent; the exact callback is documented in Settings.
+No production DDL/DML, fixture tests, source mutations or repairs were performed for that audit. Counts compare the retained source cache with its projections, not an independent fresh Homeworks fetch. The October 3 audit is retained as historical evidence, not current sync counts or activation guidance.
 
-## Future improvement / activation gates
+## Validation and release boundary
 
-No scheduler or unattended Homeworks write loop is enabled. Current direct API
-calls require an active owner session. Before unattended execution, establish
-distributed refresh coordination, verify fresh source data and external webhook
-coverage, and choose conflict rules for owner-edited jobs, cancellations,
-reschedules and deletions. The current shared upsert API has no source-version
-ordering, so delayed deliveries can still overwrite newer explicit fields.
-Enabling a timer over that path would risk business data.
+`scripts/test-homeworks-ownership.mjs` runs real PostgreSQL semantics in an isolated PGlite database using a schema-only snapshot captured read-only from production. It applies the pending migration, runs rollback-only ownership fixtures, checks fixture rollback, and exercises the existing sync/schedule regression SQL using synthetic source records. `npm run test:ownership:db` is the standard entry point; `--baseline` skips the guard migration to show that the old schema fails the ownership assertion.
 
-QuickBooks financial matching, calendar-to-job merging, route-level profit and
-employee-facing views are future work. No new platform or subscription is needed
-for the completed work. No fall-cleanup demand or crew capacity is invented when
-the underlying records do not establish it.
+`scripts/homeworks-production-drift-audit.sql` is a separate repeatable-read, read-only diagnostic and performs no mutation tests. Do not run the ownership regression against production.
+
+Record actual typecheck, lint, build, isolated database and relevant application/browser results in the final implementation/release record. These docs describe available tests and observed production evidence; they do not predeclare a complete test pass or a production rollout.
+
+Remaining product work includes QuickBooks financial matching, calendar-to-job matching, route-level paid-hour profitability and employee-facing views. Source completeness and missing demand/capacity must be reported honestly rather than filled with fabricated records.

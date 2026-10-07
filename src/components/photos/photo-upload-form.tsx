@@ -1,5 +1,7 @@
 "use client";
 
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned, type HomeworksOwnershipRecord } from "@/lib/homeworks-ownership";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Check, Loader2, TriangleAlert } from "lucide-react";
@@ -24,7 +26,7 @@ const BUCKET = "job-photos";
  * typical phone photo). The server then verifies the object really exists and
  * records the row. Photos are read back only via short-lived signed URLs.
  */
-export function PhotoUploadForm({ jobId, propertyId, clientId }: { jobId?: string; propertyId?: string; clientId?: string }) {
+export function PhotoUploadForm({ jobId, propertyId, clientId, managedRecord }: { jobId?: string; propertyId?: string; clientId?: string; managedRecord?: HomeworksOwnershipRecord | null }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,7 +106,7 @@ export function PhotoUploadForm({ jobId, propertyId, clientId }: { jobId?: strin
           </p>
         ) : null}
       </form>
-      {status.kind === "done" && propertyId ? <WorkSheetExtractionPanel photoId={status.photoId} propertyId={propertyId} /> : null}
+      {propertyId && isHomeworksOwned(managedRecord) ? <HomeworksManagedNotice record={managedRecord}>Photos stay in Jarvis. Create jobs for this property in Homeworks.</HomeworksManagedNotice> : status.kind === "done" && propertyId ? <WorkSheetExtractionPanel photoId={status.photoId} propertyId={propertyId} /> : null}
     </div>
   );
 }

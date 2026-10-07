@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Plus, Send, DollarSign, Ban, Trash2, X as XIcon } from "lucide-react";
@@ -50,6 +52,9 @@ export default async function InvoiceDetailPage({
   if (error) return <ErrorState description={error} />;
   if (!invoice) notFound();
 
+  const sourceRecord = [invoice, invoice.client, invoice.property].find(isHomeworksOwned);
+  const sourceManaged = !!sourceRecord;
+
   const updateInvoiceWithId = updateInvoice.bind(null, id);
   const deleteDraftInvoiceWithId = deleteDraftInvoice.bind(null, id);
   const voidInvoiceWithId = voidInvoice.bind(null, id);
@@ -70,46 +75,57 @@ export default async function InvoiceDetailPage({
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <StatusBadge status={invoice.display_status} />
-            {invoice.status === "draft" ? (
-              <form action={sendInvoiceWithId}>
-                <Button type="submit">
-                  <Send className="h-3.5 w-3.5" />
-                  Send
-                </Button>
-              </form>
-            ) : null}
-            {invoice.balance > 0 && invoice.status !== "void" ? (
-              <Link href={`/invoices/${id}?pay=1`}>
-                <Button>
-                  <DollarSign className="h-3.5 w-3.5" />
-                  Record Payment
+            {!sourceManaged ? <>
+              {invoice.status === "draft" ? (
+                <form action={sendInvoiceWithId}>
+                  <Button type="submit">
+                    <Send className="h-3.5 w-3.5" />
+                    Send
+                  </Button>
+                </form>
+              ) : null}
+              {invoice.balance > 0 && invoice.status !== "void" ? (
+                <Link href={`/invoices/${id}?pay=1`}>
+                  <Button>
+                    <DollarSign className="h-3.5 w-3.5" />
+                    Record Payment
+                  </Button>
+                </Link>
+              ) : null}
+              <Link href={`/invoices/${id}?edit=1`}>
+                <Button variant="secondary">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
                 </Button>
               </Link>
-            ) : null}
-            <Link href={`/invoices/${id}?edit=1`}>
-              <Button variant="secondary">
-                <Pencil className="h-3.5 w-3.5" />
-                Edit
-              </Button>
-            </Link>
-            {invoice.status === "draft" ? (
-              <form action={deleteDraftInvoiceWithId}>
-                <ConfirmSubmit confirmMessage="Delete this draft invoice? This can't be undone.">
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </ConfirmSubmit>
-              </form>
-            ) : invoice.status !== "void" ? (
-              <form action={voidInvoiceWithId}>
-                <ConfirmSubmit confirmMessage="Void this invoice? It stays in your records but no longer counts as owed. Accounting history is never deleted.">
-                  <Ban className="h-3.5 w-3.5" />
-                  Void
-                </ConfirmSubmit>
-              </form>
-            ) : null}
+              {invoice.status === "draft" ? (
+                <form action={deleteDraftInvoiceWithId}>
+                  <ConfirmSubmit confirmMessage="Delete this draft invoice? This can't be undone.">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </ConfirmSubmit>
+                </form>
+              ) : invoice.status !== "void" ? (
+                <form action={voidInvoiceWithId}>
+                  <ConfirmSubmit confirmMessage="Void this invoice? It stays in your records but no longer counts as owed. Accounting history is never deleted.">
+                    <Ban className="h-3.5 w-3.5" />
+                    Void
+                  </ConfirmSubmit>
+                </form>
+              ) : null}
+            </> : (
+              <Link href={`/invoices/${id}?edit=1`}>
+                <Button variant="secondary">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit Jarvis notes
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />
+
+      {sourceManaged ? <HomeworksManagedNotice record={sourceRecord}>Manage this invoice, its line items and payments in Homeworks. Notes stay in Jarvis.</HomeworksManagedNotice> : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Total" value={formatCurrency(invoice.total)} />
@@ -140,12 +156,12 @@ export default async function InvoiceDetailPage({
       <Card>
         <CardHeader
           title="Line Items"
-          action={
+          action={!sourceManaged ? (
             <Link href={`/invoices/${id}?addItem=1`} className="flex items-center gap-1 text-xs text-[var(--color-accent)] hover:underline">
               <Plus className="h-3.5 w-3.5" />
               Add Item
             </Link>
-          }
+          ) : undefined}
         />
         <CardBody>
           {invoice.items.length === 0 ? (
@@ -162,7 +178,7 @@ export default async function InvoiceDetailPage({
                       {formatCurrency(item.total)}
                     </td>
                     <td className="w-8 py-2">
-                      <form action={removeInvoiceItemWithId.bind(null, item.id)}>
+                      {!sourceManaged ? <form action={removeInvoiceItemWithId.bind(null, item.id)}>
                         <button
                           type="submit"
                           aria-label="Remove line item"
@@ -170,7 +186,7 @@ export default async function InvoiceDetailPage({
                         >
                           <XIcon className="h-3.5 w-3.5" />
                         </button>
-                      </form>
+                      </form> : null}
                     </td>
                   </tr>
                 ))}
@@ -179,6 +195,15 @@ export default async function InvoiceDetailPage({
           )}
         </CardBody>
       </Card>
+
+      {invoice.notes ? (
+        <Card>
+          <CardHeader title={sourceManaged ? "Jarvis Notes" : "Notes"} />
+          <CardBody>
+            <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{invoice.notes}</p>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader title="History" description="What happened to this invoice, and when" />
@@ -209,18 +234,18 @@ export default async function InvoiceDetailPage({
       </Card>
 
       {isEditing ? (
-        <Modal title="Edit Invoice" closeHref={`/invoices/${id}`}>
-          <InvoiceForm action={updateInvoiceWithId} invoice={invoice} clients={clients.data ?? []} properties={properties.data ?? []} error={formError} />
+        <Modal title={sourceManaged ? "Edit Jarvis notes" : "Edit Invoice"} closeHref={`/invoices/${id}`}>
+          <InvoiceForm action={updateInvoiceWithId} invoice={invoice} managedRecord={sourceRecord} clients={clients.data ?? []} properties={properties.data ?? []} error={formError} />
         </Modal>
       ) : null}
 
-      {isAddingItem ? (
+      {!sourceManaged && isAddingItem ? (
         <Modal title="Add Line Item" closeHref={`/invoices/${id}`}>
           <InvoiceItemForm action={addInvoiceItemWithId} services={services.data ?? []} error={formError} />
         </Modal>
       ) : null}
 
-      {isPaying ? (
+      {!sourceManaged && isPaying ? (
         <Modal title="Record Payment" closeHref={`/invoices/${id}`}>
           <RecordPaymentForm action={recordPaymentWithId} balance={invoice.balance} error={formError} />
         </Modal>

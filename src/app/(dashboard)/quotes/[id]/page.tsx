@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Plus, Send, Check, X as XIcon, ArrowRightLeft, Trash2, FileDown } from "lucide-react";
@@ -50,6 +52,9 @@ export default async function QuoteDetailPage({
   if (error) return <ErrorState description={error} />;
   if (!quote) notFound();
 
+  const sourceRecord = [quote, quote.client, quote.property].find(isHomeworksOwned);
+  const sourceManaged = !!sourceRecord;
+
   const required = [...quote.items].filter((i) => !i.is_optional);
   const optional = [...quote.items].filter((i) => i.is_optional);
 
@@ -75,67 +80,78 @@ export default async function QuoteDetailPage({
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <StatusBadge status={quote.status} />
-            {quote.status === "draft" ? (
-              <form action={sendQuoteWithId}>
-                <Button variant="secondary" type="submit">
-                  <Send className="h-3.5 w-3.5" />
-                  Mark Sent
-                </Button>
-              </form>
-            ) : null}
-            {quote.status === "sent" ? (
-              <>
-                <form action={acceptQuoteWithId}>
-                  <Button type="submit">
-                    <Check className="h-3.5 w-3.5" />
-                    Accept
+            {!sourceManaged ? <>
+              {quote.status === "draft" ? (
+                <form action={sendQuoteWithId}>
+                  <Button variant="secondary" type="submit">
+                    <Send className="h-3.5 w-3.5" />
+                    Mark Sent
                   </Button>
                 </form>
-                <form action={declineQuoteWithId}>
-                  <ConfirmSubmit confirmMessage="Mark this quote as declined?" variant="secondary">
-                    <XIcon className="h-3.5 w-3.5" />
-                    Decline
-                  </ConfirmSubmit>
-                </form>
-              </>
-            ) : null}
-            {quote.status === "accepted" ? (
-              <>
-                <form action={convertToJobWithId}>
-                  <ConfirmSubmit confirmMessage="Create a scheduled job from this quote's required line items?" variant="secondary">
-                    <ArrowRightLeft className="h-3.5 w-3.5" />
-                    Create Job
-                  </ConfirmSubmit>
-                </form>
-                <form action={convertToInvoiceWithId}>
-                  <ConfirmSubmit confirmMessage="Create an invoice from this quote's required line items?" variant="secondary">
-                    <ArrowRightLeft className="h-3.5 w-3.5" />
-                    Create Invoice
-                  </ConfirmSubmit>
-                </form>
-              </>
-            ) : null}
-            <Link href={`/quotes/${id}?edit=1`}>
-              <Button variant="secondary">
-                <Pencil className="h-3.5 w-3.5" />
-                Edit
+              ) : null}
+              {quote.status === "sent" ? (
+                <>
+                  <form action={acceptQuoteWithId}>
+                    <Button type="submit">
+                      <Check className="h-3.5 w-3.5" />
+                      Accept
+                    </Button>
+                  </form>
+                  <form action={declineQuoteWithId}>
+                    <ConfirmSubmit confirmMessage="Mark this quote as declined?" variant="secondary">
+                      <XIcon className="h-3.5 w-3.5" />
+                      Decline
+                    </ConfirmSubmit>
+                  </form>
+                </>
+              ) : null}
+              {quote.status === "accepted" ? (
+                <>
+                  <form action={convertToJobWithId}>
+                    <ConfirmSubmit confirmMessage="Create a scheduled job from this quote's required line items?" variant="secondary">
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                      Create Job
+                    </ConfirmSubmit>
+                  </form>
+                  <form action={convertToInvoiceWithId}>
+                    <ConfirmSubmit confirmMessage="Create an invoice from this quote's required line items?" variant="secondary">
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                      Create Invoice
+                    </ConfirmSubmit>
+                  </form>
+                </>
+              ) : null}
+              <Link href={`/quotes/${id}?edit=1`}>
+                <Button variant="secondary">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              </Link>
+              <Button variant="secondary" disabled title="PDF export requires connecting a document-generation service">
+                <FileDown className="h-4 w-4" />
+                Export PDF
               </Button>
-            </Link>
-            <Button variant="secondary" disabled title="PDF export requires connecting a document-generation service">
-              <FileDown className="h-4 w-4" />
-              Export PDF
-            </Button>
-            {quote.status === "draft" ? (
-              <form action={deleteDraftQuoteWithId}>
-                <ConfirmSubmit confirmMessage="Delete this draft quote? This can't be undone.">
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </ConfirmSubmit>
-              </form>
-            ) : null}
+              {quote.status === "draft" ? (
+                <form action={deleteDraftQuoteWithId}>
+                  <ConfirmSubmit confirmMessage="Delete this draft quote? This can't be undone.">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </ConfirmSubmit>
+                </form>
+              ) : null}
+            </> : (
+              <Link href={`/quotes/${id}?edit=1`}>
+                <Button variant="secondary">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit Jarvis notes
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />
+
+      {sourceManaged ? <HomeworksManagedNotice record={sourceRecord}>Manage this quote, its line items and conversions in Homeworks. Notes stay in Jarvis.</HomeworksManagedNotice> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -161,20 +177,20 @@ export default async function QuoteDetailPage({
       <Card>
         <CardHeader
           title="Line Items"
-          action={
+          action={!sourceManaged ? (
             <Link href={`/quotes/${id}?addItem=1`} className="flex items-center gap-1 text-xs text-[var(--color-accent)] hover:underline">
               <Plus className="h-3.5 w-3.5" />
               Add Item
             </Link>
-          }
+          ) : undefined}
         />
         <CardBody className="space-y-4">
           {quote.items.length === 0 ? (
             <EmptyState title="No line items yet" />
           ) : (
             <>
-              <LineItemTable title="Included" items={required} removeAction={removeQuoteItemWithId} />
-              {optional.length > 0 ? <LineItemTable title="Optional" items={optional} badge="Optional" removeAction={removeQuoteItemWithId} /> : null}
+              <LineItemTable title="Included" items={required} removeAction={sourceManaged ? undefined : removeQuoteItemWithId} />
+              {optional.length > 0 ? <LineItemTable title="Optional" items={optional} badge="Optional" removeAction={sourceManaged ? undefined : removeQuoteItemWithId} /> : null}
             </>
           )}
         </CardBody>
@@ -182,7 +198,7 @@ export default async function QuoteDetailPage({
 
       {quote.notes ? (
         <Card>
-          <CardHeader title="Notes" />
+          <CardHeader title={sourceManaged ? "Jarvis Notes" : "Notes"} />
           <CardBody>
             <p className="whitespace-pre-wrap text-sm text-[var(--color-text-secondary)]">{quote.notes}</p>
           </CardBody>
@@ -197,12 +213,12 @@ export default async function QuoteDetailPage({
       </Card>
 
       {isEditing ? (
-        <Modal title="Edit Quote" closeHref={`/quotes/${id}`}>
-          <QuoteForm action={updateQuoteWithId} quote={quote} clients={clients.data ?? []} properties={properties.data ?? []} error={formError} />
+        <Modal title={sourceManaged ? "Edit Jarvis notes" : "Edit Quote"} closeHref={`/quotes/${id}`}>
+          <QuoteForm action={updateQuoteWithId} quote={quote} managedRecord={sourceRecord} clients={clients.data ?? []} properties={properties.data ?? []} error={formError} />
         </Modal>
       ) : null}
 
-      {isAddingItem ? (
+      {!sourceManaged && isAddingItem ? (
         <Modal title="Add Line Item" closeHref={`/quotes/${id}`}>
           <QuoteItemForm action={addQuoteItemWithId} services={services.data ?? []} error={formError} />
         </Modal>
@@ -220,7 +236,7 @@ function LineItemTable({
   title: string;
   items: { id: string; description: string; quantity: number; unit_price: number; total: number }[];
   badge?: string;
-  removeAction: (itemId: string) => Promise<void>;
+  removeAction?: (itemId: string) => Promise<void>;
 }) {
   if (items.length === 0) return null;
   return (
@@ -239,7 +255,7 @@ function LineItemTable({
                 {formatCurrency(item.total)}
               </td>
               <td className="w-8 py-2">
-                <form action={removeAction.bind(null, item.id)}>
+                {removeAction ? <form action={removeAction.bind(null, item.id)}>
                   <button
                     type="submit"
                     aria-label="Remove line item"
@@ -247,7 +263,7 @@ function LineItemTable({
                   >
                     <XIcon className="h-3.5 w-3.5" />
                   </button>
-                </form>
+                </form> : null}
               </td>
             </tr>
           ))}

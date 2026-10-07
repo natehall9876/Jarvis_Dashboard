@@ -1,6 +1,6 @@
 /**
  * Structured, allowlisted write-action contracts. This union IS the
- * allowlist — the model can only ever produce one of these four shapes
+ * allowlist — the model can only ever produce one of these supported shapes
  * (via the propose_* tools in lib/ai/tools/actions.ts), and the execution
  * endpoint (lib/ai/actions/execute.ts) re-validates every field again
  * before touching the database. There is no generic "table"/"column"
@@ -20,8 +20,6 @@
 export type ProposedActionType =
   | "reschedule_job"
   | "update_job_status"
-  | "assign_employee"
-  | "create_job"
   | "add_job_note"
   | "create_task"
   | "complete_task";
@@ -35,9 +33,9 @@ export type ProposedAction = {
   type: ProposedActionType;
   /** Short, owner-facing title, e.g. "Reschedule Sarah Delgado — Weekly Mowing". */
   title: string;
-  /** The existing record this applies to, or null for create_job (nothing exists yet). */
+  /** The linked job, or null for an owner task with no linked job. */
   target: ProposedActionTarget | null;
-  /** Current field values, shown struck-through/before in the UI. Null for create_job. */
+  /** Current field values, shown struck-through/before in the UI. Null when adding a note or task. */
   current: Record<string, unknown> | null;
   /** The values after the change — the exact thing the owner is confirming. */
   proposed: Record<string, unknown>;
@@ -49,7 +47,7 @@ export type ProposedAction = {
   requiresConfirmation: true;
   /** Exact typed arguments the execution endpoint needs — re-validated there, never trusted blindly. */
   payload: Record<string, unknown>;
-  /** Fields captured at proposal time to detect a stale/changed record at execution time (e.g. { updated_at }). Null for create_job. */
+  /** Fields captured to detect a changed job at execution time (e.g. { updated_at }). Null for notes/tasks. */
   snapshot: Record<string, unknown> | null;
   createdAt: string;
 };
@@ -61,7 +59,7 @@ export function isProposedAction(value: unknown): value is ProposedAction {
     v.kind === "proposed_action" &&
     typeof v.id === "string" &&
     typeof v.type === "string" &&
-    ["reschedule_job", "update_job_status", "assign_employee", "create_job", "add_job_note", "create_task", "complete_task"].includes(v.type as string) &&
+    ["reschedule_job", "update_job_status", "add_job_note", "create_task", "complete_task"].includes(v.type as string) &&
     typeof v.title === "string" &&
     typeof v.proposed === "object" &&
     v.proposed !== null &&
@@ -75,7 +73,8 @@ export function isProposedAction(value: unknown): value is ProposedAction {
  * Not yet implemented — documented here so the next phase extends this
  * union instead of inventing a parallel shape. Each addition needs its own
  * propose_* tool, execute() case, and confirmation-card rendering, same as
- * the four above.
+ * the supported actions above. Homeworks-owned records must use a verified
+ * Homeworks write-through boundary; never add local source-record creation.
  */
 export type FutureProposedActionType =
   | "create_client"

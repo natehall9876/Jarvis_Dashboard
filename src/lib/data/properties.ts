@@ -18,7 +18,7 @@ export async function getProperties(search?: string): Promise<DataResult<Propert
 
     let query = supabase
       .from("properties")
-      .select("*, client:clients(id, first_name, last_name, company_name, data_source)")
+      .select("*, client:clients(id, first_name, last_name, company_name, data_source, homeworks_id, homeworks_status, homeworks_deleted)")
       .order("street", { ascending: true });
 
     if (search && search.trim().length > 0) {
@@ -48,7 +48,7 @@ export async function getPropertyById(id: string): Promise<DataResult<PropertyDe
     const supabase = await createSupabaseServerClient();
 
     const property = await getOrNotFound(
-      supabase.from("properties").select("*, client:clients(id, first_name, last_name, company_name)").eq("id", id).maybeSingle(),
+      supabase.from("properties").select("*, client:clients(id, first_name, last_name, company_name, data_source, homeworks_id, homeworks_status, homeworks_deleted)").eq("id", id).maybeSingle(),
     );
     if (!property) return null;
 

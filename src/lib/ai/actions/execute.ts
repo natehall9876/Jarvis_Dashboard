@@ -1,15 +1,12 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getJobById } from "@/lib/data/jobs";
-import { getPropertyById } from "@/lib/data/properties";
-import { getEmployeeById } from "@/lib/data/employees";
-import { insertJob, updateJobFields, updateJobStatus } from "@/lib/actions/jobs";
+import { updateJobFields, updateJobStatus } from "@/lib/actions/jobs";
 import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
 import { logActivity } from "@/lib/data/activity-log";
 import { isMissingTableError, validateNote, validateTask } from "@/lib/jarvis/notes-tasks-validation";
-import { clientDisplayName, propertyAddress } from "@/lib/format";
-import type { ProposedAction } from "@/lib/ai/action-types";
+import { clientDisplayName } from "@/lib/format";
+import { isProposedAction, type ProposedAction } from "@/lib/ai/action-types";
 import type { EntityReference } from "@/lib/ai/tool-types";
-import type { JobInsert } from "@/types/domain";
 import type { Json } from "@/types/database.types";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -109,7 +106,9 @@ async function finalizeActionRequest(
   }
 }
 
-export async function executeProposedAction(action: ProposedAction): Promise<ExecuteActionResult> {
+export async function executeProposedAction(action: unknown): Promise<ExecuteActionResult> {
+  if (!isProposedAction(action)) return fail("invalid", "Invalid or unsupported action payload.");
+
   const supabase = await createSupabaseServerClient();
 
   const claim = await claimActionRequest(action, supabase);
@@ -146,12 +145,6 @@ export async function executeProposedAction(action: ProposedAction): Promise<Exe
       case "update_job_status":
         result = await executeUpdateJobStatus(action);
         break;
-      case "assign_employee":
-        result = await executeAssignEmployee(action);
-        break;
-      case "create_job":
-        result = await executeCreateJob(action);
-        break;
       case "add_job_note":
         result = await executeAddJobNote(action);
         break;
@@ -177,15 +170,6 @@ export async function executeProposedAction(action: ProposedAction): Promise<Exe
     await release("failed", message);
     return fail("server_error", message);
   }
-}
-
-/** Appends a short, timestamped line to the job's existing notes — the minimal, non-invasive audit trail this phase (no schema change). */
-async function appendJobAuditNote(jobId: string, line: string): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.from("jobs").select("notes").eq("id", jobId).single();
-  const entry = `[Jarvis ${new Date().toISOString()}] ${line}`;
-  const newNotes = data?.notes ? `${data.notes}\n${entry}` : entry;
-  await supabase.from("jobs").update({ notes: newNotes }).eq("id", jobId);
 }
 
 function jobLabel(job: { property?: { client?: unknown } | null; service?: { name: string | null } | null; scheduled_date: string | null }): string {
@@ -214,7 +198,6 @@ async function executeRescheduleJob(action: ProposedAction): Promise<ExecuteActi
 
   const oldDate = job.scheduled_date;
   await updateJobFields(jobId, { scheduled_date: newDate, scheduled_start_time: newTime });
-  await appendJobAuditNote(jobId, `Rescheduled from ${oldDate ?? "unscheduled"} to ${newDate} after owner confirmation.`);
   await logActivity({
     entityType: "job",
     entityId: jobId,
@@ -255,7 +238,6 @@ async function executeUpdateJobStatus(action: ProposedAction): Promise<ExecuteAc
 
   const oldStatus = job.status;
   await updateJobStatus(jobId, newStatus);
-  await appendJobAuditNote(jobId, `Status changed from "${oldStatus}" to "${newStatus}" after owner confirmation.`);
   await logActivity({
     entityType: "job",
     entityId: jobId,
@@ -273,120 +255,6 @@ async function executeUpdateJobStatus(action: ProposedAction): Promise<ExecuteAc
     message: `Marked ${jobLabel(job)} as ${newStatus.replace(/_/g, " ")}.`,
     result: { job_id: jobId, status: updated.data.status },
     references: [{ type: "job", id: jobId, label: jobLabel(job) }],
-  };
-}
-
-async function executeAssignEmployee(action: ProposedAction): Promise<ExecuteActionResult> {
-  const jobId = action.target?.id;
-  if (!jobId) return fail("invalid", "No job specified.");
-
-  const current = await getJobById(jobId);
-  if (current.error !== null || !current.data) return fail("not_found", "That job no longer exists.");
-  const job = current.data;
-
-  const expectedUpdatedAt = action.snapshot?.updated_at;
-  if (typeof expectedUpdatedAt === "string" && expectedUpdatedAt !== job.updated_at) {
-    return fail("stale", "This job changed after Jarvis proposed the crew change — ask Jarvis to check it again before retrying.");
-  }
-
-  const employeeIds = action.payload.employee_ids;
-  if (!Array.isArray(employeeIds) || !employeeIds.every((id) => typeof id === "string")) {
-    return fail("invalid", "Proposed crew list is missing or malformed.");
-  }
-
-  for (const id of employeeIds) {
-    const employee = await getEmployeeById(id);
-    if (employee.error !== null || !employee.data) return fail("invalid", "One of the proposed employees no longer exists.");
-  }
-
-  const oldCrew = job.crew.map((c) => [c.first_name, c.last_name].filter(Boolean).join(" ")).join(", ") || "nobody";
-  await updateJobFields(jobId, {}, employeeIds);
-
-  const newCrewNames: string[] = [];
-  for (const id of employeeIds) {
-    const employee = await getEmployeeById(id);
-    if (employee.data) newCrewNames.push([employee.data.first_name, employee.data.last_name].filter(Boolean).join(" "));
-  }
-  await appendJobAuditNote(jobId, `Crew changed from [${oldCrew}] to [${newCrewNames.join(", ") || "nobody"}] after owner confirmation.`);
-  await logActivity({
-    entityType: "job",
-    entityId: jobId,
-    eventType: "job_crew_changed",
-    summary: `${jobLabel(job)} crew changed from [${oldCrew}] to [${newCrewNames.join(", ") || "nobody"}]`,
-    detail: { from: oldCrew, to: newCrewNames, reason: action.explanation },
-    source: "jarvis",
-  });
-
-  return {
-    ok: true,
-    message: `${jobLabel(job)} is now assigned to ${newCrewNames.join(", ") || "nobody"}.`,
-    result: { job_id: jobId, crew: newCrewNames },
-    references: [
-      { type: "job", id: jobId, label: jobLabel(job) },
-      ...employeeIds.map((id, i) => ({ type: "employee" as const, id, label: newCrewNames[i] ?? "Employee" })),
-    ],
-  };
-}
-
-async function executeCreateJob(action: ProposedAction): Promise<ExecuteActionResult> {
-  const propertyId = action.payload.property_id;
-  if (typeof propertyId !== "string") return fail("invalid", "No property specified.");
-
-  const property = await getPropertyById(propertyId);
-  if (property.error !== null || !property.data) return fail("not_found", "That property no longer exists.");
-
-  const scheduledDate = typeof action.payload.scheduled_date === "string" ? action.payload.scheduled_date : null;
-  if (scheduledDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
-    return fail("invalid", "Proposed date is malformed.");
-  }
-  const price = typeof action.payload.price === "number" ? action.payload.price : null;
-  const employeeIds = Array.isArray(action.payload.employee_ids)
-    ? action.payload.employee_ids.filter((id): id is string => typeof id === "string")
-    : [];
-
-  const status = action.payload.status === "completed" ? "completed" : "scheduled";
-  const completedAt = typeof action.payload.completed_at === "string" ? action.payload.completed_at : null;
-
-  const fields: JobInsert = {
-    property_id: propertyId,
-    service_id: typeof action.payload.service_id === "string" ? action.payload.service_id : null,
-    scheduled_date: scheduledDate,
-    scheduled_start_time: typeof action.payload.scheduled_start_time === "string" ? action.payload.scheduled_start_time : null,
-    price,
-    budgeted_hours: typeof action.payload.budgeted_hours === "number" ? action.payload.budgeted_hours : null,
-    actual_hours: typeof action.payload.actual_hours === "number" ? action.payload.actual_hours : null,
-    notes: typeof action.payload.notes === "string" ? action.payload.notes : null,
-    completion_notes: typeof action.payload.completion_notes === "string" ? action.payload.completion_notes : null,
-    completed_at: status === "completed" ? completedAt : null,
-    status,
-  };
-
-  const jobId = await insertJob(fields, employeeIds);
-  await appendJobAuditNote(jobId, status === "completed" ? "Logged as completed work by owner confirmation via Jarvis." : "Created by owner confirmation via Jarvis.");
-  await logActivity({
-    entityType: "job",
-    entityId: jobId,
-    eventType: "job_created",
-    summary: `${status === "completed" ? "Completed job logged" : "Job created"} for ${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`,
-    detail: { property_id: propertyId, scheduled_date: scheduledDate, price, status, reason: action.explanation },
-    source: "jarvis",
-  });
-
-  const created = await getJobById(jobId);
-  if (created.error !== null || !created.data) return fail("server_error", "Job saved, but couldn't be re-read to verify.");
-
-  const label = `${clientDisplayName(property.data.client)} — ${propertyAddress(property.data.property)}`;
-  return {
-    ok: true,
-    message:
-      status === "completed"
-        ? `Logged completed work for ${label}${scheduledDate ? ` on ${scheduledDate}` : ""}${price !== null ? ` — $${price}` : ""}.`
-        : `Created a new job for ${label}${scheduledDate ? ` on ${scheduledDate}` : ""}.`,
-    result: { job_id: jobId, scheduled_date: created.data.scheduled_date, price: created.data.price, status: created.data.status },
-    references: [
-      { type: "job", id: jobId, label },
-      { type: "property", id: propertyId, label: propertyAddress(property.data.property) },
-    ],
   };
 }
 

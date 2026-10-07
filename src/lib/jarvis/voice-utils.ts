@@ -113,8 +113,8 @@ export function toolToCapabilities(tool: string): string[] {
   if (t.includes("attention")) return ["schedule", "finances", "equipment"];
   if (t.includes("task")) return ["tasks"];
   if (t.includes("job_note")) return ["jobs", "tasks"];
-  if (t.includes("propose_create_job") || t.includes("propose_reschedule") || t.includes("propose_update_job") || t.includes("job")) return ["jobs", "schedule"];
-  if (t.includes("propose_assign_employee") || t.includes("employee")) return ["employees", "jobs"];
+  if (t.includes("job")) return ["jobs", "schedule"];
+  if (t.includes("employee")) return ["employees", "jobs"];
   if (t.includes("client")) return ["customers"];
   if (t.includes("propert")) return ["properties"];
   if (t.includes("route")) return ["routes"];

@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput, Select, Textarea, FormError } from "@/components/ui/form-fields";
 import type { Client } from "@/types/domain";
@@ -11,6 +13,16 @@ export function ClientForm({
   client?: Client;
   error?: string;
 }) {
+  if (isHomeworksOwned(client)) return (
+    <form action={action} className="space-y-4">
+      <FormError message={error} />
+      <HomeworksManagedNotice record={client}>Identity and contact details are managed in Homeworks. Notes stay in Jarvis.</HomeworksManagedNotice>
+      <Field label="Notes" htmlFor="notes">
+        <Textarea id="notes" name="notes" rows={3} defaultValue={client?.notes ?? ""} />
+      </Field>
+      <Button type="submit">Save Notes</Button>
+    </form>
+  );
   return (
     <form action={action} className="space-y-4">
       <FormError message={error} />

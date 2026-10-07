@@ -1,6 +1,6 @@
 # Trial Runbook — how to open and test Jarvis
 
-Use this guide for local checks. See INTEGRATION_AUDIT_2026-10-03.md for live integration evidence and TESTING.md for automated and authenticated test boundaries.
+Use this guide for local checks. See CURRENT_STATE.md for pending ownership rollout, HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md for read-only production evidence, and TESTING.md for automated/authenticated test boundaries.
 
 ## 1. Prerequisites
 
@@ -21,10 +21,11 @@ anywhere — it's already gitignored.**
 | `AI_PROVIDER_API_KEY` | Optional | Jarvis's AI answers. Without it, Jarvis explains it isn't configured instead of failing |
 | `AI_PROVIDER_MODEL` | Optional | Defaults to `claude-sonnet-5` if unset |
 | `WEATHER_LOCATION_LAT` / `WEATHER_LOCATION_LON` | Optional | Command Center weather card (National Weather Service, no key needed) |
-| Integration variables | Per integration | See README.md and INTEGRATION_AUDIT_2026-10-03.md; Homeworks, QuickBooks, and Google Calendar OAuth are implemented |
+| Integration variables | Per integration | See README.md and CURRENT_STATE.md; Homeworks automatic synchronization and all three OAuth adapters are implemented |
 
 The public Supabase key is the publishable key. The separate service-role
-key is server-only and must never use a NEXT_PUBLIC_ prefix.
+key is server-only and must never use a NEXT_PUBLIC_ prefix. It is limited to
+OAuth stores, automatic Homeworks projection and verified schedule write-through.
 
 ## 3. Install and run
 
@@ -120,9 +121,12 @@ containing the word "confirm," executes anything by itself.
 7. Scroll to the job's **History** card — this shows recorded changes with timestamps. The table was
    verified present live on October 3.
 
-Supported actions right now: reschedule a job, change a job's status,
-assign/change its crew, create a new job. Nothing else is wired to write
-yet — invoices, quotes, clients, etc. are read-only through Jarvis.
+The confirmed AI actions are reschedule a job, change job status, add a job
+note, create an owner task and complete an owner task. Job creation and crew
+assignment proposals are removed. For Homeworks visits, schedule/status
+confirmation writes through Homeworks first; local source edits are blocked.
+Use independent local test records for the workflow above. Do not create a
+local test job under a Homeworks property or use production customers as fixtures.
 
 ## 9. What's real data vs. test data
 
@@ -133,12 +137,12 @@ delete records merely because older documentation called them seeded.
 
 ## 10. Known limitations
 
-- Homeworks imports and reconciliation are manual; scheduled polling is absent.
+- Homeworks sync runs automatically every five minutes. Manual imports/linking/enrichment and legacy webhook upserts are retired in the pending ownership release; reconciliation is read-only.
 - Existing provider authorization needs a fresh Verify call before claiming
   live connectivity. Google Calendar has no authorization on file in the
   October 3 audit.
 - Local credential availability differs from Vercel production.
-- OAuth refresh coalescing is per process, not a distributed lock.
+- Homeworks automatic OAuth refresh uses a distributed lease; the other adapters retain their documented coalescing/version-check behavior.
 - Owner-only tool: no employee-facing app is provided.
 
 ## 11. Stopping / restarting

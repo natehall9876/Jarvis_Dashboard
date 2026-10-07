@@ -1,7 +1,10 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned, type OwnershipOption } from "@/lib/homeworks-ownership";
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { JobForm } from "@/components/jobs/job-form";
@@ -50,7 +53,7 @@ export function JobDetailView({
   jobNotes: { data: JobNote[]; needsMigration: boolean; error: string | null };
   isEditing: boolean;
   formError?: string;
-  properties: { id: string; label: string }[];
+  properties: OwnershipOption[];
   services: { id: string; name: string; default_price: number | null; default_budgeted_hours: number | null }[];
   routes: { id: string; name: string }[];
   employees: { id: string; label: string }[];
@@ -59,6 +62,9 @@ export function JobDetailView({
 }) {
   const rate = jobProductionRate(job);
   const client = job.property?.client ?? null;
+  const selectedProperty = properties.find((property) => property.id === job.property_id);
+  const sourceRecord = [job, job.property, client, selectedProperty, selectedProperty?.client].find(isHomeworksOwned);
+  const unlinkedSourceJob = !!sourceRecord && !job.homeworks_id;
 
   return (
     <div className="space-y-6">
@@ -67,7 +73,7 @@ export function JobDetailView({
         description={`${clientDisplayName(client)} — ${propertyAddress(job.property)}`}
         action={
           <div className="flex items-center gap-2">
-            <StatusQuickChange action={changeStatusAction} currentStatus={job.status} />
+            {unlinkedSourceJob ? <StatusBadge status={job.status} /> : <StatusQuickChange action={changeStatusAction} currentStatus={job.status} />}
             <Link href={`/jobs/${id}?edit=1`}>
               <Button variant="secondary">
                 <Pencil className="h-3.5 w-3.5" />
@@ -77,6 +83,8 @@ export function JobDetailView({
           </div>
         }
       />
+
+      {sourceRecord ? <HomeworksManagedNotice record={sourceRecord}>{unlinkedSourceJob ? "This job has no linked Homeworks visit. Manage its schedule and status in Homeworks. Notes and actual hours stay in Jarvis." : "Date and status changes save to Homeworks first. Notes and actual hours stay in Jarvis."}</HomeworksManagedNotice> : null}
 
       {formError && !isEditing ? <p role="alert" className="text-sm text-[var(--color-critical)]">{formError}</p> : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

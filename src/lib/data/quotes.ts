@@ -4,7 +4,8 @@ import type { DataResult, QuoteWithItems } from "@/types/domain";
 
 const QUOTE_SELECT = `
   *,
-  client:clients(id, first_name, last_name, company_name),
+  client:clients(id, first_name, last_name, company_name, data_source, homeworks_id, homeworks_status, homeworks_deleted),
+  property:properties(id, street, homeworks_id, homeworks_status, homeworks_deleted),
   items:quote_items(*)
 `;
 

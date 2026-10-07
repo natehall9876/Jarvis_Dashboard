@@ -12,16 +12,17 @@ import { getJobsForDate } from "@/lib/data/jobs";
 import { todayInZone } from "@/lib/integrations/homeworks-dates";
 import { clientDisplayName } from "@/lib/format";
 import type { JobInsert, JobUpdate } from "@/types/domain";
+import { getOwnershipRecord, isRecordHomeworksOwned, rejectOwnershipFields, requireLocalRecord, submittedFields } from "./homeworks-ownership";
 
-function jobFieldsFromForm(formData: FormData): JobInsert {
+function jobFieldsFromForm(formData: FormData, current?: { property_id: string; price: number | null }): JobInsert {
   return {
-    property_id: requiredString(formData, "property_id"),
+    property_id: formData.has("property_id") ? requiredString(formData, "property_id") : current?.property_id ?? requiredString(formData, "property_id"),
     service_id: optionalString(formData, "service_id"),
     route_id: optionalString(formData, "route_id"),
     scheduled_date: optionalString(formData, "scheduled_date"),
     scheduled_start_time: optionalString(formData, "scheduled_start_time"),
     status: optionalString(formData, "status") ?? "scheduled",
-    price: requiredNumber(formData, "price"),
+    price: current ? optionalNumber(formData, "price") : requiredNumber(formData, "price"),
     budgeted_hours: optionalNumber(formData, "budgeted_hours"),
     actual_hours: optionalNumber(formData, "actual_hours"),
     crew_size: optionalNumber(formData, "crew_size"),
@@ -37,16 +38,17 @@ function selectedEmployeeIds(formData: FormData): string[] {
 /**
  * Pure mutation helpers with no FormData/redirect dependency — the single
  * implementation both the human-facing form actions below AND the Jarvis
- * write-action executor (lib/ai/actions/execute.ts) call. Adding a second,
- * separate mutation path for AI-driven writes would risk the two drifting
- * apart (e.g. one syncing crew correctly, one not); instead there is
- * exactly one way jobs get created/rescheduled/reassigned/status-changed.
+ * executor (lib/ai/actions/execute.ts) uses for supported schedule/status
+ * changes. Local creation and crew changes must verify the job and its
+ * parents before writing; source jobs use Homeworks for schedule/status.
  */
 export async function syncJobCrew(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   jobId: string,
   employeeIds: string[],
 ) {
+  await requireLocalRecord(supabase, "jobs", jobId);
+  for (const employeeId of new Set(employeeIds)) await getOwnershipRecord(supabase, "employees", employeeId);
   const { error: deleteError } = await supabase.from("job_employees").delete().eq("job_id", jobId);
   if (deleteError) throw deleteError;
   if (employeeIds.length === 0) return;
@@ -57,7 +59,10 @@ export async function syncJobCrew(
 }
 
 export async function insertJob(fields: JobInsert, employeeIds: string[]): Promise<string> {
+  rejectOwnershipFields(fields);
   const supabase = await createSupabaseServerClient();
+  await requireLocalRecord(supabase, "properties", fields.property_id);
+  for (const employeeId of new Set(employeeIds)) await getOwnershipRecord(supabase, "employees", employeeId);
   const { data, error } = await supabase.from("jobs").insert(fields).select("id").single();
   if (error) throw error;
   await syncJobCrew(supabase, data.id, employeeIds);
@@ -65,16 +70,16 @@ export async function insertJob(fields: JobInsert, employeeIds: string[]): Promi
 }
 
 export async function updateJobFields(jobId: string, fields: JobUpdate, employeeIds?: string[]): Promise<void> {
+  rejectOwnershipFields(fields);
   const supabase = await createSupabaseServerClient();
-  const { data: current, error: readError } = await supabase.from("jobs").select("*").eq("id", jobId).maybeSingle();
-  if (readError) throw readError;
-  if (!current) throw new Error("Job not found; nothing was saved.");
+  const current = await getOwnershipRecord(supabase, "jobs", jobId);
+  const sourceManaged = await isRecordHomeworksOwned(supabase, "jobs", current);
   const changes = Object.fromEntries(Object.entries(fields).filter(([key,value]) => {
     const before = (current as unknown as Record<string,unknown>)[key];
     if (key === "scheduled_start_time") return String(value ?? "").slice(0,5) !== String(before ?? "").slice(0,5);
     return value !== before;
   })) as JobUpdate;
-  if (current.homeworks_id) {
+  if (sourceManaged) {
     const allowed = ["scheduled_date","scheduled_start_time","status","notes","completion_notes","actual_hours"];
     for (const key of Object.keys(changes)) if (!allowed.includes(key)) throw new Error(key.replaceAll("_"," ")+" is managed in Homeworks. Update it there so the change persists.");
     if (employeeIds !== undefined) {
@@ -83,17 +88,23 @@ export async function updateJobFields(jobId: string, fields: JobUpdate, employee
       if (JSON.stringify((assigned.data??[]).map(e=>e.employee_id).sort()) !== JSON.stringify([...new Set(employeeIds)].sort())) throw new Error("Crew assignments are managed in Homeworks.");
     }
     const sourcePatch = Object.fromEntries(Object.entries(changes).filter(([key])=>["scheduled_date","scheduled_start_time","status"].includes(key)));
-    if (Object.keys(sourcePatch).length) await writeHomeworksSchedule(current.homeworks_id,sourcePatch);
+    if (Object.keys(sourcePatch).length) {
+      if (!current.homeworks_id) throw new Error("This job is managed in Homeworks but has no linked visit. Update its schedule or status in Homeworks.");
+      await writeHomeworksSchedule(current.homeworks_id,sourcePatch);
+    }
     delete changes.scheduled_date; delete changes.scheduled_start_time; delete changes.status;
+  } else {
+    if (changes.property_id !== undefined) await requireLocalRecord(supabase, "properties", changes.property_id);
+    if (employeeIds !== undefined) for (const employeeId of new Set(employeeIds)) await getOwnershipRecord(supabase, "employees", employeeId);
   }
-  if (!current.homeworks_id && changes.status === "in_progress") changes.started_at = new Date().toISOString();
-  if (!current.homeworks_id && changes.status === "completed") changes.completed_at = new Date().toISOString();
+  if (!sourceManaged && changes.status === "in_progress") changes.started_at = new Date().toISOString();
+  if (!sourceManaged && changes.status === "completed") changes.completed_at = new Date().toISOString();
   if (Object.keys(changes).length) {
     const { data:saved, error } = await supabase.from("jobs").update(changes).eq("id",jobId).select("id").maybeSingle();
     if (error) throw error;
     if (!saved) throw new Error("Job changed or could not be saved. Refresh and retry.");
   }
-  if (!current.homeworks_id && employeeIds !== undefined) await syncJobCrew(supabase,jobId,employeeIds);
+  if (!sourceManaged && employeeIds !== undefined) await syncJobCrew(supabase,jobId,employeeIds);
   revalidatePath("/schedule"); revalidatePath("/"); revalidatePath("/jobs"); revalidatePath("/jobs/"+jobId);
 }
 
@@ -106,6 +117,7 @@ export async function createJob(formData: FormData) {
   const fields = jobFieldsFromForm(formData);
   const employeeIds = selectedEmployeeIds(formData);
   const result = await runMutation(async () => {
+    rejectOwnershipFields(formData);
     const jobId = await insertJob(fields, employeeIds);
     await logActivity({
       entityType: "job",
@@ -122,9 +134,13 @@ export async function createJob(formData: FormData) {
 }
 
 export async function updateJob(jobId: string, formData: FormData) {
-  const fields = jobFieldsFromForm(formData);
-  const employeeIds = selectedEmployeeIds(formData);
   const result = await runMutation(async () => {
+    rejectOwnershipFields(formData);
+    const supabase = await createSupabaseServerClient();
+    const current = await getOwnershipRecord(supabase, "jobs", jobId);
+    const fields = submittedFields(formData, jobFieldsFromForm(formData, current));
+    const sourceManaged = await isRecordHomeworksOwned(supabase, "jobs", current);
+    const employeeIds = formData.has("employee_ids") || !sourceManaged ? selectedEmployeeIds(formData) : undefined;
     await updateJobFields(jobId, fields, employeeIds);
     await logActivity({
       entityType: "job",

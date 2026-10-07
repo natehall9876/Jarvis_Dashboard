@@ -79,6 +79,9 @@ export type Database = {
           homeworks_id: string | null;
           /** Requires supabase/demo-data-classification-migration.sql. 'demo' | 'homeworks_sync' | 'owner_verified' | 'unverified'. */
           data_source: string;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -94,6 +97,9 @@ export type Database = {
           notes?: string | null;
           homeworks_id?: string | null;
           data_source?: string;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["clients"]["Insert"]>;
         Relationships: [];
@@ -117,6 +123,9 @@ export type Database = {
           active: boolean;
           /** Requires supabase/homeworks-integration-migration.sql — see docs/CURRENT_STATE.md before assuming this column is live. */
           homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -134,6 +143,9 @@ export type Database = {
           service_notes?: string | null;
           active?: boolean;
           homeworks_id?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["properties"]["Insert"]>;
         Relationships: [
@@ -159,6 +171,10 @@ export type Database = {
           default_budgeted_hours: number | null;
           recurring_allowed: boolean;
           active: boolean;
+          homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -171,6 +187,10 @@ export type Database = {
           default_budgeted_hours?: number | null;
           recurring_allowed?: boolean;
           active?: boolean;
+          homeworks_id?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["services"]["Insert"]>;
         Relationships: [];
@@ -191,6 +211,10 @@ export type Database = {
           active: boolean;
           hire_date: string | null;
           notes: string | null;
+          homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -206,6 +230,10 @@ export type Database = {
           active?: boolean;
           hire_date?: string | null;
           notes?: string | null;
+          homeworks_id?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["employees"]["Insert"]>;
         Relationships: [];
@@ -356,6 +384,9 @@ export type Database = {
           completed_at: string | null;
           /** Requires supabase/homeworks-jobs-migration.sql. */
           homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -378,6 +409,9 @@ export type Database = {
           completion_notes?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [
@@ -613,6 +647,10 @@ export type Database = {
           accepted_at: string | null;
           declined_at: string | null;
           notes: string | null;
+          homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -630,6 +668,10 @@ export type Database = {
           accepted_at?: string | null;
           declined_at?: string | null;
           notes?: string | null;
+          homeworks_id?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["quotes"]["Insert"]>;
         Relationships: [
@@ -663,6 +705,7 @@ export type Database = {
           budgeted_hours: number | null;
           is_optional: boolean;
           sort_order: number | null;
+          homeworks_id: string | null;
         };
         Insert: {
           id?: string;
@@ -676,6 +719,7 @@ export type Database = {
           budgeted_hours?: number | null;
           is_optional?: boolean;
           sort_order?: number | null;
+          homeworks_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["quote_items"]["Insert"]>;
         Relationships: [
@@ -716,6 +760,9 @@ export type Database = {
           notes: string | null;
           /** Requires supabase/homeworks-integration-migration.sql — see docs/CURRENT_STATE.md before assuming this column is live. */
           homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -735,6 +782,9 @@ export type Database = {
           paid_at?: string | null;
           notes?: string | null;
           homeworks_id?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [
@@ -766,6 +816,7 @@ export type Database = {
           quantity: number;
           unit_price: number;
           total: number;
+          homeworks_id: string | null;
         };
         Insert: {
           id?: string;
@@ -777,6 +828,7 @@ export type Database = {
           quantity?: number;
           unit_price?: number;
           total?: number;
+          homeworks_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["invoice_items"]["Insert"]>;
         Relationships: [
@@ -815,6 +867,10 @@ export type Database = {
           payment_method: string | null;
           external_reference: string | null;
           notes: string | null;
+          homeworks_id: string | null;
+          homeworks_status: string | null;
+          homeworks_deleted: boolean;
+          homeworks_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -826,6 +882,10 @@ export type Database = {
           payment_method?: string | null;
           external_reference?: string | null;
           notes?: string | null;
+          homeworks_id?: string | null;
+          homeworks_status?: string | null;
+          homeworks_deleted?: boolean;
+          homeworks_notes?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
         Relationships: [

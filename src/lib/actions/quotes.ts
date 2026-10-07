@@ -12,6 +12,7 @@ import {
   runMutation,
 } from "./shared";
 import { logActivity } from "@/lib/data/activity-log";
+import { getOwnershipRecord, isRecordHomeworksOwned, rejectOwnershipFields, requireLocalRecord, requireLocalFinancialParents, requireNativeChanges, submittedFields } from "./homeworks-ownership";
 
 async function recomputeQuoteTotal(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -35,6 +36,8 @@ export async function createQuote(formData: FormData) {
   const clientId = requiredString(formData, "client_id");
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    rejectOwnershipFields(formData);
+    await requireLocalFinancialParents(supabase, clientId, optionalString(formData, "property_id"));
     const { data, error } = await supabase
       .from("quotes")
       .insert({
@@ -69,13 +72,28 @@ export async function createQuote(formData: FormData) {
 export async function updateQuote(quoteId: string, formData: FormData) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    rejectOwnershipFields(formData);
+    const current = await getOwnershipRecord(supabase, "quotes", quoteId);
+    const formFields = {
+      property_id: optionalString(formData, "property_id"),
+      valid_until: optionalString(formData, "valid_until"),
+      notes: optionalString(formData, "notes"),
+    };
+    let fields = submittedFields(formData, formFields);
+    if (await isRecordHomeworksOwned(supabase, "quotes", current)) {
+      // Validate every submitted business field, including fields this form
+      // never renders. Next's action metadata is not a business-field patch.
+      const submitted = Object.fromEntries(Array.from(formData).filter(([key]) => !key.startsWith("$ACTION_")));
+      requireNativeChanges(current, { ...submitted, ...fields }, ["notes"]);
+      fields = submittedFields(formData, { notes: formFields.notes });
+    } else {
+      await requireLocalFinancialParents(supabase, current.client_id, formFields.property_id);
+      fields = formFields;
+    }
+    if (!Object.keys(fields).length) return;
     const { error } = await supabase
       .from("quotes")
-      .update({
-        property_id: optionalString(formData, "property_id"),
-        valid_until: optionalString(formData, "valid_until"),
-        notes: optionalString(formData, "notes"),
-      })
+      .update(fields)
       .eq("id", quoteId);
     if (error) throw error;
   });
@@ -87,6 +105,7 @@ export async function updateQuote(quoteId: string, formData: FormData) {
 export async function deleteDraftQuote(quoteId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
     const { data: quote, error: fetchError } = await supabase.from("quotes").select("status").eq("id", quoteId).single();
     if (fetchError) throw fetchError;
     if (quote.status !== "draft") throw new Error("Only draft quotes can be deleted. Decline it instead.");
@@ -101,6 +120,8 @@ export async function deleteDraftQuote(quoteId: string) {
 export async function addQuoteItem(quoteId: string, formData: FormData) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
+    rejectOwnershipFields(formData);
     const quantity = requiredNumber(formData, "quantity");
     const unitPrice = requiredNumber(formData, "unit_price");
     const { error } = await supabase.from("quote_items").insert({
@@ -124,7 +145,11 @@ export async function addQuoteItem(quoteId: string, formData: FormData) {
 export async function removeQuoteItem(quoteId: string, itemId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("quote_items").delete().eq("id", itemId);
+    await requireLocalRecord(supabase, "quotes", quoteId);
+    const { data: item, error: itemError } = await supabase.from("quote_items").select("id").eq("id", itemId).eq("quote_id", quoteId).maybeSingle();
+    if (itemError) throw itemError;
+    if (!item) throw new Error("That line item does not belong to this quote.");
+    const { error } = await supabase.from("quote_items").delete().eq("id", itemId).eq("quote_id", quoteId);
     if (error) throw error;
     await recomputeQuoteTotal(supabase, quoteId);
   });
@@ -136,6 +161,7 @@ export async function removeQuoteItem(quoteId: string, itemId: string) {
 export async function sendQuote(quoteId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
     const { error } = await supabase.from("quotes").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", quoteId);
     if (error) throw error;
     await logActivity({ entityType: "quote", entityId: quoteId, eventType: "quote_sent", summary: "Quote sent to client", source: "owner" });
@@ -147,6 +173,7 @@ export async function sendQuote(quoteId: string) {
 export async function acceptQuote(quoteId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
     const { error } = await supabase.from("quotes").update({ status: "accepted", accepted_at: new Date().toISOString() }).eq("id", quoteId);
     if (error) throw error;
     await logActivity({ entityType: "quote", entityId: quoteId, eventType: "quote_accepted", summary: "Quote accepted by client", source: "owner" });
@@ -158,6 +185,7 @@ export async function acceptQuote(quoteId: string) {
 export async function declineQuote(quoteId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
     const { error } = await supabase.from("quotes").update({ status: "declined", declined_at: new Date().toISOString() }).eq("id", quoteId);
     if (error) throw error;
     await logActivity({ entityType: "quote", entityId: quoteId, eventType: "quote_declined", summary: "Quote declined by client", source: "owner" });
@@ -170,12 +198,14 @@ export async function declineQuote(quoteId: string) {
 export async function convertQuoteToInvoice(quoteId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
       .select("*, items:quote_items(*)")
       .eq("id", quoteId)
       .single();
     if (quoteError) throw quoteError;
+    await requireLocalFinancialParents(supabase, quote.client_id, quote.property_id);
     if (quote.status !== "accepted") throw new Error("Only accepted quotes can be converted to an invoice.");
 
     const requiredItems = (quote.items as { description: string; quantity: number; unit_price: number; total: number; service_id: string | null; is_optional: boolean }[]).filter((i) => !i.is_optional);
@@ -244,12 +274,14 @@ export async function convertQuoteToInvoice(quoteId: string) {
 export async function convertQuoteToJob(quoteId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "quotes", quoteId);
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
       .select("*, items:quote_items(*)")
       .eq("id", quoteId)
       .single();
     if (quoteError) throw quoteError;
+    await requireLocalFinancialParents(supabase, quote.client_id, quote.property_id);
     if (quote.status !== "accepted") throw new Error("Only accepted quotes can be converted to a job.");
     if (!quote.property_id) throw new Error("This quote has no property to schedule a job for.");
 

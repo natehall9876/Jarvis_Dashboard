@@ -1,144 +1,71 @@
-# Architecture
+# Architecture — October 7, 2026
 
-This documents what's actually built, not the long-term vision. See
-`docs/INTEGRATION_AUDIT_2026-10-03.md` for current integration evidence, and `docs/DECISIONS.md`
-for why specific choices were made.
+This describes the current working tree. **The ownership guard migration and corresponding application changes are pending production rollout.** [Current state](CURRENT_STATE.md) records that boundary; the [October 7 read-only audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) records observed production behavior before the migration.
 
-## Layers
+## Application layers
 
-```
-DATABASE (Supabase/Postgres, RLS-scoped)
-  ↓
-DATA ACCESS  — src/lib/data/*  (every read query, returns DataResult<T>)
-DOMAIN LOGIC — src/lib/calculations.ts, src/lib/actions/*  (pure math, mutations)
-  ↓
-UI            — src/app/(dashboard)/*, src/components/*
-JARVIS         — src/lib/ai/*  (tools, provider, advisor loop, write actions)
-```
+| Layer | Implementation and responsibility |
+| --- | --- |
+| Database | Supabase/Postgres, active-owner RLS, retained source records/projections; pending ownership triggers protect source fields and operational children |
+| Reads | `src/lib/data/*`, shared domain types, calculation/formatting helpers |
+| Human mutations | `src/lib/actions/*`, session client, ownership/parent guards, explicit native-field allowlists |
+| UI | Dashboard routes and components; owned-record views show “Managed in Homeworks” guidance and expose native forms where implemented |
+| AI | Read tools/proposal tools, advisor/provider, confirmation UI and a closed action executor |
+| Ingestion | Existing scheduled Homeworks worker and transactional `homeworks_apply_page` |
+| Source write-through | Existing `writeHomeworksSchedule`, followed by verified response projection |
 
-Nothing in `src/lib/ai/*` talks to the database directly except through
-`src/lib/data/*` (reads) and `src/lib/actions/*` (writes) — the same paths
-the human-facing UI uses. There is no separate "AI data path."
+AI reads reuse the dashboard data layer. Confirmed schedule/status changes reuse human action helpers. The executor also directly maintains explicitly native `action_requests`, `job_notes` and `owner_tasks`; it has no generic table-mutation tool. Activity logging is shared. The removed job-create/crew-assign executors and direct audit-note updater are not alternative surviving operational writers.
 
-## Authentication
+## Authentication and privilege
 
-`src/proxy.ts` (Next.js middleware) refreshes the Supabase session cookie on
-every request and redirects signed-out users to `/login` for any non-API,
-non-public route. `src/lib/supabase/server.ts` creates the per-request
-Supabase client from that cookie. Ordinary business reads/writes use the
-authenticated client and live RLS owner guards backed by app_members.
-The admin client is a narrow exception for inbound webhooks and server-side
-OAuth token stores. Browser roles cannot read those token rows.
-Do not mistake the historical rls-policies.sql for the complete current
-policy set; the October 3 audit inspected the live restrictive owner policies.
+`src/proxy.ts` refreshes session cookies and redirects signed-out nonpublic page requests to login. API routes and Server Actions still require their own validation/authentication; a protected page is not their security boundary. `supabase/server.ts` creates the authenticated RLS-scoped client. `integrations/owner-auth.ts` verifies active owner membership for privileged integration operations.
 
-## Data model
+`supabase/admin.ts` uses a server-only service-role credential for OAuth stores, automatic source projection and verified schedule write-through. Tokens are inaccessible to ordinary browser roles. The retired webhook and import endpoints authenticate legacy callers and then return 410; they no longer obtain an admin client.
 
-Real Supabase tables (see `src/types/database.types.ts` for the authoritative
-shape): `clients`, `properties`, `services`, `employees`, `routes`,
-`service_agreements`, `route_stops`, `jobs`, `job_employees`, `time_entries`,
-`equipment`, `job_equipment`, `equipment_maintenance`, `quotes`,
-`quote_items`, `invoices`, `invoice_items`, `payments`, `expenses`,
-`job_materials`, `job_photos`, `integration_mappings` (defined, not yet used
-by any integration), `activity_log` and `action_requests` (both verified in the live database on October 3).
+Production had both permissive authenticated access policies and a restrictive active-owner policy at the October 7 audit. Owner RLS restricted who could write but did not restrict source-owned fields. Do not use `supabase/rls-policies.sql` alone as the current policy inventory. The new ownership triggers supplement RLS rather than replace it.
 
-Plan vs. actual already exists on `jobs`: `budgeted_hours`/`actual_hours`,
-`price`, `scheduled_date` vs. `started_at`/`completed_at`, and a `status`
-lifecycle (`scheduled → in_progress → completed`, plus `cancelled`/
-`skipped`).
+## Homeworks ingestion and schedule writes
 
-## Jarvis
+Supabase `pg_cron` runs `jarvis-homeworks-sync` every five minutes. `pg_net` sends a secret-authenticated request to `/api/integrations/homeworks/scheduled`; `runAutomaticHomeworksSync` uses the service-only token path and distributed sync lease. It traverses 21 explicit source partitions, resumes keyset checkpoints, retries bounded transient failures, and records run/stream health. Browser polling reads status and refreshes rendering; it never ingests records.
 
-- `src/lib/ai/provider.ts` + `src/lib/ai/providers/anthropic.ts` — a small
-  vendor-neutral interface over Anthropic's Messages API (raw `fetch`, no
-  SDK). Adding a second provider means one new file implementing the same
-  interface.
-- `src/lib/ai/tools/*` — the tool registry. Every read tool wraps a
-  `src/lib/data/*` query. `src/lib/ai/tools/actions.ts` holds the only tools
-  that touch writes, and even those only read the current record and return
-  a `ProposedAction` — never a mutation.
-- `src/lib/ai/advisor.ts` — the agent loop: sends the question + tool specs
-  to the model, executes whatever tools it calls, feeds results back, repeats
-  until a final text answer. Detects a `ProposedAction` in a tool result and
-  forces the model to stop (via `tool_choice: "none"`) instead of chaining
-  further tool calls that turn.
-- `src/lib/ai/action-types.ts` — the **allowlist**. `ProposedActionType` is a
-  closed union (`reschedule_job | update_job_status | assign_employee |
-  create_job`) — the model can never produce a shape outside this union, and
-  there is no generic "table/column" field anywhere. `isProposedAction()` is
-  the runtime guard the execute-action endpoint uses to reject anything else.
-- `src/lib/ai/actions/execute.ts` — the only code that actually performs a
-  Jarvis-originated write. Re-validates every field, re-reads the current
-  record, rejects a stale snapshot, claims the action id via `action_requests`
-  (falls back to an in-memory guard if that table isn't migrated yet), calls
-  the same mutation functions the human-facing forms use
-  (`src/lib/actions/jobs.ts`), re-reads the result to verify, and logs to
-  `activity_log`.
-- `src/app/api/ai-advisor/route.ts` — the read/reasoning endpoint the model's
-  answers come through.
-- `src/app/api/ai-advisor/execute-action/route.ts` — the **only** endpoint
-  that can turn a proposal into a real write. The model has no access to it;
-  it's called exclusively by the owner clicking Confirm in the UI.
+`homeworks_apply_page` atomically retains each source payload, upserts native projections, maintains source-linked child rows, and saves the page cursor. Customers, properties, events, estimates, invoices, payments, catalog items and users project into clients, properties, jobs, quotes, invoices, payments, services and employees. Invoice/quote items and source crew are projected children. Source-only calendar events with no property stay in the source view rather than inventing a property/job.
 
-## Data trust — distinctions the app (and Jarvis) must never blur
+The existing schedule flow checks owner access, reads a linked source visit, mutates Homeworks, validates returned date/time or status, and projects the confirmed event with the same sync lease. It never substitutes a local schedule mutation after source failure. Supported Homeworks statuses differ from the full local job enum; unsupported source statuses fail visibly.
 
-- **Field production $/hr** (`productionDollarsPerHour`) = revenue ÷ hours
-  logged against specific jobs (`jobs.actual_hours`) — on-site time only.
-- **True paid $/hr** (`truePaidDollarsPerHour`) = revenue ÷ every clocked
-  crew hour in `time_entries` for the same period. `time_entries.job_id` is
-  nullable, so this captures drive time, gaps, and anything paid for but not
-  attributed to a job — a job-level number structurally cannot. Both live in
-  `src/lib/calculations.ts` and `src/lib/data/command-center.ts`.
-- **Completed ≠ invoiced ≠ paid.** A job's `status` and an invoice's
-  `display_status` are separate lifecycles; `src/lib/calculations.ts`'s
-  `invoiceDisplayStatus` derives `paid/overdue/partial` from balance and due
-  date rather than trusting a raw stored value for those states.
-- **Revenue ≠ cash collected.** Business Pulse shows both
-  (`revenueMonth` vs. `cashCollectedMonth`) rather than one blended number.
-- A void invoice's remaining balance is cancelled debt, not outstanding
-  receivable — excluded from AR calculations on purpose.
+The ownership changes preserve `homeworks-auto-worker`, `homeworks_apply_page`, `orderScheduleJobs`, the shared schedule reads, leases, OAuth coordination and route preference RPC. Historical projection migrations are left intact; the new guard migration uses explicit SQL rather than patching projector function text.
 
-Jarvis's system prompt (`src/lib/ai/advisor.ts`) explicitly instructs it to
-treat these as different numbers and explain a gap when one shows up, not
-silently pick one.
+## Database ownership boundary
 
-## Activity history
+`homeworks_row_is_owned(text,jsonb)` recognizes source markers, retained projection identity, and protected client/property/invoice/quote/job ancestry. Parent rows are share-locked during the decision. `enforce_homeworks_ownership()` checks old and new rows, rejects source-marker spoofing/removal and source-owned insertion/deletion, and allows only explicit native field differences on protected updates.
 
-`activity_log` (verified live on October 3) is an append-only table:
-`entity_type`, `entity_id`, `event_type`, `summary`, `detail` (jsonb),
-`source` (`jarvis`/`owner`/`system`). `src/lib/data/activity-log.ts`'s
-`logActivity()` is best-effort and never throws — a missing audit trail must
-never be the reason a real action fails. Currently wired into job, invoice,
-and quote mutations (both the Jarvis executor and the human-facing forms in
-`src/lib/actions/*`). Not yet wired into clients, properties, or equipment.
+The guards cover `clients`, `properties`, `jobs`, `quotes`, `invoices`, `payments`, `services`, `employees`, `invoice_items`, `quote_items`, `job_employees` and `service_agreements`. Source crew membership/line items and dependent foreign-key changes are inside the boundary, not just their top-level forms. New local jobs/payments cannot escape by omitting a source ID when their parent is owned. Independent local records retain local CRUD. The [field authority table](DATA_AUTHORITY.md#allowed-native-data-on-protected-rows) gives the exact exceptions.
 
-## What's intentionally not built yet
+Functions are `SECURITY INVOKER`; the actual service role is the trusted projection exception. Ordinary roles cannot enable it with request claims/session flags. Browser/public `TRUNCATE`, `TRIGGER` and `REFERENCES` privileges are removed from protected tables. Service credentials remain privileged; source verification is the responsibility of the two trusted application paths, not an arbitrary caller-supplied payload.
 
-A dedicated recommendations
-table with accept/reject/outcome tracking (the deterministic
-`get_attention_items`/`get_owner_briefing` tools cover the "evidence-backed"
-requirement today without one), route-level true-paid $/hr breakdown
-(company-wide only so far), scheduled unattended Homeworks synchronization,
-and matching QuickBooks financials or Calendar events into job records.
+`src/lib/actions/homeworks-ownership.ts` provides session-scoped ownership reads, local-parent validation, source-field rejection and native-change checks. It performs no writes and is not a Server Action module. Source-owned and inherited-owned invoice/quote edit forms expose native notes only; `updateInvoice` and `updateQuote` validate all submitted business fields and reject source-field changes, then write only submitted notes. `src/lib/homeworks-ownership.ts` supplies marker/option checks for UI/data presentation; database pointer/lineage checks remain the final boundary for stale or incomplete UI metadata.
 
-## Provider integrations
+## AI proposals and confirmation
 
-Homeworks direct OAuth/GraphQL, manual imports/reconciliation and inbound
-webhooks exist. QuickBooks and Google Calendar OAuth and read-only preview
-adapters exist. See INTEGRATION_AUDIT_2026-10-03.md for live evidence, refresh
-limitations, environment requirements and owner-only setup steps.
+The advisor/provider loop exposes read tools plus named proposal tools. Proposals do not mutate; confirmation posts a structured action to `/api/ai-advisor/execute-action`. Both that route and `executeProposedAction` validate the closed action union before mutation:
 
-## Reliability boundaries (October 3 follow-up)
+| Action | Execution destination |
+| --- | --- |
+| `reschedule_job` | `updateJobFields`; source jobs use verified Homeworks schedule write-through |
+| `update_job_status` | `updateJobStatus`; source jobs use supported Homeworks status write-through |
+| `add_job_note` | Native `job_notes` |
+| `create_task` | Native `owner_tasks` |
+| `complete_task` | Native `owner_tasks` |
 
-The privileged OAuth stores use integrations/owner-auth.ts to verify an active
-owner through the caller's RLS client before admin access. Token refresh writes
-compare updated_at; Google calendar selections carry that version from the list
-request. This prevents overwriting reconnects but is not a distributed token
-refresh lease. Provider API responses pass through api-response.ts for bounded,
-non-cacheable requests and sanitized failures; malformed envelopes are rejected.
+`create_job` and `assign_employee` are removed from action types, registered tools, executor and confirmation UI. Human local creation remains independently guarded. Existing stale-snapshot checks, action-request idempotency/fallback, result verification and activity history remain; no generic write tool is introduced.
 
-Business Pulse derives calendar periods from America/New_York and fails closed
-when a required source is unavailable. Today's Mission instead retains its jobs
-and names unavailable supporting sections. Owner briefing/attention tools refuse
-to synthesize a complete report from missing source data. Confirmed demo records
-are excluded from operational rollups; raw record pages remain available.
+## Native model and data trust
+
+Jarvis-native tables include route preferences/stops, owner tasks, job notes/photos, equipment, expenses/time/material/support records, activity/action history and integration state. Source-projected tables may also carry the explicit native notes/hours/payroll fields. Source notes are always separate `homeworks_notes` values.
+
+Field production dollars/hour, true paid dollars/hour, completed work, invoices, payments and receivables remain distinct. Rhode Island calendar periods, demo/deletion filters, visible source errors and honest missing-data states govern operational totals. Saved route preferences only order actual visits when source order is absent.
+
+QuickBooks and Google Calendar OAuth/read adapters do not write Homeworks projections. Financial matching, calendar-to-job matching, route-level paid-hour profitability and employee-facing views remain separate future work. Automatic unattended Homeworks sync is already implemented and is not a future activation gate.
+
+## Verification surfaces
+
+[HOMEWORKS_WRITERS.md](HOMEWORKS_WRITERS.md) enumerates every relevant source/native/retired writer, including direct quote conversion and worksheet-photo paths. `scripts/test-homeworks-ownership.mjs` loads a schema-only production snapshot into isolated PGlite, applies the pending migration and runs rollback ownership plus existing sync/schedule SQL with synthetic fixtures. The separate production drift script uses a read-only transaction, reports identifiers/counts for discrepancies, and never repairs them. Test outcomes and production rollout must have explicit records; a schema snapshot or successful build is not deployment evidence.

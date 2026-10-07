@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput, Select, Textarea, FormError } from "@/components/ui/form-fields";
 import type { Employee } from "@/types/domain";
@@ -11,27 +13,32 @@ export function EmployeeForm({
   employee?: Employee;
   error?: string;
 }) {
+  const sourceManaged = isHomeworksOwned(employee);
   return (
     <form action={action} className="space-y-4">
       <FormError message={error} />
+      {sourceManaged ? <HomeworksManagedNotice record={employee}>Name, contact details and active status are managed in Homeworks. Staffing details and notes stay in Jarvis.</HomeworksManagedNotice> : null}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="First Name" htmlFor="first_name" required>
-          <TextInput id="first_name" name="first_name" defaultValue={employee?.first_name ?? ""} required />
-        </Field>
-        <Field label="Last Name" htmlFor="last_name">
-          <TextInput id="last_name" name="last_name" defaultValue={employee?.last_name ?? ""} />
-        </Field>
-      </div>
+      {!sourceManaged ? <>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="First Name" htmlFor="first_name" required>
+            <TextInput id="first_name" name="first_name" defaultValue={employee?.first_name ?? ""} required />
+          </Field>
+          <Field label="Last Name" htmlFor="last_name">
+            <TextInput id="last_name" name="last_name" defaultValue={employee?.last_name ?? ""} />
+          </Field>
+        </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Phone" htmlFor="phone">
-          <TextInput id="phone" name="phone" type="tel" defaultValue={employee?.phone ?? ""} />
-        </Field>
-        <Field label="Email" htmlFor="email">
-          <TextInput id="email" name="email" type="email" defaultValue={employee?.email ?? ""} />
-        </Field>
-      </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Phone" htmlFor="phone">
+            <TextInput id="phone" name="phone" type="tel" defaultValue={employee?.phone ?? ""} />
+          </Field>
+          <Field label="Email" htmlFor="email">
+            <TextInput id="email" name="email" type="email" defaultValue={employee?.email ?? ""} />
+          </Field>
+        </div>
+
+      </> : null}
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Role" htmlFor="role">
@@ -57,10 +64,13 @@ export function EmployeeForm({
           <input type="checkbox" name="has_drivers_license" defaultChecked={employee?.has_drivers_license ?? false} className="h-4 w-4 rounded border-[var(--color-border-strong)] bg-[var(--color-surface-2)] accent-[var(--color-accent)]" />
           Has driver&apos;s license
         </label>
-        <label className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-          <input type="checkbox" name="active" defaultChecked={employee?.active ?? true} className="h-4 w-4 rounded border-[var(--color-border-strong)] bg-[var(--color-surface-2)] accent-[var(--color-accent)]" />
-          Active
-        </label>
+        <input type="hidden" name="has_drivers_license" value="false" />
+        {!sourceManaged ? (
+          <label className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+            <input type="checkbox" name="active" defaultChecked={employee?.active ?? true} className="h-4 w-4 rounded border-[var(--color-border-strong)] bg-[var(--color-surface-2)] accent-[var(--color-accent)]" />
+            Active
+          </label>
+        ) : null}
       </div>
 
       <Field label="Notes" htmlFor="notes">
@@ -68,7 +78,7 @@ export function EmployeeForm({
       </Field>
 
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="submit">{employee ? "Save Changes" : "Add Employee"}</Button>
+        <Button type="submit">{employee ? sourceManaged ? "Save Staffing Details" : "Save Changes" : "Add Employee"}</Button>
       </div>
     </form>
   );

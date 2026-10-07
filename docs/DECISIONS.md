@@ -1,74 +1,51 @@
-> Current integration/schema evidence: [October 3, 2026 audit](INTEGRATION_AUDIT_2026-10-03.md). Earlier observations below are historical; they do not override that audit.
+# Decisions — October 7, 2026
 
-# Decisions
+These decisions describe current code and the pending ownership migration. [Current state](CURRENT_STATE.md) distinguishes the working tree from production; [data authority](DATA_AUTHORITY.md) defines field ownership. The October 3 integration audit is historical and does not override the newer automatic-sync implementation or October 7 production evidence.
 
-Why things are built the way they are — so a future change doesn't
-accidentally undo a deliberate choice.
+## Homeworks owns operational records; Jarvis owns explicit extensions
 
-## No service-role key, anywhere, ever
+Homeworks-owned records are read-only projections inside Jarvis. Automatic projection and verified source-first schedule/status writes are the only surviving application paths that change their source-owned fields. Separate local imports, arbitrary webhook payloads and enrichment writers are retired even if they previously fetched source data: multiple transformation/writing paths can race or disagree.
 
-Every data access — human or Jarvis-originated, read or write — goes through
-the same authenticated, RLS-scoped Supabase client. This was a constraint
-from the start, not a limitation discovered later. It means some things
-(e.g. a durable audit log) had to be designed as tables the authenticated
-role can write to under RLS, rather than an admin-only backend process.
+Independent local records remain supported. They cannot create new jobs, billing records, payments or other operational children under source-owned parents. Existing protected records allow only intentional native fields, such as notes and actual hours. The database defaults new columns to protected instead of assuming unmapped fields are safe to edit.
+
+## Enforce ownership in the database as well as the application
+
+Hiding a button or guarding one action cannot protect direct authenticated REST calls, stale actions, child-table mutations, foreign-key cascades or concurrent parent linking. Migration `20261007023608_homeworks_ownership_guards.sql` checks source markers, retained projection identity and old/new parent lineage, with parent locks. It protects 12 tables and removes ordinary-role `TRUNCATE`, `TRIGGER` and `REFERENCES` privileges. Source identity cannot be forged or removed by normal callers.
+
+The migration is additive enforcement, not data repair. It does not rewrite the existing projector and performs no business-row updates/deletes. Its production application is pending until explicitly recorded.
+
+## Use a narrow trusted server-role boundary
+
+Ordinary UI/AI data access uses the authenticated RLS-scoped client. The blanket historical “no service-role key anywhere” rule is obsolete. Server-only OAuth token storage, the unattended Homeworks worker and verified Homeworks schedule write-through legitimately use the admin client. Browser roles cannot read OAuth bearer tokens or execute source-projection/lease RPCs.
+
+The guard trusts actual PostgreSQL `current_user = 'service_role'`, not a request-provided claim or custom session flag. That credential remains privileged and server-only. Retired webhook/import routes no longer instantiate it. No generic service-role business writer is added.
+
+## Preserve the proven worker and schedule path
+
+The five-minute worker, source stream coverage, leases, checkpointing and `homeworks_apply_page` remain the ingestion implementation. A real source response is projected after schedule/status write-through while holding the same lease. The ownership task does not add a second worker or a manual refresh/import trigger.
+
+Homeworks route order wins when supplied; saved native route preferences order existing visits when source ordering is absent. Preferences never create visits or revenue. The shared schedule read path remains the basis for Schedule, mission and first-job selection.
 
 ## The model never gets a generic write tool
 
-Considered and rejected: a single flexible `execute_mutation(table, filter,
-patch)` tool that the model could call for anything. Rejected because it
-collapses the entire safety architecture into "trust the model's judgment
-about what to change," which is exactly the failure mode
-`docs/AI_GUARDRAILS.md` exists to prevent. Every write capability is instead
-a specific, named tool with a closed, typed input — adding a new capability
-means adding a new named tool, on purpose, every time.
+There is no `execute_mutation(table, filter, patch)` capability. The closed confirmed-action allowlist is `reschedule_job`, `update_job_status`, `add_job_note`, `create_task`, and `complete_task`. `create_job` and `assign_employee` proposals/execution are removed. A new source operation needs a verified source-first implementation, not a local-table shortcut.
 
-## Propose/confirm is two separate HTTP endpoints, not one with a flag
+`/api/ai-advisor` prepares proposals; `/api/ai-advisor/execute-action` handles explicit confirmation. Separate routes make the interaction clear but are not sufficient authorization by themselves: both the route and executor validate the allowlist, actions check the session/current state, and the database enforces ownership. Confirmation is not permission to bypass source authority.
 
-`/api/ai-advisor` (reasoning, can produce a proposal) and
-`/api/ai-advisor/execute-action` (the only thing that can execute one) are
-deliberately separate routes rather than one endpoint with a
-`confirm: true` parameter. This makes "the model can reach this" and "only
-an explicit UI click can reach this" a property of which URL is called, not
-a runtime branch that could be gotten wrong.
+## Keep native state and audit history separate
 
-## Durability is additive and falls back, never blocks
+`job_notes`, `owner_tasks`, action requests, activity history and integration health remain Jarvis-native. The AI executor writes those explicit tables where needed; it does not provide a separate generic CRM writer. Native `notes` fields and source `homeworks_notes` are distinct.
 
-Both `activity_log` and `action_requests` were designed so the app works
-identically before and after their migration is applied — before, via an
-in-memory fallback or a graceful empty state; after, with real durability.
-This was chosen over making either table a hard dependency, because this
-environment has no way to apply a migration itself (no service-role key, no
-linked Supabase CLI project) — a hard dependency would have meant shipping
-something broken by construction. See `docs/CURRENT_STATE.md` for exactly
-what's pending.
+`activity_log` remains best-effort. Existing `action_requests` persistence/idempotency and its in-process fallback are preserved; their limitations do not justify weakening source checks. A missing or incomplete activity trail cannot establish who last changed a projected field or prove that local edits never occurred.
 
-## Two production-rate numbers, not one
+## Measure drift without repairing it
 
-`productionDollarsPerHour` (revenue ÷ job-attributed hours) and
-`truePaidDollarsPerHour` (revenue ÷ every clocked crew hour) are exposed as
-two separate, separately-labeled fields rather than picking "the" production
-number. This was a direct response to the observation that a job-level
-number structurally cannot see paid time that isn't attributed to a job
-(drive time, gaps) — `time_entries.job_id` being nullable is exactly what
-makes the second number possible, and collapsing them into one metric would
-throw that signal away.
+Production diagnostics run read-only and compare against the actual deployed projector. The October 7 audit found no current retained-source drift but also found missing ownership enforcement. Zero drift is neither proof of historical write safety nor independent proof that the source cache contains the latest provider state. No repair is bundled into this task.
 
-## Mock data lives in `src/mock/` and nothing imports it
+Database mutation regressions use synthetic fixtures in isolated PostgreSQL and roll back. A schema-only production catalog snapshot provides realistic constraints/RLS/functions without copying business rows. Test results and production deployment are recorded separately.
 
-Considered and rejected: seeding believable-looking placeholder data
-directly into components for early UI development. Rejected because it
-creates exactly the failure mode Nate flagged — a dashboard that "looks
-built" while showing fiction. `src/mock/` exists for local UI experimentation
-only, with a README stating the rule, and it's been re-verified this session
-(grep, not assumption) that nothing in `src/app` or `src/lib/data` imports
-it.
+## Preserve business and interaction distinctions
 
-## Voice reuses `submit()`; there is no second intelligence path
+Field production dollars/hour and true paid dollars/hour remain separate measures; job revenue, invoiced value and cash collected remain separate lifecycles. A void invoice is not outstanding receivable. Missing data does not become a successful zero-dollar report.
 
-The Web Speech API's transcript is handed to the exact same function a
-typed question or a suggested-question chip already calls. This was a
-constraint, not just a convenience: a separate "voice brain" would need its
-own confirmation-safety guarantees re-verified independently, doubling the
-attack surface for the exact failure mode `docs/AI_GUARDRAILS.md` #3 exists
-to prevent.
+Mock data is isolated to `src/mock/` and must not supply production data. Voice transcripts reuse the same submission/proposal/confirmation flow as typed requests; there is no separate voice mutation authority.

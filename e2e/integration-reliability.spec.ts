@@ -110,7 +110,7 @@ test("Google Calendar accepts empty pages and follows calendar-list pagination",
   await expect(api.listCalendars()).resolves.toEqual({ ok: true, data: [{ id: "work", summary: "Work" }] });
 });
 
-test("a direct Homeworks sync never claims a webhook delivery by default", async () => {
+test("a retired direct Homeworks sync never claims any delivery", async () => {
   const events: { eventType: string }[] = [];
   const sync = loadServerModule<typeof import("../src/lib/integrations/homeworks-sync")>("src/lib/integrations/homeworks-sync.ts", {
     "@/lib/data/activity-log": { logActivity: async (event: { eventType: string }) => { events.push(event); } },
@@ -121,8 +121,8 @@ test("a direct Homeworks sync never claims a webhook delivery by default", async
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch: async () => Response.json({ id: "test-row" }) },
   });
-  expect((await sync.syncHomeworksEntity(client, { entity_type: "customer", homeworks_id: "test-customer" })).ok).toBe(true);
-  expect(events[0].eventType).toBe("homeworks_bulk_import");
+  expect((await sync.syncHomeworksEntity(client, { entity_type: "customer", homeworks_id: "test-customer" })).ok).toBe(false);
+  expect(events).toEqual([]);
 });
 
 test("malformed token expiry is treated as expired", () => {
@@ -145,7 +145,7 @@ test("Homeworks preview reports an unavailable schedule instead of zero jobs", a
   if (result.ok) expect(result.upcomingJobCount).toBeNull();
 });
 
-test("Homeworks refuses a truncated customer import before any database write", async () => {
+test("Homeworks refuses the retired customer import before any database write", async () => {
   let writes = 0;
   const client = createClient("https://example.supabase.co", "test-key", { auth: { persistSession: false }, global: { fetch: async () => Response.json([]) } });
   const action = loadServerModule<typeof import("../src/lib/actions/homeworks-import")>("src/lib/actions/homeworks-import.ts", {

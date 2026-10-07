@@ -257,8 +257,8 @@ export type CreateJobFromWorkSheetResult = { ok: true; jobId: string } | { ok: f
  * Saves a work-sheet extraction as a real completed job — only ever called
  * with values the owner has already reviewed and possibly corrected in the
  * UI, never the raw extraction directly. Reuses insertJob (the same
- * function the manual Create Job form and the AI's propose_create_job use)
- * rather than a parallel write path.
+ * guarded function the manual Create Job form uses). Source-owned property
+ * lineage is rejected before creating a local job.
  */
 export async function createJobFromWorkSheet(formData: FormData): Promise<CreateJobFromWorkSheetResult> {
   const supabase = await createSupabaseServerClient();

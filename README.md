@@ -22,7 +22,7 @@ On Windows PowerShell, use npm.cmd/npx.cmd if script execution policy blocks
 the .ps1 launchers. Do not change the machine's execution policy.
 
 The dashboard requires NEXT_PUBLIC_SUPABASE_URL and
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. OAuth token stores and inbound webhooks
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. OAuth token stores, automatic Homeworks sync and verified schedule write-through
 also require server-only SUPABASE_SERVICE_ROLE_KEY. Never use a service-role
 key in NEXT_PUBLIC_* or commit environment files.
 
@@ -30,13 +30,13 @@ key in NEXT_PUBLIC_* or commit environment files.
 
 - src/proxy.ts refreshes the session and protects dashboard navigation.
 - src/lib/supabase/server.ts uses the user's session and RLS for business data.
-- src/lib/supabase/admin.ts is restricted to inbound integration processing
-  and protected server-side OAuth stores.
+- src/lib/supabase/admin.ts is restricted to protected OAuth stores, the
+  automatic Homeworks worker and verified Homeworks schedule write-through.
 - src/lib/data contains business reads; src/lib/actions contains mutations.
 - src/lib/ai uses those same data/action paths. AI write proposals require
   explicit confirmation and revalidation before execution.
-- src/lib/integrations contains provider adapters, OAuth, import and
-  reconciliation logic.
+- src/lib/integrations contains provider adapters, OAuth, automatic projection,
+  source write-through and read-only reconciliation; legacy import writers are retired.
 - Settings distinguishes configuration, stored authorization and a verified
   provider read. A stored token or imported customer count is not proof of
   current external connectivity.
@@ -52,7 +52,7 @@ do not blindly rerun them or loosen owner restrictions.
 
 | Provider | Implemented behavior | Verification |
 | --- | --- | --- |
-| Homeworks | Direct OAuth PKCE + GraphQL; customer/property/job preview, import, reconciliation and enrichment; inbound webhook | Verify live reads and delivery provenance; imports are manual, no scheduled polling |
+| Homeworks | Direct OAuth PKCE + GraphQL; automatic five-minute projection, read-only reconciliation and verified schedule write-through | Legacy imports/webhook upserts are retired in the pending ownership release; see docs/CURRENT_STATE.md |
 | QuickBooks | OAuth, refresh, company/customer/invoice/payment reads and financial preview | Verify company info; existing production authorization on file as of Oct 3 |
 | Google Calendar | OAuth, calendar selection and paginated read-only event preview | No authorization on file as of Oct 3; owner setup/consent needed |
 | Weather | National Weather Service | Live location lookup |
@@ -64,7 +64,8 @@ provider level; Jarvis's adapter implements reads only. Calendar requests
 calendar.readonly. Calendar events are not copied into the job schedule.
 
 Required provider variable names:
-HOMEWORKS_OAUTH_CLIENT_ID; HOMEWORKS_WEBHOOK_SECRET for inbound delivery;
+HOMEWORKS_OAUTH_CLIENT_ID and HOMEWORKS_SYNC_SECRET for automatic Homeworks sync;
+HOMEWORKS_WEBHOOK_SECRET only preserves authentication on retired legacy routes;
 QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET;
 GOOGLE_CALENDAR_CLIENT_ID / GOOGLE_CALENDAR_CLIENT_SECRET.
 ZAPIER_WEBHOOK_URL is independent of Homeworks OAuth.

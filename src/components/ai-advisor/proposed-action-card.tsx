@@ -2,17 +2,16 @@
 
 import { useState } from "react";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
-import type { ProposedAction } from "@/lib/ai/action-types";
+import { isProposedAction, type ProposedAction } from "@/lib/ai/action-types";
 
 const FIELD_LABELS: Record<string, string> = {
   scheduled_date: "Scheduled date",
   scheduled_start_time: "Start time",
   status: "Status",
-  crew: "Crew",
-  property: "Property",
-  price: "Price",
-  budgeted_hours: "Budgeted hours",
-  crew_size: "Crew size",
+  note: "Job note",
+  task: "Task",
+  due: "Due date",
+  notes: "Notes",
 };
 
 function label(key: string): string {
@@ -40,7 +39,7 @@ export function ProposedActionCard({
   const [state, setState] = useState<CardState>({ kind: "pending" });
 
   async function confirm() {
-    if (state.kind === "confirming" || state.kind === "done") return;
+    if (!isProposedAction(action) || state.kind === "confirming" || state.kind === "done") return;
     setState({ kind: "confirming" });
     onExecutingChange?.(true);
     try {
@@ -54,7 +53,7 @@ export function ProposedActionCard({
         setState({ kind: "done", message: json.message ?? "Done." });
         onSettled?.("confirmed");
       } else {
-        const retryable = json.reason !== "already_processed" && json.reason !== "stale";
+        const retryable = !["already_processed", "stale", "invalid", "not_found"].includes(json.reason ?? "");
         setState({ kind: "error", message: json.error ?? "Something went wrong.", retryable });
       }
     } catch {
@@ -68,6 +67,10 @@ export function ProposedActionCard({
     // No network call — cancelling a proposal must never touch the database.
     setState({ kind: "done", message: "Cancelled — no changes were made." });
     onSettled?.("cancelled");
+  }
+
+  if (!isProposedAction(action)) {
+    return <p className="mt-2 text-xs text-[var(--color-text-secondary)]">This proposal is no longer supported. Ask Jarvis to check it again.</p>;
   }
 
   const fieldKeys = Array.from(new Set([...(action.current ? Object.keys(action.current) : []), ...Object.keys(action.proposed)]));

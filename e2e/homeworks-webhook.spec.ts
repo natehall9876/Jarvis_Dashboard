@@ -1,82 +1,66 @@
 import { test, expect } from "@playwright/test";
+import { loadServerModule } from "./load-server-module";
 
-/**
- * The Homeworks webhook is a server-to-server endpoint with no Supabase
- * Auth session — its only gate is the shared secret. These checks don't
- * need HOMEWORKS_WEBHOOK_SECRET or SUPABASE_SERVICE_ROLE_KEY configured;
- * they verify the endpoint fails safely in exactly that (unconfigured)
- * state, and rejects bad input before ever reaching the database.
- */
-test.describe("Homeworks webhook security boundary", () => {
-  test("rejects a request with the wrong secret", async ({ request }) => {
-    const res = await request.post("/api/integrations/homeworks/webhook", {
-      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
-      data: { entity_type: "customer", homeworks_id: "test" },
+type Route = { POST: (request: Request) => Promise<Response> };
+
+for (const routeName of ["webhook", "import"]) {
+  for (const [configured, supplied, expected] of [
+    [undefined, "wrong", 503],
+    ["fixture-secret", "CANARY-wrong-secret", 401],
+    ["fixture-secret", "fixture-secret", 410],
+  ] as const) {
+    test(`retired ${routeName} preserves auth and returns ${expected} without database access`, async () => {
+      let databaseCalls = 0;
+      const forbidden = () => { databaseCalls++; throw new Error("Database must not be accessed"); };
+      const route = loadServerModule<Route>(`src/app/api/integrations/homeworks/${routeName}/route.ts`, {
+        "@/lib/env.server": { homeworksWebhookEnv: { secret: configured } },
+        "@/lib/supabase/admin": { createSupabaseAdminClient: forbidden },
+        "@/lib/supabase/server": { createSupabaseServerClient: forbidden },
+      });
+      // Even malformed bodies receive the retired response after authentication.
+      const response = await route.POST(new Request("https://jarvis.test/api/retired", { method: "POST", headers: { "x-homeworks-webhook-secret": supplied }, body: "not JSON" }));
+      expect(response.status).toBe(expected);
+      const body = await response.text();
+      expect(body).not.toContain("CANARY-wrong-secret");
+      if (expected === 410) expect(body).toContain("Automatic Homeworks sync is authoritative");
+      expect(databaseCalls).toBe(0);
     });
-    // Either 401 (secret configured, this one's wrong) or 503 (not
-    // configured at all) is an acceptable "did not write to the database" —
-    // 500 or 200 would not be.
-    expect([401, 503]).toContain(res.status());
-  });
+  }
 
-  test("rejects a malformed body before touching the database", async ({ request }) => {
-    const res = await request.post("/api/integrations/homeworks/webhook", {
-      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
-      data: { nonsense: true },
+  test(`retired ${routeName} cannot be revived with a valid import or dry-run payload`, async () => {
+    let databaseCalls = 0;
+    const forbidden = () => { databaseCalls++; throw new Error("Database must not be accessed"); };
+    const route = loadServerModule<Route>(`src/app/api/integrations/homeworks/${routeName}/route.ts`, {
+      "@/lib/env.server": { homeworksWebhookEnv: { secret: "fixture-secret" } },
+      "@/lib/supabase/admin": { createSupabaseAdminClient: forbidden },
     });
-    expect(res.status()).toBeLessThan(500);
+    for (const dry_run of [false, true]) {
+      const response = await route.POST(new Request("https://jarvis.test/api/retired", {
+        method: "POST", headers: { "x-homeworks-webhook-secret": "fixture-secret", "content-type": "application/json" },
+        body: JSON.stringify({ entity_type: "customer", homeworks_id: "customer-1", records: [{ entity_type: "customer", homeworks_id: "customer-1" }], dry_run }),
+      }));
+      expect(response.status).toBe(410);
+    }
+    expect(databaseCalls).toBe(0);
   });
-});
+}
 
-test.describe("Homeworks bulk import security boundary", () => {
-  test("rejects a request with the wrong secret", async ({ request }) => {
-    const res = await request.post("/api/integrations/homeworks/import", {
-      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
-      data: { records: [{ entity_type: "customer", homeworks_id: "test" }] },
+for (const signedIn of [false, true]) {
+  test(`retired admin import ${signedIn ? "returns 410 after session check" : "rejects unauthenticated callers"}`, async () => {
+    const calls: string[] = [];
+    const client = new Proxy({ auth: { getUser: async () => { calls.push("auth"); return { data: { user: signedIn ? { id: "owner" } : null } }; } } }, {
+      get(target, property) {
+        if (property === "auth") return target.auth;
+        if (property === "then") return undefined;
+        calls.push(String(property));
+        throw new Error("No business records should be accessed");
+      },
     });
-    expect([401, 503]).toContain(res.status());
-  });
-
-  test("rejects an empty records array", async ({ request }) => {
-    const res = await request.post("/api/integrations/homeworks/import", {
-      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
-      data: { records: [] },
+    const route = loadServerModule<{ POST: () => Promise<Response> }>("src/app/api/integrations/homeworks/admin-import/route.ts", {
+      "@/lib/supabase/server": { createSupabaseServerClient: async () => client },
     });
-    // Wrong secret is checked first, so this is 401/503 too when
-    // unconfigured — the point is it never reaches the database either way.
-    expect(res.status()).toBeLessThan(500);
+    const response = await route.POST();
+    expect(response.status).toBe(signedIn ? 410 : 401);
+    expect(calls).toEqual(["auth"]);
   });
-
-  test("rejects a batch over the size limit", async ({ request }) => {
-    const res = await request.post("/api/integrations/homeworks/import", {
-      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
-      data: { records: Array.from({ length: 501 }, (_, i) => ({ entity_type: "customer", homeworks_id: `x${i}` })) },
-    });
-    expect(res.status()).toBeLessThan(500);
-  });
-
-  test("dry_run mode still enforces the same auth gate as a real import", async ({ request }) => {
-    // dry_run must never be a lighter-security preview path — a wrong
-    // secret should be rejected identically whether or not dry_run is set.
-    const res = await request.post("/api/integrations/homeworks/import", {
-      headers: { "x-homeworks-webhook-secret": "definitely-wrong" },
-      data: { records: [{ entity_type: "customer", homeworks_id: "test" }], dry_run: true },
-    });
-    expect([401, 503]).toContain(res.status());
-  });
-});
-
-test.describe("Homeworks owner-facing admin import", () => {
-  test("requires a logged-in session, not the webhook secret", async ({ request }) => {
-    const res = await request.post("/api/integrations/homeworks/admin-import", {
-      data: { records: [{ entity_type: "customer", homeworks_id: "test" }], dry_run: true },
-    });
-    expect(res.status()).toBe(401);
-  });
-
-  test("the import page redirects an unauthenticated visitor to login", async ({ page }) => {
-    const res = await page.goto("/settings/homeworks-import");
-    expect(res?.status()).toBeLessThan(500);
-    await expect(page).toHaveURL(/\/login/);
-  });
-});
+}

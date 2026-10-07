@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Archive } from "lucide-react";
@@ -37,6 +39,7 @@ export default async function ClientDetailPage({
   if (!data) notFound();
 
   const { client, properties, jobs, quotes, invoices, outstanding_balance, balance_verified } = data;
+  const sourceManaged = isHomeworksOwned(client);
   const clientPhotos = await getClientPhotos(id);
   const { data: services } = await getServiceOptions();
   const serviceNameById = new Map((services ?? []).map((s) => [s.id, s.name]));
@@ -55,10 +58,10 @@ export default async function ClientDetailPage({
             <Link href={`/clients/${id}?edit=1`}>
               <Button variant="secondary">
                 <Pencil className="h-3.5 w-3.5" />
-                Edit
+                {sourceManaged ? "Edit Notes" : "Edit"}
               </Button>
             </Link>
-            {client.status !== "inactive" ? (
+            {!sourceManaged && client.status !== "inactive" ? (
               <form action={archiveClientWithId}>
                 <ConfirmSubmit confirmMessage={`Archive ${clientDisplayName(client)}? They'll be marked inactive but their history stays intact.`}>
                   <Archive className="h-3.5 w-3.5" />
@@ -69,6 +72,8 @@ export default async function ClientDetailPage({
           </div>
         }
       />
+
+      {sourceManaged ? <HomeworksManagedNotice record={client}>Customer details and properties are managed in Homeworks. Notes stay in Jarvis.</HomeworksManagedNotice> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -112,11 +117,11 @@ export default async function ClientDetailPage({
         <CardHeader
           title="Properties"
           description={`${properties.length} on file`}
-          action={
+          action={!sourceManaged ? (
             <Link href={`/properties?new=1&client=${id}`} className="text-xs text-[var(--color-accent)] hover:underline">
               + Add property
             </Link>
-          }
+          ) : undefined}
         />
         <CardBody>
           {properties.length === 0 ? (
@@ -223,7 +228,7 @@ export default async function ClientDetailPage({
       </Card>
 
       {isEditing ? (
-        <Modal title="Edit Client" closeHref={`/clients/${id}`}>
+        <Modal title={sourceManaged ? "Edit Client Notes" : "Edit Client"} closeHref={`/clients/${id}`}>
           <ClientForm action={updateClientWithId} client={client} error={formError} />
         </Modal>
       ) : null}

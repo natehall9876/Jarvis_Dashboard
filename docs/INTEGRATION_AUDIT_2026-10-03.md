@@ -1,5 +1,7 @@
 # Integration audit — October 3, 2026
 
+> Historical evidence for the revision and date below. Current architecture, ownership rollout and sync status are documented in [CURRENT_STATE.md](CURRENT_STATE.md) and [DATA_AUTHORITY.md](DATA_AUTHORITY.md); these historical results do not verify the October 7 ownership changes.
+
 This is a timestamped audit, not a claim that external data is permanently current.
 Canonical checkout: C:\Users\nateh\OneDrive\Documents\Jarvis_Dashboard.
 Baseline: 9aa06f25d25f7b5e16472b4b5932570c4f1bbffe on main.

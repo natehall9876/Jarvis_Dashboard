@@ -7,6 +7,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm run verify:no-client-secrets
+npm run test:ownership:db
 npx playwright test --workers=2 --reporter=line
 ```
 
@@ -19,7 +20,8 @@ build against the same .next directory while that server is compiling.
 
 e2e includes pure domain/integration tests and browser tests in Chromium
 and mobile Safari. Coverage includes Homeworks normalization, linking,
-pagination, reconciliation, history/enrichment, webhook auth boundaries;
+pagination, read-only reconciliation/history/enrichment planning, retired
+webhook/import authentication and no-write boundaries;
 OAuth state/expiry/token handling; notes, tasks, photos, schedule/revenue,
 voice, login redirects, section isolation and interrupted workflows.
 
@@ -34,6 +36,26 @@ these tests never read real tokens or write business records.
 The voice-lab tests exercise isolated application components and mocked
 browser APIs. They are not evidence of a signed-in production session or a
 real microphone's behavior on the owner's phone.
+
+## Isolated Homeworks ownership database regression
+
+`npm run test:ownership:db` uses PGlite (real PostgreSQL semantics in an isolated
+in-memory database) and a schema-only snapshot captured read-only from production.
+It applies `20261007023608_homeworks_ownership_guards.sql`, executes synthetic
+rollback fixtures, verifies rollback, then runs the existing sync and schedule SQL
+against synthetic source records. No Supabase connection or production business
+rows are used. `npm run test:ownership:db -- --baseline` deliberately skips the guard
+migration to expose the prior ownership failure.
+
+The assertions distinguish an actual denied mutation from a zero-row RLS update,
+check native overlays/independent local writes and forbidden source/child writes,
+and exercise the real `homeworks_apply_page` with service-role privileges. Tests
+of the current source-role boundary do not replace application checks, browser
+verification or inspection of the installed production migration.
+
+The production counterpart is `scripts/homeworks-production-drift-audit.sql`, a
+separate repeatable-read read-only diagnostic. Never run the ownership fixtures
+or schema snapshot against production. See HOMEWORKS_WRITERS.md for writer scope.
 
 ## Live persistence suite
 
@@ -50,10 +72,14 @@ because no authenticated dedicated test setup was available locally.
 
 A passing mocked provider test proves error handling and request behavior,
 not that real credentials are accepted. A READY deployment proves deployment
-health, not CRM freshness. Record fresh provider verification and database
-observations with timestamps. See INTEGRATION_AUDIT_2026-10-03.md.
+health, not CRM freshness or installed database ownership guards. Record fresh
+provider verification, migration installation and database observations separately.
+See CURRENT_STATE.md and HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md.
 
-## October 3 follow-up coverage
+## Historical October 3 follow-up coverage
+
+These results describe that earlier revision, not a full pass of the current
+ownership changes. Current test outcomes belong in the implementation/release record.
 
 The complete default suite passed 734 tests across Chromium and mobile Safari.
 Typecheck, lint, production build and client-secret scan passed on NatesPC.

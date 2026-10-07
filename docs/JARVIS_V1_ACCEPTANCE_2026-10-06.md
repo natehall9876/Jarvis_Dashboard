@@ -1,5 +1,7 @@
 # Jarvis V1 production acceptance — 2026-10-06
 
+> Historical evidence for the revision and date below. Current architecture, ownership rollout and sync status are documented in [CURRENT_STATE.md](CURRENT_STATE.md) and [DATA_AUTHORITY.md](DATA_AUTHORITY.md); these historical results do not verify the October 7 ownership changes.
+
 Production: https://jarvis-dashboard-fawn.vercel.app
 
 The operational dashboard is deployed and personally verified against real production data. **Full V1 acceptance is not complete:** QuickBooks denies production reads, Google Calendar lacks credentials/authorization, and physical iPhone microphone recognition remains unverified. Missing data is explicitly unavailable.

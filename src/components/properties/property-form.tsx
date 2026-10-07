@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned, type OwnershipOption, type HomeworksOwnershipRecord } from "@/lib/homeworks-ownership";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput, Select, Textarea, FormError } from "@/components/ui/form-fields";
 import type { Property } from "@/types/domain";
@@ -7,24 +9,46 @@ export function PropertyForm({
   property,
   clients,
   defaultClientId,
+  managedRecord,
   error,
 }: {
   action: (formData: FormData) => void;
   property?: Property;
-  clients: { id: string; label: string }[];
+  clients: OwnershipOption[];
+  managedRecord?: HomeworksOwnershipRecord | null;
   defaultClientId?: string;
   error?: string;
 }) {
+  const sourceRecord = isHomeworksOwned(property) ? property : managedRecord;
+  if (property && isHomeworksOwned(sourceRecord)) return (
+    <form action={action} className="space-y-4">
+      <FormError message={error} />
+      <HomeworksManagedNotice record={sourceRecord}>Address and property details are managed in Homeworks. Access and service notes stay in Jarvis.</HomeworksManagedNotice>
+      <Field label="Access Notes" htmlFor="access_notes">
+        <Textarea id="access_notes" name="access_notes" rows={2} defaultValue={property.access_notes ?? ""} />
+      </Field>
+      <Field label="Service Notes" htmlFor="service_notes">
+        <Textarea id="service_notes" name="service_notes" rows={2} defaultValue={property.service_notes ?? ""} />
+      </Field>
+      <Button type="submit">Save Notes</Button>
+    </form>
+  );
+  const selectedClient = clients.find((client) => client.id === defaultClientId);
+  const localClients = clients.filter((client) => !isHomeworksOwned(client));
+  if (isHomeworksOwned(selectedClient) || (!property && localClients.length === 0)) {
+    return <HomeworksManagedNotice record={selectedClient}>Create properties for Homeworks customers in Homeworks.</HomeworksManagedNotice>;
+  }
   return (
     <form action={action} className="space-y-4">
       <FormError message={error} />
+      {localClients.length < clients.length ? <HomeworksManagedNotice>Create properties for Homeworks customers in Homeworks.</HomeworksManagedNotice> : null}
 
       <Field label="Client" htmlFor="client_id" required>
         <Select id="client_id" name="client_id" defaultValue={property?.client_id ?? defaultClientId ?? ""} required>
           <option value="" disabled>
             Select a client...
           </option>
-          {clients.map((c) => (
+          {localClients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
             </option>

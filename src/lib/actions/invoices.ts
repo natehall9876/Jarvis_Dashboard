@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { optionalString, requiredString, requiredNumber, withError, runMutation } from "./shared";
 import { logActivity } from "@/lib/data/activity-log";
+import { getOwnershipRecord, isRecordHomeworksOwned, rejectOwnershipFields, requireLocalRecord, requireLocalFinancialParents, requireNativeChanges, submittedFields } from "./homeworks-ownership";
 
 async function recomputeInvoiceTotal(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -24,6 +25,8 @@ export async function createInvoice(formData: FormData) {
   const clientId = requiredString(formData, "client_id");
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    rejectOwnershipFields(formData);
+    await requireLocalFinancialParents(supabase, clientId, optionalString(formData, "property_id"));
     const dueDate = optionalString(formData, "due_date");
     const { data, error } = await supabase
       .from("invoices")
@@ -60,13 +63,28 @@ export async function createInvoice(formData: FormData) {
 export async function updateInvoice(invoiceId: string, formData: FormData) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    rejectOwnershipFields(formData);
+    const current = await getOwnershipRecord(supabase, "invoices", invoiceId);
+    const formFields = {
+      property_id: optionalString(formData, "property_id"),
+      due_date: optionalString(formData, "due_date"),
+      notes: optionalString(formData, "notes"),
+    };
+    let fields = submittedFields(formData, formFields);
+    if (await isRecordHomeworksOwned(supabase, "invoices", current)) {
+      // Validate every submitted business field, including fields this form
+      // never renders. Next's action metadata is not a business-field patch.
+      const submitted = Object.fromEntries(Array.from(formData).filter(([key]) => !key.startsWith("$ACTION_")));
+      requireNativeChanges(current, { ...submitted, ...fields }, ["notes"]);
+      fields = submittedFields(formData, { notes: formFields.notes });
+    } else {
+      await requireLocalFinancialParents(supabase, current.client_id, formFields.property_id);
+      fields = formFields;
+    }
+    if (!Object.keys(fields).length) return;
     const { error } = await supabase
       .from("invoices")
-      .update({
-        property_id: optionalString(formData, "property_id"),
-        due_date: optionalString(formData, "due_date"),
-        notes: optionalString(formData, "notes"),
-      })
+      .update(fields)
       .eq("id", invoiceId);
     if (error) throw error;
   });
@@ -78,6 +96,7 @@ export async function updateInvoice(invoiceId: string, formData: FormData) {
 export async function deleteDraftInvoice(invoiceId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "invoices", invoiceId);
     const { data: invoice, error: fetchError } = await supabase.from("invoices").select("status").eq("id", invoiceId).single();
     if (fetchError) throw fetchError;
     if (invoice.status !== "draft") throw new Error("Only draft invoices can be deleted. Void it instead.");
@@ -92,6 +111,7 @@ export async function deleteDraftInvoice(invoiceId: string) {
 export async function voidInvoice(invoiceId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "invoices", invoiceId);
     const { error } = await supabase.from("invoices").update({ status: "void" }).eq("id", invoiceId);
     if (error) throw error;
     await logActivity({
@@ -109,6 +129,7 @@ export async function voidInvoice(invoiceId: string) {
 export async function sendInvoice(invoiceId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "invoices", invoiceId);
     const { error } = await supabase.from("invoices").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", invoiceId);
     if (error) throw error;
     await logActivity({
@@ -126,6 +147,8 @@ export async function sendInvoice(invoiceId: string) {
 export async function addInvoiceItem(invoiceId: string, formData: FormData) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    await requireLocalRecord(supabase, "invoices", invoiceId);
+    rejectOwnershipFields(formData);
     const quantity = requiredNumber(formData, "quantity");
     const unitPrice = requiredNumber(formData, "unit_price");
     const { error } = await supabase.from("invoice_items").insert({
@@ -147,7 +170,11 @@ export async function addInvoiceItem(invoiceId: string, formData: FormData) {
 export async function removeInvoiceItem(invoiceId: string, itemId: string) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("invoice_items").delete().eq("id", itemId);
+    await requireLocalRecord(supabase, "invoices", invoiceId);
+    const { data: item, error: itemError } = await supabase.from("invoice_items").select("id").eq("id", itemId).eq("invoice_id", invoiceId).maybeSingle();
+    if (itemError) throw itemError;
+    if (!item) throw new Error("That line item does not belong to this invoice.");
+    const { error } = await supabase.from("invoice_items").delete().eq("id", itemId).eq("invoice_id", invoiceId);
     if (error) throw error;
     await recomputeInvoiceTotal(supabase, invoiceId);
   });
@@ -159,6 +186,9 @@ export async function removeInvoiceItem(invoiceId: string, itemId: string) {
 export async function recordPayment(invoiceId: string, clientId: string, formData: FormData) {
   const result = await runMutation(async () => {
     const supabase = await createSupabaseServerClient();
+    rejectOwnershipFields(formData);
+    const invoice = await requireLocalRecord(supabase, "invoices", invoiceId);
+    if (invoice.client_id !== clientId) throw new Error("The payment client does not match the invoice.");
     const amount = requiredNumber(formData, "amount");
 
     const { error: paymentError } = await supabase.from("payments").insert({
@@ -171,13 +201,6 @@ export async function recordPayment(invoiceId: string, clientId: string, formDat
       notes: optionalString(formData, "notes"),
     });
     if (paymentError) throw paymentError;
-
-    const { data: invoice, error: fetchError } = await supabase
-      .from("invoices")
-      .select("amount_paid, total")
-      .eq("id", invoiceId)
-      .single();
-    if (fetchError) throw fetchError;
 
     const newAmountPaid = invoice.amount_paid + amount;
     const patch: { amount_paid: number; status?: string; paid_at?: string } = { amount_paid: newAmountPaid };

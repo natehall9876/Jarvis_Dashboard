@@ -14,10 +14,19 @@ new write capability means adding a new union member and a new
 `propose_*`/`execute*` pair — never a generic "run this mutation" escape
 hatch.
 
+The supported actions are `reschedule_job`, `update_job_status`,
+`add_job_note`, `create_task`, and `complete_task`. Job creation (including
+logging completed work as a new job) and crew assignment have no AI tool,
+proposal type, or executor. Source-owned creation/crew changes belong in
+Homeworks; guarded human creation for independent local records remains separate. Both the HTTP
+endpoint and executor reject retired or unknown action types at runtime;
+old confirmation cards must not offer a Confirm button for them.
+
 ## 2. Propose ≠ execute
 
-Every `propose_*` tool in `src/lib/ai/tools/actions.ts` only reads data and
-returns a `ProposedAction`. It never calls `.insert()`/`.update()`/
+Every `propose_*` tool in `src/lib/ai/tools/actions.ts` and
+`src/lib/ai/tools/tasks.ts` only reads or validates data and returns a
+`ProposedAction`. It never calls `.insert()`/`.update()`/
 `.delete()`. The only code that performs a Jarvis-originated write is
 `src/lib/ai/actions/execute.ts`, reached only through
 `/api/ai-advisor/execute-action` — an endpoint the model has no way to call.
@@ -37,8 +46,9 @@ produces zero execute-action calls, because voice only ever reaches
 
 ## 4. Never guess a write target
 
-A `propose_*` tool requires an exact id (`job_id`, `employee_id`,
-`property_id`) — never a name or fuzzy match. The system prompt explicitly
+A `propose_*` tool targeting an existing record requires an exact id
+(`job_id` or `task_id`) — never a name or fuzzy match. Creating an owner
+task does not require a linked job. The system prompt explicitly
 instructs the model: if a request could match more than one record, ask
 which one or list candidates — never call a `propose_*` tool with a guessed
 id. This is verified behavior (an ambiguous "reschedule the client's job"
@@ -47,14 +57,18 @@ proposal at all).
 
 ## 5. Read-before-write, and re-validate at execution time
 
-Every `propose_*` tool reads the current record and includes a snapshot
-(currently `updated_at`) in the proposal. `execute.ts` re-reads the record at
+Job schedule/status proposal tools read the current record and include a
+snapshot (`updated_at`) in the proposal. `execute.ts` re-reads the record at
 confirmation time and rejects the action if the snapshot doesn't match
 (`reason: "stale"`) — the record changed between proposal and confirmation.
 Every field in the payload is re-validated against real constraints
 (job status enum, date format, record existence) at execution time — nothing
 from the client request is trusted just because it round-tripped through the
 UI.
+
+Note additions validate the note and check that the job still exists.
+Task additions validate the title, notes, and optional due date; task
+completion checks that the task is still open before updating it.
 
 ## 6. Exactly-once execution
 
@@ -85,7 +99,20 @@ behavior, since the key is never in-context to begin with.
 ## 9. Keep privileged integration access narrow
 
 Human and AI business reads/writes use the authenticated RLS-scoped client.
-Server-only OAuth token stores and authenticated inbound webhook handling
-are deliberate admin-client exceptions; see src/lib/supabase/admin.ts.
+Server-only OAuth token stores, the automatic Homeworks worker, and verified
+Homeworks schedule write-through are deliberate admin-client exceptions.
+Legacy webhook/import endpoints are retired and no longer use the admin client.
+See docs/DATA_AUTHORITY.md and docs/HOMEWORKS_WRITERS.md.
 Never import the admin client into browser code, expose tokens through AI
 tools, or use service-role access to bypass ordinary business-data RLS.
+
+## 10. Keep source fields in Homeworks and local additions separate
+
+Confirmed schedule/status changes call the shared `updateJobFields` /
+`updateJobStatus` actions, which write through Homeworks and verify the
+source result. The executor must never directly patch `jobs` or
+`job_employees`, including appending audit text to Homeworks-owned
+`jobs.notes`. Audit events go to `activity_log`; owner-requested notes go
+to `job_notes`; owner tasks go to `owner_tasks`. These local additions do
+not change Homeworks job details. Source failures must surface as failures
+without a local fallback or a claim that the requested change succeeded.

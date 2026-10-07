@@ -1,14 +1,23 @@
 # Homeworks automatic production synchronization
 
+The worker described here is already in production. The October 7 ownership
+guards and legacy-writer retirement are working-tree changes pending deployment
+and migration; see [current state](CURRENT_STATE.md). Earlier verification below
+is timestamped evidence of the worker, not a claim that the new guards are live.
+
 ## Root cause
 The previous integration had working OAuth/API reads, owner-invoked imports/reconciliation, and a webhook receiver. It had no production scheduled worker and no verified Homeworks event subscription delivering the required object coverage. A successful connection/API check therefore did not advance operational data. At diagnosis, production contained 48 linked jobs last updated September 25 and no linked Homeworks invoices.
 
 ## Production flow
 Homeworks GraphQL -> Supabase pg_cron every five minutes -> pg_net POST to the Vercel scheduled route -> service-only OAuth worker -> transactional source mirror and native projections -> production server-rendered UI. The browser only checks status every 20 seconds and refreshes displayed data; it never performs ingestion.
 
-The named cron job is jarvis-homeworks-sync, schedule */5 * * * *. Each timestamp-capable stream uses updatedAt with a five-minute overlap and id keyset pagination. Every stream receives a full scan at least daily. Properties, items and users are scanned each run because their filter schema does not support the same incremental timestamp. 21 explicit archive/deletion partitions avoid provider default filters hiding records.
+The named cron job is jarvis-homeworks-sync, schedule */5 * * * *. Each timestamp-capable stream uses updatedAt with a five-minute overlap and id keyset pagination. Every stream receives a full scan at least daily. Properties, items and users are scanned each run because their filter schema does not support the same incremental timestamp. Events are also scanned each run so route-stop changes are observed even when event updatedAt does not advance. 21 explicit archive/deletion partitions avoid provider default filters hiding records.
 
-The existing webhook endpoint remains available, but automatic operation does not depend on it. No sufficient native webhook subscription interface was found in the live Homeworks GraphQL schema used by this connection.
+Automatic operation does not depend on inbound webhook delivery. The October 7
+working tree retires the old webhook/import endpoints with HTTP 410 after
+authentication and removes the competing manual import/enrichment writers.
+No sufficient native webhook subscription interface was found in the live
+Homeworks GraphQL schema used by this connection.
 
 ## Data coverage
 - Customers: source ID, name, email, both phone fields, contact address, status, notes and deletion state.

@@ -115,15 +115,15 @@ export default async function SettingsPage({
       <Card>
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-[var(--color-text-primary)]">Homeworks customer import</p>
-            <p className="text-xs text-[var(--color-text-secondary)]">Review and safely import Homeworks records — preview before anything is written.</p>
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">Homeworks source records</p>
+            <p className="text-xs text-[var(--color-text-secondary)]">View automatically synchronized Homeworks records and their source IDs.</p>
           </div>
           <Link
-            href="/settings/homeworks-import"
+            href="/homeworks"
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-surface-3)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)]"
           >
             <Upload className="h-4 w-4" />
-            Open Import Tool
+            View Homeworks Records
           </Link>
         </CardBody>
       </Card>

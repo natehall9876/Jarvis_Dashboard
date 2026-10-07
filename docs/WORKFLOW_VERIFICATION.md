@@ -1,5 +1,7 @@
 # Workflow verification — September 23, 2026
 
+> Historical evidence for the revision and date below. Current architecture, ownership rollout and sync status are documented in [CURRENT_STATE.md](CURRENT_STATE.md) and [DATA_AUTHORITY.md](DATA_AUTHORITY.md); these historical results do not verify the October 7 ownership changes.
+
 Fresh clone/fetch found only `main`, at `0baedae9961fcfae287c5f0d9a2a82ff9f123b92`.
 GitHub returned no commit for `fac5a4c`, `1759c96`, `291a5aa`, or `422cb04`.
 No recovery patch or bundle was available in this workspace. Existing fixes on

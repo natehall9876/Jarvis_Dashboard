@@ -28,12 +28,13 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
   return (
     <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-[var(--color-text-primary)]">Sync status</p>
+        <p className="text-xs font-medium text-[var(--color-text-primary)]">Legacy sync history</p>
         <Button type="button" variant="secondary" onClick={run} disabled={pending}>
           {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Check sync status
+          Check legacy history
         </Button>
       </div>
+      <a href="/homeworks" className="text-xs text-[var(--color-accent)] hover:underline">View current automatic synchronization status</a>
       <p className="text-[11px] text-[var(--color-text-muted)]">Token stored since {connectedAt ? when(connectedAt) : "never — not connected"}. That alone doesn&apos;t mean anything has synced.</p>
 
       {result && !result.ok ? (
@@ -85,7 +86,7 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
           {!s.lastWebhookDeliveryAt ? (
             <p className="flex items-start gap-1.5 text-[var(--color-warning)]">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              No delivery with verified webhook provenance is recorded. Older entries may have been manual imports. If the Zapier Zap is supposed to be running, check its History tab in Zapier directly — a linked/total count above being non-zero only means SOME sync path (webhook, bulk import, or manual link) has run at some point, not that the live webhook specifically is delivering right now.
+              No verified delivery from the retired webhook is recorded. These counts describe legacy import activity; automatic synchronization status is available on the Homeworks page.
             </p>
           ) : null}
           {s.recentActivity.length > 0 ? (

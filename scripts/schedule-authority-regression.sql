@@ -1,5 +1,6 @@
 -- Run as a database administrator. All fixture writes roll back.
 begin;
+set local role service_role;
 do $$ declare own uuid:=gen_random_uuid(); row_data jsonb; hid text; n integer; begin
 if not public.homeworks_claim_lease('sync',own,30) then raise exception 'Sync busy; retry the test later'; end if;
 select homeworks_id,payload into hid,row_data from public.homeworks_records where entity='events' and projected_id is not null and not coalesce((payload->>'isDeleted')::boolean,false) order by homeworks_id limit 1;

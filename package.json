@@ -11,7 +11,8 @@
     "typegen": "next typegen",
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:persistence": "playwright test --config playwright.persistence.config.ts"
+    "test:persistence": "playwright test --config playwright.persistence.config.ts",
+    "test:ownership:db": "node scripts/test-homeworks-ownership.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.6",
@@ -27,6 +28,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

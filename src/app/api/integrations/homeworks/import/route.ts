@@ -1,130 +1,15 @@
 import { NextResponse } from "next/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { homeworksWebhookEnv } from "@/lib/env.server";
-import { dryRunHomeworksEntity, isValidHomeworksSyncPayload, syncHomeworksEntity, type BulkImportPayload } from "@/lib/integrations/homeworks-sync";
+import { LEGACY_HOMEWORKS_WRITE_DISABLED } from "@/lib/integrations/homeworks-sync";
+import { INVALID_SECRET_MESSAGE } from "@/lib/integrations/homeworks-sync-failures";
 
-/**
- * One-time (or repeatable) BULK backfill for records that already existed
- * in Homeworks before the live webhook started catching new ones — the
- * "New Customer" Zapier trigger only fires for customers created AFTER the
- * Zap is turned on, so it can never retroactively import the existing
- * customer base on its own. No Homeworks API or Zapier action can list
- * "all customers" in bulk either (checked: Homeworks' documented Zapier
- * triggers are all event-based, and there's no documented direct API), so
- * this endpoint accepts whatever export Homeworks' own UI can produce
- * (Settings/Reports — check there; not something this project can access
- * or verify without a live account) and applies the exact same safe,
- * idempotent upsert logic as the live webhook.
- *
- * Body: { records: HomeworksSyncPayload[], dry_run?: boolean } — same
- * per-record shape the webhook uses. With dry_run: true, nothing is
- * written — every record is checked against the database (and against
- * customers appearing earlier in the same batch) and the response reports
- * exactly how many would be created vs. updated vs. fail, so a real export
- * can be validated before a single row changes. Without dry_run, processes
- * sequentially (not parallel) and keeps going past individual failures, so
- * one bad row (e.g. a property referencing a customer not yet synced)
- * doesn't abort the whole batch — the response reports success/failure per
- * record so nothing fails silently.
- *
- * Same shared-secret auth as the webhook (HOMEWORKS_WEBHOOK_SECRET) — this
- * is not a lighter-security bulk-loading backdoor, just a batched version
- * of the same authenticated write path.
- */
+/** Retired projection writer. Authenticate legacy callers, then reject without I/O. */
 export async function POST(request: Request) {
   if (!homeworksWebhookEnv.secret) {
     return NextResponse.json({ error: "Homeworks integration is not configured (HOMEWORKS_WEBHOOK_SECRET missing)." }, { status: 503 });
   }
-  const providedSecret = request.headers.get("x-homeworks-webhook-secret");
-  if (providedSecret !== homeworksWebhookEnv.secret) {
-    return NextResponse.json({ error: "Invalid or missing webhook secret." }, { status: 401 });
+  if (request.headers.get("x-homeworks-webhook-secret") !== homeworksWebhookEnv.secret) {
+    return NextResponse.json({ error: INVALID_SECRET_MESSAGE }, { status: 401 });
   }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  if (typeof body !== "object" || body === null || !("records" in body) || !Array.isArray((body as { records: unknown }).records)) {
-    return NextResponse.json({ error: "Body must be { records: [...] } — an array of the same per-record shape the webhook uses." }, { status: 400 });
-  }
-  const records = (body as { records: unknown[] }).records;
-  if (records.length === 0) {
-    return NextResponse.json({ error: "records array is empty." }, { status: 400 });
-  }
-  if (records.length > 500) {
-    return NextResponse.json({ error: "Max 500 records per request — split larger exports into batches." }, { status: 400 });
-  }
-
-  // "job" is a real entity_type (see lib/integrations/homeworks-sync.ts),
-  // but only for the direct-API sync path (lib/actions/homeworks-job-
-  // sync.ts) — this bulk CSV/JSON endpoint's contract never included jobs
-  // and its shape (customer_homeworks_id, not property_homeworks_id)
-  // doesn't fit one, so reject it explicitly rather than accept it and
-  // fail confusingly downstream.
-  const invalid = records.filter((r) => !isValidHomeworksSyncPayload(r) || (r as { entity_type?: string }).entity_type === "job");
-  if (invalid.length > 0) {
-    return NextResponse.json(
-      {
-        error: `${invalid.length} of ${records.length} records are missing required fields (entity_type, homeworks_id, and customer_homeworks_id for property/invoice), or use entity_type "job" (not supported by this bulk endpoint — jobs sync via Settings' Homeworks card instead).`,
-      },
-      { status: 400 },
-    );
-  }
-  const validRecords = records as BulkImportPayload[];
-
-  let supabase: ReturnType<typeof createSupabaseAdminClient>;
-  try {
-    supabase = createSupabaseAdminClient();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Supabase admin client is not configured.";
-    return NextResponse.json({ error: message }, { status: 503 });
-  }
-
-  const dryRun = (body as { dry_run?: unknown }).dry_run === true;
-  if (dryRun) {
-    const customersSeen = new Set<string>();
-    const preview = [];
-    for (const record of validRecords) {
-      preview.push(await dryRunHomeworksEntity(supabase, record, customersSeen));
-      if (record.entity_type === "customer") customersSeen.add(record.homeworks_id);
-    }
-    const toCreate = preview.filter((p) => p.action === "create").length;
-    const toUpdate = preview.filter((p) => p.action === "update").length;
-    const wouldFail = preview.filter((p) => p.action === "would_fail").length;
-    return NextResponse.json({
-      ok: true,
-      dry_run: true,
-      total: preview.length,
-      would_create: toCreate,
-      would_update: toUpdate,
-      would_fail: wouldFail,
-      preview,
-    });
-  }
-
-  // Sequential, not Promise.all — customers should generally be imported
-  // before the properties/invoices that reference them, and sequential
-  // processing keeps that order predictable within one batch rather than
-  // racing. For 500 records this is a few seconds, not a bottleneck.
-  const results: Array<{ homeworks_id: string; entity_type: string } & ({ ok: true; id: string } | { ok: false; error: string })> = [];
-  for (const record of validRecords) {
-    const result = await syncHomeworksEntity(supabase, record, "bulk_import");
-    results.push(
-      result.ok
-        ? { homeworks_id: record.homeworks_id, entity_type: record.entity_type, ok: true, id: result.id }
-        : { homeworks_id: record.homeworks_id, entity_type: record.entity_type, ok: false, error: result.error },
-    );
-  }
-
-  const succeeded = results.filter((r) => r.ok).length;
-  return NextResponse.json({
-    ok: true,
-    total: results.length,
-    succeeded,
-    failed: results.length - succeeded,
-    results,
-  });
+  return NextResponse.json({ error: LEGACY_HOMEWORKS_WRITE_DISABLED }, { status: 410 });
 }

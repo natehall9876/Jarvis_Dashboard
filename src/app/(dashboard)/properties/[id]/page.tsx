@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Archive } from "lucide-react";
@@ -41,6 +43,8 @@ export default async function PropertyDetailPage({
   if (!data) notFound();
 
   const { property, client, route, agreements, jobs, quotes, invoices, photos } = data;
+  const sourceRecord = isHomeworksOwned(property) ? property : isHomeworksOwned(client) ? client : null;
+  const sourceManaged = !!sourceRecord;
   const { urls: photoUrls, error: photoUrlsError } = await getJobPhotoUrls(photos.map((p) => p.storage_path));
   const updatePropertyWithId = updateProperty.bind(null, id);
   const archivePropertyWithId = archiveProperty.bind(null, id);
@@ -56,10 +60,10 @@ export default async function PropertyDetailPage({
             <Link href={`/properties/${id}?edit=1`}>
               <Button variant="secondary">
                 <Pencil className="h-3.5 w-3.5" />
-                Edit
+                {sourceManaged ? "Edit Notes" : "Edit"}
               </Button>
             </Link>
-            {property.active ? (
+            {!sourceManaged && property.active ? (
               <form action={archivePropertyWithId}>
                 <ConfirmSubmit confirmMessage="Archive this property? Its history stays intact, but it'll be marked inactive.">
                   <Archive className="h-3.5 w-3.5" />
@@ -70,6 +74,8 @@ export default async function PropertyDetailPage({
           </div>
         }
       />
+
+      {sourceManaged ? <HomeworksManagedNotice record={sourceRecord}>Property details and jobs are managed in Homeworks. Access and service notes stay in Jarvis.</HomeworksManagedNotice> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -207,14 +213,23 @@ export default async function PropertyDetailPage({
       <Card>
         <CardHeader title="Photos" description={`${photos.length} on file`} />
         <CardBody className="space-y-4">
-          <PhotoUploadForm propertyId={id} clientId={client?.id} />
+          <PhotoUploadForm
+            propertyId={id}
+            clientId={client?.id}
+            managedRecord={sourceRecord ? {
+              homeworks_id: sourceRecord.homeworks_id,
+              homeworks_status: sourceRecord.homeworks_status,
+              homeworks_deleted: sourceRecord.homeworks_deleted,
+              data_source: "data_source" in sourceRecord ? sourceRecord.data_source : undefined,
+            } : null}
+          />
           <PhotoGrid photos={photos} photoUrls={photoUrls} photoUrlsError={photoUrlsError} emptyDescription="Before/after photos from completed jobs will appear here." />
         </CardBody>
       </Card>
 
       {isEditing ? (
-        <Modal title="Edit Property" closeHref={`/properties/${id}`}>
-          <PropertyForm action={updatePropertyWithId} property={property} clients={clientsResult.data ?? []} error={formError} />
+        <Modal title={sourceManaged ? "Edit Property Notes" : "Edit Property"} closeHref={`/properties/${id}`}>
+          <PropertyForm action={updatePropertyWithId} property={property} managedRecord={sourceRecord} clients={clientsResult.data ?? []} error={formError} />
         </Modal>
       ) : null}
     </div>

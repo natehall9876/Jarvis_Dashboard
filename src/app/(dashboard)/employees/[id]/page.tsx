@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned } from "@/lib/homeworks-ownership";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Archive } from "lucide-react";
@@ -33,6 +35,7 @@ export default async function EmployeeDetailPage({
   if (error) return <ErrorState description={error} />;
   if (!employee) notFound();
 
+  const sourceManaged = isHomeworksOwned(employee);
   const updateEmployeeWithId = updateEmployee.bind(null, id);
   const archiveEmployeeWithId = archiveEmployee.bind(null, id);
 
@@ -47,10 +50,10 @@ export default async function EmployeeDetailPage({
             <Link href={`/employees/${id}?edit=1`}>
               <Button variant="secondary">
                 <Pencil className="h-3.5 w-3.5" />
-                Edit
+                {sourceManaged ? "Edit Staffing Details" : "Edit"}
               </Button>
             </Link>
-            {employee.active ? (
+            {!sourceManaged && employee.active ? (
               <form action={archiveEmployeeWithId}>
                 <ConfirmSubmit confirmMessage={`Mark ${employee.first_name} as inactive? Their job history stays intact.`}>
                   <Archive className="h-3.5 w-3.5" />
@@ -61,6 +64,8 @@ export default async function EmployeeDetailPage({
           </div>
         }
       />
+
+      {sourceManaged ? <HomeworksManagedNotice record={employee}>Employee identity, contact details and active status are managed in Homeworks. Staffing details and notes stay in Jarvis.</HomeworksManagedNotice> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -130,7 +135,7 @@ export default async function EmployeeDetailPage({
       </Card>
 
       {isEditing ? (
-        <Modal title="Edit Employee" closeHref={`/employees/${id}`}>
+        <Modal title={sourceManaged ? "Edit Staffing Details" : "Edit Employee"} closeHref={`/employees/${id}`}>
           <EmployeeForm action={updateEmployeeWithId} employee={employee} error={formError} />
         </Modal>
       ) : null}

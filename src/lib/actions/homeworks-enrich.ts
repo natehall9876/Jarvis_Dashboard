@@ -1,10 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { LEGACY_HOMEWORKS_WRITE_DISABLED } from "@/lib/integrations/homeworks-sync";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getEventsInRange, type EventFetchMeta } from "@/lib/integrations/homeworks-api";
-import { logActivity } from "@/lib/data/activity-log";
-import { normalizeServiceName, planEnrichment, type EnrichEvent, type EnrichJob, type EnrichPlan, type EnrichRow } from "@/lib/integrations/homeworks-enrich";
+import { planEnrichment, type EnrichEvent, type EnrichJob, type EnrichPlan } from "@/lib/integrations/homeworks-enrich";
 import type { DateRange } from "@/lib/integrations/homeworks-dates";
 
 type Supa = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -74,81 +74,8 @@ export type EnrichConfirmResult =
   | { ok: true; jobsUpdated: number; fieldsFilled: number; servicesCreated: number; skipped: number; errors: number; details: { hwId: string; customer: string; outcome: "updated" | "skipped" | "error"; detail: string }[] }
   | { ok: false; message: string };
 
-/**
- * The only write path for enrichment. Re-derives the whole plan from live data
- * (never trusts client state) and applies ONLY fills. Every write is guarded so
- * it can only land on a still-blank field — if the owner edited a job after the
- * preview, that write updates zero rows and is skipped. Never creates or
- * deletes jobs, never touches notes/price/status/photos, never changes an
- * external ID. Re-running after success finds nothing left to fill.
- */
-export async function confirmHomeworksEnrichment(range: DateRange): Promise<EnrichConfirmResult> {
-  const built = await buildPlan(range);
-  if (!built.ok) return built;
-  const { plan, supabase } = built;
-
-  const serviceIdByName = new Map(built.services.map((s) => [normalizeServiceName(s.name), s.id]));
-  let servicesCreated = 0;
-  const details: (Extract<EnrichConfirmResult, { ok: true }>["details"][number])[] = [];
-  let errors = 0;
-
-  // Create only the services that genuinely don't exist (checked case-insensitively, just now).
-  for (const svc of plan.servicesToCreate) {
-    const key = normalizeServiceName(svc.name);
-    if (serviceIdByName.has(key)) continue;
-    const { data, error } = await supabase.from("services").insert({ name: svc.name, description: svc.description, active: true }).select("id").single();
-    if (error || !data) {
-      errors++;
-      details.push({ hwId: "-", customer: `service "${svc.name}"`, outcome: "error", detail: error?.message ?? "Could not create service." });
-      continue;
-    }
-    serviceIdByName.set(key, data.id);
-    servicesCreated++;
-  }
-
-  let jobsUpdated = 0;
-  let fieldsFilled = 0;
-  for (const row of plan.rows.filter((r): r is EnrichRow => r.status === "update")) {
-    let filled = 0;
-    const notes: string[] = [];
-    for (const change of row.changes) {
-      let q;
-      if (change.field === "service") {
-        const serviceId = row.resolved.serviceName ? serviceIdByName.get(normalizeServiceName(row.resolved.serviceName)) : undefined;
-        if (!serviceId) {
-          notes.push("service unavailable");
-          continue;
-        }
-        q = supabase.from("jobs").update({ service_id: serviceId }).eq("id", row.jobId).is("service_id", null);
-      } else if (change.field === "budgeted_hours" && row.resolved.hours !== null) {
-        q = supabase.from("jobs").update({ budgeted_hours: row.resolved.hours }).eq("id", row.jobId).or("budgeted_hours.is.null,budgeted_hours.lte.0");
-      } else if (change.field === "scheduled_start_time" && row.resolved.startTime) {
-        q = supabase.from("jobs").update({ scheduled_start_time: row.resolved.startTime }).eq("id", row.jobId).is("scheduled_start_time", null);
-      } else continue;
-      const { data, error } = await q.select("id");
-      if (error) {
-        errors++;
-        notes.push(`${change.field}: ${error.message}`);
-      } else if (!data || data.length === 0) notes.push(`${change.field} changed since preview — left alone`);
-      else filled++;
-    }
-    if (filled > 0) {
-      jobsUpdated++;
-      fieldsFilled += filled;
-      await logActivity({
-        entityType: "job",
-        entityId: row.jobId,
-        eventType: "homeworks_enriched",
-        summary: `Filled ${filled} blank field(s) from Homeworks event ${row.hwId}`,
-        detail: { fields: row.changes.map((c) => c.field), homeworks_id: row.hwId },
-        source: "owner",
-      });
-    }
-    details.push({ hwId: row.hwId, customer: row.customer, outcome: filled > 0 ? "updated" : notes.length ? "error" : "skipped", detail: notes.length ? notes.join("; ") : `Filled ${filled} field(s)` });
-  }
-
-  revalidatePath("/schedule");
-  revalidatePath("/jobs");
-  revalidatePath("/");
-  return { ok: true, jobsUpdated, fieldsFilled, servicesCreated, skipped: details.filter((d) => d.outcome === "skipped").length, errors, details };
+/** Retired: automatic sync owns the Homeworks projections. Performs no I/O. */
+export async function confirmHomeworksEnrichment(_range: DateRange): Promise<EnrichConfirmResult> {
+  void _range; // Keep the retired action signature compatible with stale callers.
+  return { ok: false, message: LEGACY_HOMEWORKS_WRITE_DISABLED };
 }

@@ -1,3 +1,5 @@
+import { HomeworksManagedNotice } from "@/components/homeworks-managed-notice";
+import { isHomeworksOwned, isHomeworksOptionOwned, type OwnershipOption } from "@/lib/homeworks-ownership";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput, Select, Textarea, FormError } from "@/components/ui/form-fields";
 import type { JobDetail } from "@/lib/data/jobs";
@@ -14,27 +16,40 @@ export function JobForm({
 }: {
   action: (formData: FormData) => void;
   job?: JobDetail;
-  properties: { id: string; label: string }[];
+  properties: OwnershipOption[];
   services: { id: string; name: string; default_price: number | null; default_budgeted_hours: number | null }[];
   routes: { id: string; name: string }[];
   employees: { id: string; label: string }[];
   defaultDate?: string;
   error?: string;
 }) {
-  const sourceManaged = Boolean(job?.homeworks_id);
+  const selectedProperty = properties.find((property) => property.id === job?.property_id);
+  const sourceRecord = [job, job?.property, job?.property?.client, selectedProperty, selectedProperty?.client].find(isHomeworksOwned);
+  const sourceManaged = !!sourceRecord;
+  const unlinkedSourceJob = sourceManaged && !job?.homeworks_id;
+  const localProperties = properties.filter((property) => !isHomeworksOptionOwned(property));
+  const selectableProperties = sourceManaged ? properties : localProperties;
   const assignedIds = new Set((job?.crew ?? []).map((c) => c.id));
+
+  if (!job && localProperties.length === 0) return <HomeworksManagedNotice>Create jobs for Homeworks properties in Homeworks.</HomeworksManagedNotice>;
 
   return (
     <form action={action} className="space-y-4">
       <FormError message={error} />
-      {sourceManaged ? <p className="text-sm text-[var(--color-text-secondary)]">Date and time changes save to Homeworks first. Customer, service, price, labor budget and crew are managed in Homeworks. Notes and actual hours stay in Jarvis.</p> : null}
+      {sourceManaged ? (
+        <HomeworksManagedNotice record={sourceRecord}>
+          {unlinkedSourceJob
+            ? "This job has no linked Homeworks visit. Manage its schedule and status in Homeworks. Notes and actual hours stay in Jarvis."
+            : "Date and time changes save to Homeworks first. Use the job status control to update status in Homeworks. Customer, service, price, labor budget and crew are managed in Homeworks. Notes and actual hours stay in Jarvis."}
+        </HomeworksManagedNotice>
+      ) : localProperties.length < properties.length ? <HomeworksManagedNotice>Create jobs for Homeworks properties in Homeworks.</HomeworksManagedNotice> : null}
 
       <Field label="Property" htmlFor="property_id" required>
         <Select id="property_id" name="property_id" disabled={sourceManaged} required defaultValue={job?.property_id ?? ""}>
           <option value="" disabled>
             Select a property...
           </option>
-          {properties.map((p) => (
+          {selectableProperties.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
             </option>
@@ -67,10 +82,10 @@ export function JobForm({
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Scheduled Date" htmlFor="scheduled_date" required>
-          <TextInput id="scheduled_date" name="scheduled_date" type="date" defaultValue={job?.scheduled_date ?? defaultDate ?? ""} required />
+          <TextInput id="scheduled_date" name="scheduled_date" disabled={unlinkedSourceJob} type="date" defaultValue={job?.scheduled_date ?? defaultDate ?? ""} required />
         </Field>
         <Field label="Start Time" htmlFor="scheduled_start_time">
-          <TextInput id="scheduled_start_time" name="scheduled_start_time" type="time" defaultValue={job?.scheduled_start_time?.slice(0, 5) ?? ""} />
+          <TextInput id="scheduled_start_time" name="scheduled_start_time" disabled={unlinkedSourceJob} type="time" defaultValue={job?.scheduled_start_time?.slice(0, 5) ?? ""} />
         </Field>
       </div>
 

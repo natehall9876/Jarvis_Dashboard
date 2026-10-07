@@ -1,4 +1,5 @@
 begin;
+set local role service_role;
 select public.homeworks_claim_lease('sync','9b2d3404-0000-4000-8000-000000000001',280);
 do $$
 declare initial_id uuid; final_id uuid; payload jsonb; checkpoint jsonb;
@@ -32,6 +33,7 @@ rollback;
 
 
 begin;
+set local role service_role;
 select public.homeworks_claim_lease('sync','9b2d3404-0000-4000-8000-000000000002',280);
 do $test$
 declare source jsonb; parent uuid; expected integer; actual integer; revision timestamptz;
@@ -53,6 +55,7 @@ select 'PASS: invoice line projection, duplicate replay, unchanged revision, sou
 rollback;
 
 begin;
+set local role service_role;
 select public.homeworks_claim_lease('sync','9b2d3404-0000-4000-8000-000000000003',280);
 do $test$ declare source jsonb; parent uuid; begin
 select payload,projected_id into source,parent from homeworks_records where entity='invoices' and payload->>'dueDate' is not null limit 1;

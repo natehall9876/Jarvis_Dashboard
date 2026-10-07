@@ -6,8 +6,8 @@ import type { DataResult, Invoice, InvoiceItem, InvoiceWithClient, Payment } fro
 
 const INVOICE_SELECT = `
   *,
-  client:clients(id, first_name, last_name, company_name, data_source),
-  property:properties(id, street)
+  client:clients(id, first_name, last_name, company_name, data_source, homeworks_id, homeworks_status, homeworks_deleted),
+  property:properties(id, street, homeworks_id, homeworks_status, homeworks_deleted)
 `;
 
 function enrichInvoice(

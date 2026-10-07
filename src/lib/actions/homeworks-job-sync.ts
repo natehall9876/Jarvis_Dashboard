@@ -1,27 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getEventsInRange, type EventFetchMeta, type HomeworksUpcomingJob } from "@/lib/integrations/homeworks-api";
 import { rangeForDays, type DateRange } from "@/lib/integrations/homeworks-dates";
-import { syncHomeworksEntity } from "@/lib/integrations/homeworks-sync";
-import { VALID_JOB_STATUSES } from "@/lib/actions/job-constants";
-
-/**
- * Homeworks EventStatus -> Jarvis job status. Only OPEN is ever fetched by
- * getUpcomingJobs (see its query), so this only needs that one real case
- * mapped — no guessing at CLOSED/SKIPPED/CANCELLED/WAITLISTED equivalents
- * that aren't in scope yet.
- */
-function mapStatus(homeworksStatus: string): (typeof VALID_JOB_STATUSES)[number] {
-  return homeworksStatus === "OPEN" ? "scheduled" : "scheduled";
-}
-
-function buildNotes(job: HomeworksUpcomingJob): string {
-  const parts = [`Homeworks: ${job.title}`];
-  if (job.recurringEventId) parts.push("(recurring series)");
-  return parts.join(" ");
-}
+import { LEGACY_HOMEWORKS_WRITE_DISABLED } from "@/lib/integrations/homeworks-sync";
 
 export type JobPreviewRow = {
   homeworksId: string;
@@ -114,73 +96,8 @@ export type JobImportResult =
   | { ok: true; stats: JobFetchStats; created: number; updated: number; blocked: number; errors: number; rows: JobImportResultRow[] }
   | { ok: false; message: string };
 
-/**
- * Only ever runs from the owner's own click (Server Action — this
- * environment has no way to invoke it itself). Re-runs the exact same
- * property-synced check as the preview server-side, so a stale preview
- * can never cause a write for a property that isn't actually linked.
- */
-export async function confirmHomeworksJobImport(range?: DateRange): Promise<JobImportResult> {
-  const jobsResult = await loadOpenEvents(range);
-  if (!jobsResult.ok) return { ok: false, message: jobsResult.message };
-
-  const supabase = await createSupabaseServerClient();
-  const [{ data: properties, error: propError }, { data: preExistingJobs, error: jobError }] = await Promise.all([
-    supabase.from("properties").select("id, homeworks_id").not("homeworks_id", "is", null),
-    // Captured BEFORE any upsert runs below — a real bug, caught while
-    // writing this (2026-09-20), fetched this same query AFTER the
-    // upsert loop, which meant every row this function had just created
-    // was already in the table by the time it was read, so every create
-    // was misreported as an update. Same bug class as the customer
-    // import's same-turn duplicate-detection gap fixed earlier this
-    // session — a "before" snapshot has to actually be taken before, not
-    // just placed earlier in the reasoning.
-    supabase.from("jobs").select("homeworks_id").not("homeworks_id", "is", null),
-  ]);
-  if (propError) return { ok: false, message: `Couldn't read existing Jarvis properties: ${propError.message}` };
-  if (jobError) return { ok: false, message: `Couldn't read existing Jarvis jobs: ${jobError.message}` };
-  const syncedPropertyIds = new Set((properties ?? []).map((p) => p.homeworks_id as string));
-  const preExistingJobIds = new Set((preExistingJobs ?? []).map((j) => j.homeworks_id as string));
-
-  const rows: JobImportResultRow[] = [];
-  for (const job of jobsResult.jobs) {
-    if (!job.property || !syncedPropertyIds.has(job.property.id)) {
-      rows.push({ homeworksId: job.id, title: job.title, outcome: "blocked", detail: "Property not yet synced — import customers/properties first." });
-      continue;
-    }
-    const wasAlreadyPresent = preExistingJobIds.has(job.id);
-    const price = typeof job.total === "string" && job.total.trim() !== "" ? Number(job.total) : typeof job.total === "number" ? job.total : NaN;
-    const result = await syncHomeworksEntity(supabase, {
-      entity_type: "job",
-      homeworks_id: job.id,
-      property_homeworks_id: job.property.id,
-      scheduled_date: job.startDate,
-      // Only set when Homeworks itself reported a specific time — never
-      // invented for an all-day event.
-      scheduled_start_time: job.hasTime === false ? null : job.hasTime === true ? (job.startTime ?? undefined) : undefined,
-      price: Number.isFinite(price) ? price : undefined,
-      status: mapStatus(job.status),
-      ...(wasAlreadyPresent ? {} : { notes: buildNotes(job) }),
-    });
-    if (!result.ok) {
-      rows.push({ homeworksId: job.id, title: job.title, outcome: "error", detail: result.error });
-      continue;
-    }
-    rows.push({ homeworksId: job.id, title: job.title, outcome: wasAlreadyPresent ? "updated" : "created" });
-  }
-
-  revalidatePath("/jobs");
-  revalidatePath("/schedule");
-  revalidatePath("/");
-  revalidatePath("/settings");
-
-  return {
-    ok: true,
-    stats: jobsResult.stats,
-    created: rows.filter((r) => r.outcome === "created").length,
-    updated: rows.filter((r) => r.outcome === "updated").length,
-    blocked: rows.filter((r) => r.outcome === "blocked").length,
-    errors: rows.filter((r) => r.outcome === "error").length,
-    rows,
-  };
+/** Retired: automatic sync owns the Homeworks projections. Performs no I/O. */
+export async function confirmHomeworksJobImport(_range?: DateRange): Promise<JobImportResult> {
+  void _range; // Keep the retired action signature compatible with stale callers.
+  return { ok: false, message: LEGACY_HOMEWORKS_WRITE_DISABLED };
 }

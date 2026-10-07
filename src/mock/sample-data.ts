@@ -18,6 +18,9 @@ export const MOCK_CLIENTS: Client[] = [
     status: "active",
     notes: "Prefers morning appointments. Gate code changes seasonally.",
     homeworks_id: null,
+    homeworks_status: null,
+    homeworks_deleted: false,
+    homeworks_notes: null,
     data_source: "demo",
   },
 ];
@@ -44,6 +47,9 @@ export const MOCK_JOBS: Job[] = [
     started_at: null,
     completed_at: null,
     homeworks_id: null,
+    homeworks_status: null,
+    homeworks_deleted: false,
+    homeworks_notes: null,
   },
 ];
 

@@ -1,62 +1,31 @@
-# Homeworks verification
+# Homeworks verification — October 7, 2026
 
-Current evidence is in `INTEGRATION_AUDIT_2026-10-03.md`. Direct API access,
-webhook receipt, stored records, and automatic scheduling are separate checks.
-A saved OAuth authorization or populated customer table proves neither a
-fresh API read nor continuing webhook delivery.
+Use [current state](CURRENT_STATE.md) for release status, [data authority](DATA_AUTHORITY.md) for the ownership contract, and the [October 7 production audit](HOMEWORKS_OWNERSHIP_PRODUCTION_AUDIT_2026-10-07.md) for timestamped read-only evidence. The automatic worker is already deployed; the ownership migration/application changes are pending rollout. A stored OAuth authorization, a recent worker run and an independent provider read establish different facts.
 
-## Prerequisites
+## Read-only operational checks
 
-Use the existing production Jarvis project and an authenticated owner session.
-The server needs `SUPABASE_SERVICE_ROLE_KEY`; direct OAuth also needs
-`HOMEWORKS_OAUTH_CLIENT_ID`. Webhook ingestion needs `HOMEWORKS_WEBHOOK_SECRET`.
-Check variable names and deployment scopes without printing values.
-Historical handoff notes raised a webhook-secret rotation concern. Its current
-rotation state was not verified in the October 3 audit. Resolve that history in
-the existing Vercel and sender configuration before using it for a write test;
-coordinate both ends so legitimate deliveries are not broken.
+1. Use the existing Jarvis deployment and owner session. Inspect variable names/scopes without exposing values: the worker needs server-only Supabase service-role access, Homeworks OAuth configuration and `HOMEWORKS_SYNC_SECRET` matching the scheduler's Vault secret. Do not create another integration or reconnect an existing valid account speculatively.
+2. Open Settings and use the existing Homeworks Verify action. Record its timestamp and success/error, never tokens. Compare a read-only reconciliation/source view with Homeworks when independent freshness evidence is required.
+3. Inspect `homeworks_sync_runs` and all 21 `homeworks_sync_state` streams: recent successful starts, no unexplained failures/stale cursor, and expected full-scan behavior. `homeworks_records.changed_at` records content changes, not every successful read; old changed_at alone is not stale-sync evidence.
+4. Confirm the named five-minute scheduler and the secret-protected scheduled route configuration. Do not invoke ingestion to replace missing scheduler evidence. The browser status poll is a display refresh, not ingestion.
+5. Run `scripts/homeworks-production-drift-audit.sql` only through a read-only diagnostic connection. Check its deployed projector fingerprint before relying on its mappings. It compares retained payloads/projections and emits counts/minimal identifiers without repairing anything.
 
-## Direct API, read-only first
+The October 7 audit found zero current drift across 373 top-level source projections and 103 line items, but no installed ownership guards. Zero drift does not establish that source-owned writes are blocked or that retained data is independently complete at the provider.
 
-1. Open Settings and use Homeworks **Verify**. Record success/error and time,
-   never tokens. A stored authorization is not this check.
-2. Preview the full customer/property sync, upcoming jobs, and reconciliation.
-   Compare totals and dates with Homeworks itself. A failed schedule read must
-   show unknown, not zero. A capped customer result cannot be confirmed.
-3. Inspect proposed additions and updates. Confirm imports only after reviewing
-   actual changes and source authority. Do not use real customer writes as a test.
-4. Check sync status and distinguish manual imports from webhook receipts.
+## Legacy endpoints are retired
 
-## Webhook authentication, no write
+After the ownership application deployment, `/api/integrations/homeworks/webhook` and `/import` preserve missing-secret 503/wrong-secret 401 and return 410 after successful secret authentication. `/admin-import` requires a session and then returns 410. These responses mean the old write path is retired, not that a delivery succeeded. Do not send real customer payloads, confirm manual imports, or create a test webhook record to verify the new architecture.
 
-POST a deliberately invalid secret to the existing webhook route. A 401 with
-an invalid-secret error proves only that the route rejects that request.
-A 503 names missing server configuration. Neither proves valid delivery.
-Never put the real secret in command output, a transcript, or a committed file.
+Isolated tests in `e2e/homeworks-webhook.spec.ts` and `homeworks-write-safety.spec.ts` exercise correct/incorrect auth, malformed and valid legacy payloads, stale confirms and the shared retired sink without database/source access. Historical webhook-labelled activity may also have originated from manual imports; preserve that ambiguity rather than relabelling old history.
 
-## Valid delivery, dedicated test record only
+## Isolated mutation regression
 
-Use the already configured sender, if one exists. Do not buy another service.
-First inspect its trigger coverage and delivery history. Send a clearly marked,
-owner-approved dedicated test record with a unique external ID. Check:
+Run `npm run test:ownership:db`. The harness loads `scripts/fixtures/homeworks-production-schema-20261007.sql` into isolated PGlite, applies the ownership migration, runs synthetic authenticated/service-role/native-field/parent-lineage checks in rollback transactions, verifies rollback, and runs the existing sync/schedule projection regressions. No production business rows are copied. `npm run test:ownership:db -- --baseline` skips the migration and is expected to expose the original ownership gap.
 
-- Successful response and exactly one matching database record.
-- An activity event with `origin: webhook` and `provenance_version: 2`.
-- The same record is visible in the owner's Jarvis session.
-- Repeating the same test event preserves the record ID and does not duplicate it.
+This is distinct from production read-only diagnostics. Do not execute `homeworks-ownership-regression.sql`, the synthetic schema snapshot, or projection fixture scripts against production.
 
-Do not replay arbitrary real customer payloads or remove records during this
-check. A test delivery verifies only that event shape, not every entity type.
+## Release verification
 
-## Automatic freshness
+Only after the migration and application deployment are explicitly recorded should the new boundary be called live. Inspect installed trigger definitions/role privileges; confirm a subsequent ordinary automatic run, source projection and dashboard refresh. Verify owned views show “Managed in Homeworks,” invalid creation/payment/conversion controls are absent, native edits remain available where implemented, and retired AI action types are rejected.
 
-The repository has no scheduled full sync. Direct import, enrichment, job sync,
-and reconciliation run only when requested. A webhook receiver cannot produce
-events by itself; its sender must be configured and delivering each needed type.
-Historical `homeworks_webhook_sync` labels are ambiguous because manual imports
-used the same default before the October 3 fix. Version-2 provenance separates
-new deliveries without rewriting historical records.
-
-Before enabling recurring writes, verify current provider data and sender
-coverage, deletion/cancellation behavior, and how Homeworks changes interact
-with owner edits. Preview and preserve records until those semantics are clear.
+Live schedule/status write-through changes Homeworks. Exercise it only within a separately authorized, designated test workflow, verify the source response and subsequent projection, and preserve the existing source-failure/no-local-fallback behavior. Mocked schedule tests and isolated projection SQL do not by themselves prove production provider credentials or a live source mutation.
