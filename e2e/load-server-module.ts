@@ -1,3 +1,6 @@
+// Next normally installs AsyncLocalStorage before loading server modules.
+// Match that runtime in these isolated tests instead of caching Next's fake fallback.
+import "next/dist/server/node-environment-baseline";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

@@ -54,7 +54,10 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser().catch(() => ({
+    data: { user: null },
+    error: { name: "AuthVerificationUnavailable", code: undefined },
+  }));
 
   const pathname = request.nextUrl.pathname;
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
@@ -90,9 +93,8 @@ export async function proxy(request: NextRequest) {
   // prefetched links firing at once) can race: whichever loses gets
   // "Invalid Refresh Token: Already Used" even though the session is
   // perfectly valid — the winner already rotated it. That's a transient
-  // error, not "signed out", so only redirect on a clean no-session result
-  // (no user AND no error) rather than treating every getUser() failure as
-  // a logout.
+  // error, not "signed out". Redirect missing/invalid sessions to login;
+  // temporary failures get a retry page without clearing session cookies.
   // A request with no session cookie at all (a fresh, never-logged-in
   // visitor) doesn't come back as "no user, no error" — the Supabase SSR
   // client surfaces it as a distinctly-named AuthSessionMissingError. That's
@@ -100,13 +102,34 @@ export async function proxy(request: NextRequest) {
   // refresh-token race (a different, differently-named transient error),
   // so it's safe to treat as a real sign-out even though other auth errors
   // are deliberately not.
-  const definitelySignedOut = !user && (!authError || authError.name === "AuthSessionMissingError");
+  const invalidSessionCodes = new Set([
+    "bad_jwt", "session_not_found", "session_expired",
+    "refresh_token_not_found", "user_not_found", "user_banned",
+  ]);
+  const definitelySignedOut = !user && (
+    !authError || authError.name === "AuthSessionMissingError" ||
+    (authError.code !== undefined && invalidSessionCodes.has(authError.code))
+  );
 
-  if (definitelySignedOut && !isPublicPath && !isApiPath) {
+  if (!user && !isPublicPath && !isApiPath) {
+    const destination = pathname + request.nextUrl.search;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(url);
+    url.search = "";
+    url.searchParams.set("redirectTo", destination);
+    if (definitelySignedOut) return NextResponse.redirect(url);
+
+    // A temporary auth outage or a concurrent token-refresh race is not a
+    // logout. Retain cookies, but never render anonymous RLS results as an
+    // empty schedule, zero revenue, or missing customers.
+    const signInHref = "/login?" + new URLSearchParams({ redirectTo: destination });
+    return new NextResponse(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Jarvis — Connection check</title>
+<style>body{margin:0;background:#111;color:#f4f4f4;font:18px system-ui;line-height:1.6}main{max-width:36rem;padding:4rem 1.5rem;margin:auto}a{color:#72f238;margin-right:1.5rem}</style></head>
+<body><main><h1>Jarvis needs to verify your sign-in</h1><p>Your business data has not been loaded. This does not mean your customers or schedule are empty.</p><p>Try again in a moment. If this continues, sign in again.</p><a href="">Try again</a><a href="${signInHref}">Sign in</a></main></body></html>`, {
+      status: 503,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "retry-after": "5" },
+    });
   }
 
   if (user && pathname === "/login") {
@@ -123,19 +146,9 @@ export const config = {
   matcher: [
     {
       source: "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-      // Next.js's Link component prefetches every visible sidebar link in the
-      // background. Those prefetch requests used to hit this same proxy and
-      // call getUser(), which can trigger a real Supabase refresh-token
-      // rotation — racing against the actual navigation request for the same
-      // cookie. The loser gets "Invalid Refresh Token: Already Used", and
-      // Supabase's client treats that as a dead session and clears the auth
-      // cookie, silently logging the user out of the page they were actually
-      // navigating to. Prefetches don't need auth gating (RLS still protects
-      // the data), so skip proxy entirely for them.
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
+      // Guard prefetches too: caching an anonymous RSC response can make a
+      // later navigation look as if saved business records disappeared.
+
     },
   ],
 };
