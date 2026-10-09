@@ -104,12 +104,22 @@ export function GoogleCalendarConnectionCard({
 
         {statusError ? <p role="alert" className="text-xs text-[var(--color-critical)]">{statusError}</p> : null}
         {!configured ? (
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Not configured — <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">GOOGLE_CALENDAR_CLIENT_ID</code> and{" "}
-            <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5">GOOGLE_CALENDAR_CLIENT_SECRET</code> are missing. Create an OAuth client at{" "}
-            <span className="text-[var(--color-text-secondary)]">console.cloud.google.com</span> with redirect URI{" "}
-            <code className="break-all rounded bg-[var(--color-surface-3)] px-1 py-0.5">https://jarvis-dashboard-fawn.vercel.app/api/integrations/google-calendar/oauth/callback</code>, and enable the Calendar API.
-          </p>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-soft)] p-4">
+              <p className="text-sm font-medium text-[var(--color-warning)]">Setup required</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">Jarvis needs its Google app credentials before you can sign in and choose a calendar.</p>
+            </div>
+            <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--color-surface-3)] px-4 text-sm font-medium">Open Google Cloud setup</a>
+            <details className="text-xs leading-5 text-[var(--color-text-secondary)]">
+              <summary className="cursor-pointer py-2 font-medium">Deployment setup details</summary>
+              <ol className="mt-2 list-decimal space-y-3 pl-4">
+                <li>Enable the Google Calendar API and create a web application OAuth client.</li>
+                <li>Add this exact redirect URI:<code className="mt-1 block break-all rounded-lg bg-[var(--color-surface-3)] p-2">https://jarvis-dashboard-fawn.vercel.app/api/integrations/google-calendar/oauth/callback</code></li>
+                <li>Set <code>GOOGLE_CALENDAR_CLIENT_ID</code> and <code>GOOGLE_CALENDAR_CLIENT_SECRET</code> in the production deployment, then redeploy.</li>
+                <li>Return here, connect your Google account, choose a calendar, and preview events to verify access.</li>
+              </ol>
+            </details>
+          </div>
         ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/google-calendar/oauth/connect"

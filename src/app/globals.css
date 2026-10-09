@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --color-surface-0: #07090c;
-  --color-surface-1: #0e1116;
-  --color-surface-2: #141822;
-  --color-surface-3: #1b2029;
-  --color-surface-raised: #171b24;
-  --color-border: #20242e;
-  --color-border-strong: #2b3140;
+  --color-surface-0: #101513;
+  --color-surface-1: #161d19;
+  --color-surface-2: #1c2520;
+  --color-surface-3: #253029;
+  --color-surface-raised: #2a372f;
+  --color-border: #2c3831;
+  --color-border-strong: #405147;
 
-  --color-text-primary: #f2f4f8;
-  --color-text-secondary: #99a2b5;
-  --color-text-muted: #5f6779;
+  --color-text-primary: #f2f6f3;
+  --color-text-secondary: #b4c2b9;
+  --color-text-muted: #95a79c;
 
   /* WeedEater brand green — the app's one distinctive color, used
      everywhere an accent is needed (active nav, primary actions, live
      data, positive figures) so the whole app reads as one identity
      rather than a generic dark-mode dashboard. */
-  --color-accent: #72f238;
-  --color-accent-strong: #5ed62a;
-  --color-accent-soft: #142b09;
-  --color-accent-glow: rgba(114, 242, 56, 0.22);
+  --color-accent: #b1ef78;
+  --color-accent-strong: #98d75f;
+  --color-accent-soft: #273c20;
+  --color-accent-glow: rgba(177, 239, 120, 0.12);
 
   --color-info: #4f8fff;
   --color-info-soft: #101e35;

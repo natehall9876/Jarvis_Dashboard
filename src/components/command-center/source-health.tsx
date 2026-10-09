@@ -29,10 +29,12 @@ export function SourceHealthBanner() {
   const health=sourceHealth(state?.streams??[],expected,checkedAt??0);
   const current=health.current&&!error&&!state?.run?.error;
   const time=health.lastSuccess ? new Date(health.lastSuccess).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' ET' : 'not yet verified';
-  return <aside aria-label="Data freshness" role={current?'status':'alert'} className={`mb-5 rounded-lg border p-3 text-sm ${current?'border-[var(--color-border)]':'border-amber-600 text-amber-300'}`}>
-    <div className="flex flex-wrap justify-between gap-2"><strong>{!checkedAt?'Checking source freshness…':current?'Homeworks current · Database reachable':'Data needs attention'}</strong><Link className="underline" href="/homeworks">Sync details</Link></div>
-    <p>All-source checkpoint: {time}. Automatic updates every 5 minutes.</p>
-    {error&&<p>{error}</p>}{!error&&checkedAt&&!current&&<p>Use saved figures with caution. {state?.run?.error||health.errors[0]||'Some source streams are stale or have never completed.'}</p>}
-    <p className="text-xs text-[var(--color-text-muted)]">QuickBooks and Google Calendar are checked separately in the cards below or in Settings.</p>
+  return <aside aria-label="Data freshness" role={!checkedAt || current?'status':'alert'} className={`mb-7 rounded-xl border px-4 py-3 text-xs ${current || !checkedAt?'border-[var(--color-border)] bg-[var(--color-surface-1)]':'border-amber-600 bg-[var(--color-warning-soft)] text-amber-200'}`}>
+    <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+      <span className="flex items-center gap-2 font-medium"><span aria-hidden className={`h-1.5 w-1.5 rounded-full ${current?'bg-[var(--color-accent)]':'bg-[var(--color-warning)]'}`} />{!checkedAt?'Checking source freshness…':current?'Homeworks current · Database reachable':'Data needs attention'}</span>
+      <Link className="min-h-6 content-center text-[var(--color-text-secondary)] underline underline-offset-4" href="/homeworks">Sync details</Link>
+    </div>
+    <p className="mt-1.5 leading-5 text-[var(--color-text-muted)]">All-source checkpoint: {time}. Updates every 5 minutes. Accounting and calendar access are checked separately.</p>
+    {error&&<p className="mt-2 leading-5">{error}</p>}{!error&&checkedAt&&!current&&<p className="mt-2 leading-5">Use saved figures with caution. {state?.run?.error||health.errors[0]||'Some source streams are stale or have never completed.'}</p>}
   </aside>;
 }

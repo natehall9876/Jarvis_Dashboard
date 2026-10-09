@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { getIntegrationCards, type IntegrationStatus } from "@/lib/data/integrations";
@@ -10,138 +9,84 @@ import { isHomeworksOAuthConfigured, isIntegrationConfigured } from "@/lib/env.s
 import { HomeworksConnectionCard } from "@/components/settings/homeworks-connection-card";
 import { QuickBooksConnectionCard } from "@/components/settings/quickbooks-connection-card";
 import { GoogleCalendarConnectionCard } from "@/components/settings/google-calendar-connection-card";
-import { CheckCircle2, CircleDashed, TriangleAlert, Upload } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, CircleDashed, CloudSun, Database, RefreshCw, Sparkles, TriangleAlert } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const statusMeta: Record<IntegrationStatus, { label: string; tone: BadgeTone; icon: React.ReactNode }> = {
-  unverified: { label: "Ready to test", tone: "neutral", icon: <CircleDashed className="h-3 w-3" /> },
-  connected: { label: "Connected", tone: "accent", icon: <CheckCircle2 className="h-3 w-3" /> },
-  needs_setup: { label: "Needs Setup", tone: "warning", icon: <TriangleAlert className="h-3 w-3" /> },
-  not_connected: { label: "Not Connected", tone: "neutral", icon: <CircleDashed className="h-3 w-3" /> },
+const statusMeta: Record<IntegrationStatus, { label: string; tone: BadgeTone }> = {
+  unverified: { label: "Ready to test", tone: "neutral" },
+  connected: { label: "Verified live", tone: "accent" },
+  needs_setup: { label: "Setup needed", tone: "warning" },
+  not_connected: { label: "Not connected", tone: "neutral" },
 };
 
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    homeworks?: string;
-    homeworks_message?: string;
-    quickbooks?: string;
-    quickbooks_message?: string;
-    gcal?: string;
-    gcal_message?: string;
-  }>;
+export default async function SettingsPage({ searchParams }: {
+  searchParams: Promise<{ homeworks?: string; homeworks_message?: string; quickbooks?: string; quickbooks_message?: string; gcal?: string; gcal_message?: string }>;
 }) {
-  const [
-    cards,
-    homeworksConnection,
-    quickbooksConnection,
-    googleCalendarConnection,
-    {
-      homeworks: homeworksStatus,
-      homeworks_message: homeworksMessage,
-      quickbooks: quickbooksStatus,
-      quickbooks_message: quickbooksMessage,
-      gcal: gcalStatus,
-      gcal_message: gcalMessage,
-    },
-  ] = await Promise.all([
-    getIntegrationCards(),
-    getConnectionStatus(),
-    getQuickBooksConnectionStatus(),
-    getGoogleCalendarConnectionStatus(),
-    searchParams,
+  const [cards, homeworksConnection, quickbooksConnection, googleCalendarConnection, params] = await Promise.all([
+    getIntegrationCards(), getConnectionStatus(), getQuickBooksConnectionStatus(), getGoogleCalendarConnectionStatus(), searchParams,
   ]);
-
+  const serviceCards = cards.filter(card => ["supabase", "weather", "aiProvider"].includes(card.key));
+  const homeworksMessage = params.homeworks === "connected" || params.homeworks === "error" ? { status: params.homeworks, message: params.homeworks_message } as const : null;
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Settings / Integrations"
-        description="Connection status for every system Jarvis can talk to. Nothing here is marked Connected unless it's been verified."
-      />
-
-      <Card><CardBody><h2 className="font-semibold">Automatic Homeworks synchronization</h2><p>Server-side sync every 5 minutes, with daily full reconciliation. No manual import is needed.</p><Link className="text-green-400" href="/homeworks">View live Homeworks records and verified sync status →</Link></CardBody></Card>
-
-      <HomeworksConnectionCard
-        connected={homeworksConnection.connected}
-        connectedAt={homeworksConnection.connected ? homeworksConnection.connectedAt : null}
-        statusError={!homeworksConnection.connected ? homeworksConnection.error : null}
-        configured={isHomeworksOAuthConfigured()}
-        urlMessage={homeworksStatus === "connected" || homeworksStatus === "error" ? { status: homeworksStatus, message: homeworksMessage } : null}
-      />
-
-      <QuickBooksConnectionCard
-        connected={quickbooksConnection.connected}
-        connectedAt={quickbooksConnection.connected ? quickbooksConnection.connectedAt : null}
-        statusError={!quickbooksConnection.connected ? quickbooksConnection.error : null}
-        realmId={quickbooksConnection.connected ? quickbooksConnection.realmId : null}
-        statusCheckedAt={new Date().toISOString()}
-        refreshExpiresAt={quickbooksConnection.connected ? quickbooksConnection.refreshExpiresAt : null}
-        configured={isIntegrationConfigured("quickbooks")}
-        urlMessage={quickbooksStatus === "connected" || quickbooksStatus === "error" ? { status: quickbooksStatus, message: quickbooksMessage } : null}
-      />
-
-      <GoogleCalendarConnectionCard
-        connected={googleCalendarConnection.connected}
-        connectedAt={googleCalendarConnection.connected ? googleCalendarConnection.connectedAt : null}
-        statusError={!googleCalendarConnection.connected ? googleCalendarConnection.error : null}
-        selectedCalendarId={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarId : null}
-        selectedCalendarSummary={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarSummary : null}
-        configured={isIntegrationConfigured("googleCalendar")}
-        urlMessage={gcalStatus === "connected" || gcalStatus === "error" ? { status: gcalStatus, message: gcalMessage } : null}
-      />
-
-      <p className="text-sm text-[var(--color-text-secondary)]">Homeworks updates automatically. The retired webhook importer is not used. GitHub deployment access is managed outside Jarvis, and optional Zapier automations are not required for your business data to sync.</p>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.filter((card) => ["supabase", "weather", "aiProvider"].includes(card.key)).map((card) => {
-          const meta = statusMeta[card.status];
-          return (
-            <Card key={card.key}>
-              <CardBody className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{card.name}</h3>
-                  <Badge tone={meta.tone}>
-                    {meta.icon}
-                    {meta.label}
-                  </Badge>
-                </div>
-                <p className="text-xs text-[var(--color-text-secondary)]">{card.description}</p>
-                <p className="text-xs text-[var(--color-text-muted)]">{card.statusDetail}</p>
-              </CardBody>
-            </Card>
-          );
-        })}
+    <div className="mx-auto max-w-7xl space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">Workspace / Settings</p>
+          <h1 className="text-3xl font-semibold tracking-tight lg:text-4xl">Connections</h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--color-text-secondary)]">Your business, in one place. Check live access, reconnect an account, or see exactly what still needs setup.</p>
+        </div>
+        <Link href="/ai-advisor" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-4 text-sm font-medium hover:bg-[var(--color-surface-3)]"><Sparkles className="h-4 w-4 text-[var(--color-accent)]" />Ask Jarvis<ArrowUpRight className="h-4 w-4" /></Link>
       </div>
 
-      <Card>
-        <CardBody className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-[var(--color-text-primary)]">Homeworks source records</p>
-            <p className="text-xs text-[var(--color-text-secondary)]">View automatically synchronized Homeworks records and their source IDs.</p>
-          </div>
-          <Link
-            href="/homeworks"
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-surface-3)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)]"
-          >
-            <Upload className="h-4 w-4" />
-            View Homeworks Records
-          </Link>
-        </CardBody>
-      </Card>
+      <section aria-labelledby="services-heading">
+        <h2 id="services-heading" className="mb-3 text-sm font-semibold">Workspace services</h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {serviceCards.map(card => {
+            const meta = statusMeta[card.status];
+            const Icon = card.key === "supabase" ? Database : card.key === "weather" ? CloudSun : Sparkles;
+            return <Card key={card.key}><CardBody className="space-y-4">
+              <div className="flex items-center justify-between gap-3"><span className="rounded-xl bg-[var(--color-surface-3)] p-2.5"><Icon className="h-5 w-5 text-[var(--color-text-secondary)]" /></span><Badge tone={meta.tone}>{card.status === "connected" ? <CheckCircle2 className="h-3 w-3" /> : <CircleDashed className="h-3 w-3" />}{meta.label}</Badge></div>
+              <div><h3 className="font-semibold">{card.key === "supabase" ? "Jarvis database" : card.key === "aiProvider" ? "Jarvis AI" : card.name}</h3><p className="mt-2 text-xs leading-5 text-[var(--color-text-secondary)]">{card.statusDetail}</p></div>
+              {card.key === "aiProvider" && <Link href="/ai-advisor" className="inline-flex min-h-9 items-center gap-1 text-xs font-medium text-[var(--color-accent)]">Test with a question<ArrowUpRight className="h-3.5 w-3.5" /></Link>}
+            </CardBody></Card>;
+          })}
+        </div>
+      </section>
 
-      <Card>
-        <CardBody className="space-y-2 text-sm text-[var(--color-text-secondary)]">
-          <p className="font-medium text-[var(--color-text-primary)]">Environment variables</p>
-          <p>
-            Copy <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-xs">.env.local.example</code> to{" "}
-            <code className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-xs">.env.local</code> and fill in the values
-            for whichever integrations you&apos;re ready to connect. Supabase is required for the app to show any data; the rest are
-            optional. OAuth flows are implemented: configure the server credentials, authorize once, then use Verify or the read-only preview to check live access.
-          </p>
-        </CardBody>
-      </Card>
+      <section aria-labelledby="business-accounts-heading" className="space-y-4">
+        <div><h2 id="business-accounts-heading" className="text-sm font-semibold">Business accounts</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">Saved authorization and a successful live read are shown separately.</p></div>
+        <Card><CardBody className="flex flex-wrap items-center justify-between gap-5">
+          <div className="flex items-start gap-4"><span className="rounded-xl bg-[var(--color-accent-soft)] p-3 text-[var(--color-accent)]"><RefreshCw className="h-5 w-5" /></span><div><h3 className="font-semibold">Homeworks</h3><p className="mt-1 text-sm text-[var(--color-text-secondary)]">Customers, jobs, schedules and billing.</p><p className="mt-2 text-xs text-[var(--color-text-muted)]">Automatic updates every 5 minutes. See the freshness check above for the latest verified checkpoint.</p></div></div>
+          <Link href="/homeworks" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--color-surface-3)] px-4 text-sm font-medium">View sync activity<ArrowUpRight className="h-4 w-4" /></Link>
+        </CardBody></Card>
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+          <QuickBooksConnectionCard connected={quickbooksConnection.connected}
+            connectedAt={quickbooksConnection.connected ? quickbooksConnection.connectedAt : null}
+            statusError={!quickbooksConnection.connected ? quickbooksConnection.error : null}
+            realmId={quickbooksConnection.connected ? quickbooksConnection.realmId : null}
+            statusCheckedAt={new Date().toISOString()}
+            refreshExpiresAt={quickbooksConnection.connected ? quickbooksConnection.refreshExpiresAt : null}
+            configured={isIntegrationConfigured("quickbooks")}
+            urlMessage={params.quickbooks === "connected" || params.quickbooks === "error" ? { status: params.quickbooks, message: params.quickbooks_message } : null} />
+          <GoogleCalendarConnectionCard connected={googleCalendarConnection.connected}
+            connectedAt={googleCalendarConnection.connected ? googleCalendarConnection.connectedAt : null}
+            statusError={!googleCalendarConnection.connected ? googleCalendarConnection.error : null}
+            selectedCalendarId={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarId : null}
+            selectedCalendarSummary={googleCalendarConnection.connected ? googleCalendarConnection.selectedCalendarSummary : null}
+            configured={isIntegrationConfigured("googleCalendar")}
+            urlMessage={params.gcal === "connected" || params.gcal === "error" ? { status: params.gcal, message: params.gcal_message } : null} />
+        </div>
+      </section>
+
+      <details open={params.homeworks === "error" || params.homeworks === "connected" || (!homeworksConnection.connected && !!homeworksConnection.error)} className="group rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+        <summary className="cursor-pointer px-5 py-5 text-sm font-medium">Homeworks connection &amp; reconciliation</summary>
+        <div className="border-t border-[var(--color-border)] p-4"><HomeworksConnectionCard connected={homeworksConnection.connected}
+          connectedAt={homeworksConnection.connected ? homeworksConnection.connectedAt : null}
+          statusError={!homeworksConnection.connected ? homeworksConnection.error : null}
+          configured={isHomeworksOAuthConfigured()} urlMessage={homeworksMessage} /></div>
+      </details>
+      <div className="flex items-start gap-3 text-xs leading-5 text-[var(--color-text-muted)]"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>QuickBooks and Calendar previews are read-only. Homeworks remains the source for scheduled jobs and business records.</p></div>
     </div>
   );
 }
