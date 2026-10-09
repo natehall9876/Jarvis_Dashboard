@@ -15,7 +15,7 @@ export default function AIAdvisorPage() {
       <PageHeader
         title="AI Advisor"
         description="Ask questions about today's operations, profitability, and pricing — grounded in your live Supabase data."
-        action={<Badge tone={configured ? "accent" : "warning"}>{configured ? "Connected" : "Not Connected"}</Badge>}
+        action={<Badge tone={configured ? "accent" : "warning"}>{configured ? "Ready to test" : "Not configured"}</Badge>}
       />
 
       {!configured ? (

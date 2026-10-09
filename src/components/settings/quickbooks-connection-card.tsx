@@ -103,8 +103,9 @@ export function QuickBooksConnectionCard({
           </a>
         ) : (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-[var(--color-text-primary)]">{expired ? "Expired authorization" : needsReconnect ? "Needs reconnect" : verifiedAt ? "Verified live at " + new Date(verifiedAt).toLocaleString("en-US", { timeZone: "America/New_York" }) : "Saved authorization - not verified in this view"}</p>
-            {needsReconnect ? <a className="inline-flex min-h-11 items-center text-sm text-[var(--color-accent)] underline" href="/api/integrations/quickbooks/oauth/connect">Reconnect QuickBooks</a> : null}
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">{expired ? "Expired authorization" : needsReconnect ? "Needs reconnect" : ((result && !result.ok) || (preview && !preview.ok)) ? "Read failed — connection needs attention" : verifiedAt ? "Verified live at " + new Date(verifiedAt).toLocaleString("en-US", { timeZone: "America/New_York" }) : "Saved authorization - not verified in this view"}</p>
+            <a className="inline-flex min-h-11 items-center text-sm text-[var(--color-accent)] underline" href="/api/integrations/quickbooks/oauth/connect">Reconnect QuickBooks</a>
+            <p className="text-xs text-[var(--color-text-muted)]">Your saved connection is kept until a new authorization succeeds. If access is denied, reconnect with the company administrator; do not disconnect first.</p>
             <p className="text-xs text-[var(--color-text-secondary)]">
               Company {realmId ?? "unknown"} — token on file since {connectedAt ? new Date(connectedAt).toLocaleString() : "unknown"}.
             </p>

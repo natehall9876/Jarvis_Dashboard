@@ -15,6 +15,7 @@ import { CheckCircle2, CircleDashed, TriangleAlert, Upload } from "lucide-react"
 export const dynamic = "force-dynamic";
 
 const statusMeta: Record<IntegrationStatus, { label: string; tone: BadgeTone; icon: React.ReactNode }> = {
+  unverified: { label: "Ready to test", tone: "neutral", icon: <CircleDashed className="h-3 w-3" /> },
   connected: { label: "Connected", tone: "accent", icon: <CheckCircle2 className="h-3 w-3" /> },
   needs_setup: { label: "Needs Setup", tone: "warning", icon: <TriangleAlert className="h-3 w-3" /> },
   not_connected: { label: "Not Connected", tone: "neutral", icon: <CircleDashed className="h-3 w-3" /> },
@@ -91,8 +92,10 @@ export default async function SettingsPage({
         urlMessage={gcalStatus === "connected" || gcalStatus === "error" ? { status: gcalStatus, message: gcalMessage } : null}
       />
 
+      <p className="text-sm text-[var(--color-text-secondary)]">Homeworks updates automatically. The retired webhook importer is not used. GitHub deployment access is managed outside Jarvis, and optional Zapier automations are not required for your business data to sync.</p>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.filter((card) => card.key !== "quickbooks" && card.key !== "googleCalendar").map((card) => {
+        {cards.filter((card) => ["supabase", "weather", "aiProvider"].includes(card.key)).map((card) => {
           const meta = statusMeta[card.status];
           return (
             <Card key={card.key}>

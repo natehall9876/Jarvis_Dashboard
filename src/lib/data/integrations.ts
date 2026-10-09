@@ -5,7 +5,7 @@ import { getWeatherForCoordinates } from "@/lib/integrations/weather";
 
 type IntegrationKey = keyof typeof integrationEnv;
 
-export type IntegrationStatus = "connected" | "needs_setup" | "not_connected";
+export type IntegrationStatus = "connected" | "needs_setup" | "not_connected" | "unverified";
 
 export type IntegrationCard = {
   key: string;
@@ -121,7 +121,7 @@ function getAIProviderStatus(): IntegrationCard {
     key: "aiProvider",
     name: "AI Provider",
     description: "Powers the AI Advisor's answers.",
-    status: configured ? "needs_setup" : "not_connected",
+    status: configured ? "unverified" : "not_connected",
     statusDetail: configured
       ? "API key configured; connectivity is unverified. Ask it a real question to confirm right now; this badge reflects configuration, not a fresh test call."
       : "No credentials found in the environment.",

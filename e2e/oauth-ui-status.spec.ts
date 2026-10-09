@@ -32,3 +32,10 @@ test("QuickBooks presents the complete production callback URI", () => {
   const html = renderQuickBooks({ configured: false });
   expect(html).toContain("https://jarvis-dashboard-fawn.vercel.app/api/integrations/quickbooks/oauth/callback");
 });
+
+
+test("saved QuickBooks authorization can be replaced without disconnecting first", () => {
+  const html = renderQuickBooks();
+  expect(html).toContain("Reconnect QuickBooks");
+  expect(html).toContain("kept until");
+});

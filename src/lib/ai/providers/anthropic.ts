@@ -13,6 +13,23 @@ const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-sonnet-5";
 
+function failure(errorMessage: string): AICompletionResult {
+  return { stopReason: "error", text: "", toolUses: [], rawContent: [], errorMessage };
+}
+
+function providerError(status?: number, type?: unknown): string {
+  if (status === 401 || type === "authentication_error") {
+    return "Jarvis's AI key is invalid or expired. Replace the AI key to restore Ask Jarvis. You can use notes and scheduling directly.";
+  }
+  if (status === 403 || type === "permission_error") {
+    return "Jarvis's AI key does not have permission for this request. Check its access settings.";
+  }
+  if (status === 429 || type === "rate_limit_error") {
+    return "Jarvis's AI request limit was reached. Wait a moment, then retry.";
+  }
+  return "The AI service could not complete this response. Please retry.";
+}
+
 /**
  * In-flight accumulation for one streamed content block — text is built up
  * from `text_delta` chunks directly; tool_use input arrives as fragments of
@@ -69,6 +86,8 @@ export class AnthropicProvider implements AIProvider {
     try {
       response = await fetch(ANTHROPIC_API_URL, {
         method: "POST",
+        cache: "no-store",
+        signal: AbortSignal.timeout(45_000),
         headers: {
           "content-type": "application/json",
           "x-api-key": integrationEnv.aiProvider.apiKey,
@@ -90,42 +109,34 @@ export class AnthropicProvider implements AIProvider {
           messages: params.messages.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
-    } catch (err) {
-      yield {
-        stopReason: "error",
-        text: "",
-        toolUses: [],
-        rawContent: [],
-        errorMessage: err instanceof Error ? err.message : "Failed to reach the AI provider.",
-      };
+    } catch {
+      yield failure("Jarvis could not reach its AI service in time. Please retry.");
       return;
     }
 
     if (!response.ok || !response.body) {
-      const body = response.body ? await response.text() : "No response body.";
-      yield {
-        stopReason: "error",
-        text: "",
-        toolUses: [],
-        rawContent: [],
-        errorMessage: `AI provider returned an error (${response.status}): ${body.slice(0, 400)}`,
-      };
+      // Never echo third-party response bodies, which can contain request details.
+      await response.body?.cancel().catch(() => undefined);
+      yield failure(providerError(response.status));
       return;
     }
 
     const blocks = new Map<number, StreamBlockState>();
     let stopReason: AICompletionResult["stopReason"] = "end_turn";
     let streamError: string | null = null;
+    let messageComplete = false;
+    let receivedStopReason = false;
+    const openBlocks = new Set<number>();
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
     try {
-      while (true) {
+      while (!messageComplete && !streamError) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, "\n");
 
         // SSE frames are separated by a blank line; each frame may carry
         // multiple `field: value` lines but this API only ever sends one
@@ -140,6 +151,7 @@ export class AnthropicProvider implements AIProvider {
 
           if (payload.type === "content_block_start") {
             const index = payload.index as number;
+            openBlocks.add(index);
             const block = payload.content_block as Record<string, unknown>;
             if (block.type === "text") {
               blocks.set(index, { type: "text", text: "" });
@@ -166,29 +178,37 @@ export class AnthropicProvider implements AIProvider {
             } else if (delta.type === "signature_delta" && state.type === "thinking") {
               state.signature += delta.signature as string;
             }
+          } else if (payload.type === "content_block_stop") {
+            openBlocks.delete(payload.index as number);
           } else if (payload.type === "message_delta") {
             const delta = payload.delta as Record<string, unknown>;
+            if (typeof delta.stop_reason === "string") receivedStopReason = true;
             if (delta.stop_reason === "tool_use") stopReason = "tool_use";
             else if (delta.stop_reason === "max_tokens") stopReason = "max_tokens";
+          } else if (payload.type === "message_stop") {
+            messageComplete = true;
+            break;
           } else if (payload.type === "error") {
             const error = payload.error as Record<string, unknown> | undefined;
-            streamError = typeof error?.message === "string" ? error.message : "The AI provider returned a stream error.";
+            streamError = providerError(undefined, error?.type);
+            break;
           }
         }
       }
-    } catch (err) {
-      yield {
-        stopReason: "error",
-        text: "",
-        toolUses: [],
-        rawContent: [],
-        errorMessage: err instanceof Error ? err.message : "Lost connection to the AI provider mid-response.",
-      };
+    } catch {
+      yield failure("Jarvis lost the AI response before it finished. Please retry.");
       return;
+    } finally {
+      await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
     }
 
     if (streamError) {
-      yield { stopReason: "error", text: "", toolUses: [], rawContent: [], errorMessage: streamError };
+      yield failure(streamError);
+      return;
+    }
+    if (!messageComplete || !receivedStopReason || openBlocks.size > 0) {
+      yield failure("The AI response was interrupted. No command from this incomplete response was run. Please retry.");
       return;
     }
 
@@ -206,7 +226,12 @@ export class AnthropicProvider implements AIProvider {
         try {
           input = state.jsonBuffer.trim() ? JSON.parse(state.jsonBuffer) : {};
         } catch {
-          input = {};
+          yield failure("The AI returned an incomplete command. Nothing from this response was run. Please retry.");
+          return;
+        }
+        if (!input || typeof input !== "object" || Array.isArray(input)) {
+          yield failure("The AI returned an invalid command. Nothing from this response was run. Please retry.");
+          return;
         }
         rawContent.push({ type: "tool_use", id: state.id, name: state.name, input });
         toolUses.push({ type: "tool_use", id: state.id, name: state.name, input });

@@ -63,6 +63,8 @@ export async function extractWorkSheetInfo(imageBase64: string, mediaType: strin
   try {
     response = await fetch(ANTHROPIC_API_URL, {
       method: "POST",
+      cache: "no-store",
+      signal: AbortSignal.timeout(45_000),
       headers: {
         "content-type": "application/json",
         "x-api-key": integrationEnv.aiProvider.apiKey,
@@ -83,17 +85,33 @@ export async function extractWorkSheetInfo(imageBase64: string, mediaType: strin
         ],
       }),
     });
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Failed to reach the AI provider." };
+  } catch {
+    return { ok: false, message: "The AI service could not read the photo in time. Please retry or enter the details manually." };
   }
 
   if (!response.ok) {
-    const body = await response.text();
-    return { ok: false, message: `AI provider returned an error (${response.status}): ${body.slice(0, 300)}` };
+    await response.body?.cancel().catch(() => undefined);
+    return {
+      ok: false,
+      message: response.status === 401
+        ? "Jarvis's AI key is invalid or expired. Replace the AI key, or enter the work details manually."
+        : "The AI service could not read this photo. Please retry or enter the details manually.",
+    };
   }
 
-  const json = (await response.json()) as { content?: { type: string; text?: string }[] };
-  const textBlock = (json.content ?? []).find((b) => b.type === "text");
+  let json: { content?: unknown; stop_reason?: unknown };
+  try {
+    const value: unknown = await response.json();
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid envelope");
+    json = value;
+  } catch {
+    return { ok: false, message: "The AI service returned an unreadable response. Please retry or enter the details manually." };
+  }
+  if (json.stop_reason !== "end_turn" || !Array.isArray(json.content)) {
+    return { ok: false, message: "The AI service did not finish reading this photo. Please retry or enter the details manually." };
+  }
+  const textBlock = json.content.find((b): b is { type: "text"; text: string } =>
+    !!b && typeof b === "object" && b.type === "text" && typeof b.text === "string");
   if (!textBlock?.text) return { ok: false, message: "The AI provider returned an empty response." };
 
   let parsed: unknown;
