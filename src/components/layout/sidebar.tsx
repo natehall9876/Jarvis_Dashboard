@@ -26,7 +26,7 @@ export function Sidebar() {
     </Link>;
   }
   return (
-    <aside className="hidden w-60 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-1)] lg:fixed lg:inset-y-0 lg:left-0 lg:flex">
+    <aside className="hud-sidebar hidden w-60 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-1)] lg:fixed lg:inset-y-0 lg:left-0 lg:flex">
       <Link href="/" className="flex items-center gap-3 px-6 py-6" aria-label="Jarvis home">
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-accent)] text-[#102516]"><BrandIcon className="h-5 w-5" /></span>
         <span><span className="block text-xl font-semibold tracking-tight">{BRAND.name}<span className="text-[var(--color-accent)]">.</span></span><span className="block text-[11px] text-[var(--color-text-muted)]">{BRAND.subtitle}</span></span>

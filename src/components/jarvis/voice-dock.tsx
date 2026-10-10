@@ -111,7 +111,7 @@ export function VoiceDock() {
         </div>
       ) : null}
       <div
-        className={`fixed right-3 z-[60] flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/90 p-1.5 pr-2 shadow-[var(--shadow-raised)] backdrop-blur-md lg:bottom-6 ${panelOpen && !onAdvisorPage ? "lg:right-[29.5rem]" : "lg:right-6"}`}
+        className={`hud-dock fixed right-3 z-[60] flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/90 p-1.5 pr-2 shadow-[var(--shadow-raised)] backdrop-blur-md lg:bottom-6 ${panelOpen && !onAdvisorPage ? "lg:right-[34rem]" : "lg:right-6"}`}
         style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
         role="region"
         aria-label="Jarvis voice"
@@ -159,22 +159,22 @@ export function VoiceDock() {
       {panelOpen && !onAdvisorPage ? (
         <div className="pointer-events-none fixed inset-0 z-50 flex justify-end">
           <button type="button" aria-label="Close conversation" onClick={() => setPanelOpen(false)} className="pointer-events-auto absolute inset-0 bg-black/60 lg:hidden" />
-          <div className="pointer-events-auto relative flex h-full w-full max-w-md flex-col border-l border-[var(--color-border-strong)] bg-[var(--color-surface-1)] shadow-[var(--shadow-raised)] animate-fade-in">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
+          <div className="hud-drawer pointer-events-auto relative flex h-full w-full max-w-[32rem] flex-col border-l border-[var(--color-border-strong)] bg-[var(--color-surface-1)] shadow-[var(--shadow-raised)] animate-fade-in">
+            <div className="hud-drawer-header flex items-center justify-between px-5 py-3">
               <div className="flex items-center gap-3">
                 <span className="h-9 w-9 overflow-hidden rounded-full bg-[var(--color-surface-0)] ring-1 ring-[var(--color-border-strong)]">
                   <JarvisCore state={visualState} className="h-full w-full" />
                 </span>
                 <div>
-                  <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Jarvis</h2>
-                  <p className="text-[11px] text-[var(--color-text-muted)]">Conversation continues as you navigate</p>
+                  <h2 className="text-base font-light tracking-[.22em] text-[#d9faff]">J.A.R.V.I.S.</h2>
+                  <p className="text-[11px] text-[var(--color-text-muted)]">PERSONAL INTELLIGENCE / VOICE INTERFACE</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setPanelOpen(false)}
                 aria-label="Close"
-                className="rounded-md p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]"
+                className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -190,7 +190,12 @@ export function VoiceDock() {
               partly under the dock: visible, but not clickable, on mobile.
             */}
             <div className="flex-1 overflow-y-auto px-5 py-4" style={{ paddingBottom: "calc(9.5rem + env(safe-area-inset-bottom))" }}>
-              <AskAdvisor />
+              <div className="hud-drawer-identity">
+                <button type="button" onClick={micPress} disabled={!hydrated} aria-label={loading ? "Stop response" : listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk to Jarvis"} className="hud-drawer-core focus-visible:outline-2 focus-visible:outline-[#a5f5ff]"><JarvisCore state={visualState} className="h-full w-full" /></button>
+                <p>{listening ? "I’m listening, Nate." : loading ? "On it, Nate." : speaking ? "Here’s what I found." : "At your service."}</p>
+                <span>{listening ? "VOICE CHANNEL OPEN" : loading ? "PROCESSING YOUR REQUEST" : "TAP THE CORE. SAY THE WORD."}</span>
+              </div>
+              <AskAdvisor compact />
               <div className="mt-4">
                 <VoiceDiagnostics />
               </div>

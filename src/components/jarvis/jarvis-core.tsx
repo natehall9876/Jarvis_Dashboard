@@ -3,27 +3,61 @@
 import { useId } from "react";
 import type { JarvisVisualState } from "@/lib/jarvis/network-engine";
 
-/** A state indicator, not simulated telemetry or a microphone waveform. */
+/** Decorative hologram. Color and movement reflect assistant state, not measured telemetry. */
 export function JarvisCore({ state, className = "" }: { state: JarvisVisualState; className?: string }) {
   const id = useId().replace(/:/g, "");
   return (
-    <svg viewBox="0 0 320 320" fill="none" aria-hidden="true" className={`jarvis-core ${className}`} data-state={state}>
+    <svg viewBox="0 0 480 480" fill="none" aria-hidden="true" className={`jarvis-core ${className}`} data-state={state}>
       <defs>
-        <radialGradient id={`${id}-glow`}><stop stopColor="currentColor" stopOpacity=".16" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></radialGradient>
-        <linearGradient id={`${id}-arc`} x1="45" y1="50" x2="270" y2="275" gradientUnits="userSpaceOnUse"><stop stopColor="currentColor" /><stop offset=".5" stopColor="currentColor" stopOpacity=".08" /><stop offset="1" stopColor="currentColor" stopOpacity=".65" /></linearGradient>
+        <radialGradient id={`${id}-halo`}><stop stopColor="currentColor" stopOpacity=".25" /><stop offset=".65" stopColor="currentColor" stopOpacity=".06" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></radialGradient>
+        <radialGradient id={`${id}-eye`}><stop stopColor="#fff" /><stop offset=".13" stopColor="#d9ffff" /><stop offset=".3" stopColor="currentColor" stopOpacity=".75" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></radialGradient>
+        <linearGradient id={`${id}-arc`}><stop stopColor="currentColor" stopOpacity="0" /><stop offset=".6" stopColor="currentColor" /><stop offset="1" stopColor="#fff" /></linearGradient>
       </defs>
-      <circle cx="160" cy="160" r="156" fill={`url(#${id}-glow)`} />
-      <circle cx="160" cy="160" r="146" stroke="currentColor" strokeOpacity=".16" strokeWidth="1" strokeDasharray="1 8" />
-      <path d="M160 5V17M315 160H303M160 315V303M5 160H17" stroke="currentColor" strokeOpacity=".6" />
-      <circle className="jarvis-core-orbit" cx="160" cy="160" r="131" stroke={`url(#${id}-arc)`} strokeWidth="1.5" strokeDasharray="210 22 28 20 164 25 120 234" />
-      <circle cx="160" cy="160" r="113" stroke="currentColor" strokeOpacity=".17" />
-      <circle className="jarvis-core-inner" cx="160" cy="160" r="106" stroke="currentColor" strokeOpacity=".5" strokeWidth="3" strokeDasharray="48 118" />
-      <circle cx="160" cy="160" r="88" fill="#0b151f" stroke="currentColor" strokeOpacity=".35" />
-      <circle cx="160" cy="160" r="81" stroke="currentColor" strokeOpacity=".1" />
-      <g className="jarvis-core-bars" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-        {[10, 23, 38, 57, 30, 47, 65, 35, 20, 10].map((height, index) => <path key={index} d={`M${115 + index * 10} ${160 - height / 2}v${height}`} style={{ animationDelay: `${index * -80}ms` }} />)}
+      <circle cx="240" cy="240" r="235" fill={`url(#${id}-halo)`} />
+      <g stroke="currentColor">
+        <circle cx="240" cy="240" r="224" strokeOpacity=".2" />
+        <circle cx="240" cy="240" r="219" strokeOpacity=".65" strokeDasharray="1 10.46" strokeWidth="5" />
+        <path d="M240 4v14m0 444v14M4 240h14m444 0h14M72 72l10 10m316 316 10 10M72 408l10-10M398 82l10-10" strokeOpacity=".9" />
+        <g className="jarvis-core-orbit">
+          <circle cx="240" cy="240" r="204" strokeWidth="2" strokeOpacity=".65" strokeDasharray="300 48 78 24 200 58 65 510" />
+          <circle cx="240" cy="240" r="197" strokeWidth="10" strokeOpacity=".12" strokeDasharray="230 80 60 400" />
+          <path d="M240 36a204 204 0 0 1 204 204" stroke={`url(#${id}-arc)`} strokeWidth="3" />
+          <circle cx="240" cy="36" r="4" fill="#e1ffff" stroke="none" />
+        </g>
+        <g className="jarvis-core-counter">
+          {Array.from({ length: 48 }, (_, i) => <path key={i} d={i % 4 === 0 ? "M240 55v17" : "M240 58v8"} transform={`rotate(${i * 7.5} 240 240)`} strokeOpacity={i % 4 === 0 ? ".9" : ".4"} strokeWidth={i % 4 === 0 ? "2.5" : "1"} />)}
+          <circle cx="240" cy="240" r="173" strokeOpacity=".28" />
+          <circle cx="240" cy="240" r="167" strokeWidth="3" strokeDasharray="110 50 25 140" stroke="#ffbf69" strokeOpacity=".8" />
+        </g>
+        <g className="jarvis-core-gyroscope" strokeOpacity=".3">
+          <ellipse cx="240" cy="240" rx="149" ry="65" transform="rotate(-32 240 240)" />
+          <ellipse cx="240" cy="240" rx="149" ry="65" transform="rotate(32 240 240)" />
+          <ellipse cx="240" cy="240" rx="65" ry="149" />
+          <circle cx="240" cy="240" r="148" />
+          <ellipse cx="240" cy="240" rx="149" ry="25" />
+        </g>
+        <g className="jarvis-core-inner">
+          <circle cx="240" cy="240" r="129" strokeWidth="12" strokeDasharray="3 12.7" strokeOpacity=".7" />
+          <circle cx="240" cy="240" r="114" strokeWidth="1.5" strokeDasharray="290 42 60 42" />
+          <path d="M240 119v11m121 110h-11M240 361v-11M119 240h11" stroke="#ffbf69" strokeWidth="4" />
+        </g>
+        <circle cx="240" cy="240" r="99" fill="#04141e" fillOpacity=".9" strokeOpacity=".5" />
+        <circle cx="240" cy="240" r="92" strokeOpacity=".16" strokeWidth="5" />
+        <g className="jarvis-core-lens">
+          <circle cx="240" cy="240" r="83" fill={`url(#${id}-eye)`} stroke="none" />
+          <circle cx="240" cy="240" r="60" strokeOpacity=".45" strokeDasharray="2 5" />
+          <path d="M204 219l36-21 36 21v42l-36 21-36-21z" strokeOpacity=".8" strokeWidth="1.5" />
+          <path d="M204 219l36 21 36-21m-36 21v42" strokeOpacity=".6" />
+          <circle cx="240" cy="240" r="10" fill="#eaffff" strokeWidth="5" strokeOpacity=".2" />
+        </g>
+        <g className="jarvis-core-bars" strokeWidth="2">
+          {[5, 9, 17, 10, 23, 30, 16, 26, 12, 20, 8, 5].map((height, index) => <path key={index} d={`M${201.5 + index * 7} ${315 - height / 2}v${height}`} style={{ animationDelay: `${index * -95}ms` }} />)}
+        </g>
       </g>
-      <path d="M150 51h20M150 269h20M51 150v20M269 150v20" stroke="currentColor" strokeOpacity=".7" strokeWidth="2" />
+      <g fill="currentColor" fontFamily="monospace" fontSize="7" letterSpacing="2" opacity=".8">
+        <text x="240" y="32" textAnchor="middle">J.A.R.V.I.S.</text>
+        <text x="240" y="456" textAnchor="middle">{state.toUpperCase()}</text>
+      </g>
     </svg>
   );
 }
