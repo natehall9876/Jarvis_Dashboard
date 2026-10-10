@@ -20,12 +20,6 @@ import {
 import type { DataResult, InvoiceWithClient, JobWithRelations, QuoteWithItems } from "@/types/domain";
 import type { EquipmentWithMaintenanceFlag } from "@/lib/data/equipment";
 
-const JOB_RELATIONS_SELECT = `
-  *,
-  property:properties(*, client:clients(id, first_name, last_name, company_name, data_source)),
-  service:services(id, name)
-`;
-
 /** True once a client is *confirmed* demo/seed data — never true for merely-unverified provenance. */
 function isDemoJob(job: { property?: { client?: { data_source?: string } | null } | null }): boolean {
   return job.property?.client?.data_source === "demo";
