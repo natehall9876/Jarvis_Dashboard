@@ -55,3 +55,10 @@ jobs:
         # provider token endpoints — found and fixed once already (see
         # scripts/check-no-client-secrets.mjs's own doc comment).
         run: npm run verify:no-client-secrets
+
+
+      - name: Isolated integration and recovery regressions
+        run: npm run test:isolated
+
+      - name: Synthetic Homeworks ownership and sync database regressions
+        run: npm run test:ownership:db

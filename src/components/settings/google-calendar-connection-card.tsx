@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, TriangleAlert, Unplug } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatCalendarStart } from "@/lib/integrations/google-calendar-display";
+import { formatDateOnly } from "@/lib/format";
 import {
   disconnectGoogleCalendarAction,
   listGoogleCalendars,
@@ -52,7 +54,13 @@ export function GoogleCalendarConnectionCard({
     setActionError(null);
     setPreview(null);
     setCalendars(null);
-    startListTransition(async () => setCalendars(await listGoogleCalendars()));
+    startListTransition(async () => {
+      try {
+        setCalendars(await listGoogleCalendars());
+      } catch {
+        setActionError("Calendar list could not be loaded. Check your connection and try again.");
+      }
+    });
   }
   function pickCalendar(id: string, summary: string) {
     if (!calendars?.ok) return;
@@ -60,10 +68,14 @@ export function GoogleCalendarConnectionCard({
     setPreview(null);
     setActionError(null);
     startTransition(async () => {
-      const selected = await selectGoogleCalendar(id, summary, version);
-      if (!selected.ok) { setActionError(selected.message); return; }
-      setCalendars(null);
-      router.refresh();
+      try {
+        const selected = await selectGoogleCalendar(id, summary, version);
+        if (!selected.ok) { setActionError(selected.message); return; }
+        setCalendars(null);
+        router.refresh();
+      } catch {
+        setActionError("Calendar selection could not be confirmed. Reload Settings to check which calendar is saved before trying again.");
+      }
     });
   }
   function runPreview() {
@@ -71,16 +83,26 @@ export function GoogleCalendarConnectionCard({
     setActionError(null);
     setCalendars(null);
     setPreview(null);
-    startPreviewTransition(async () => setPreview(await previewGoogleCalendarEvents(selectedCalendarId)));
+    startPreviewTransition(async () => {
+      try {
+        setPreview(await previewGoogleCalendarEvents(selectedCalendarId));
+      } catch {
+        setActionError("Calendar preview could not be loaded. Check your connection and try again.");
+      }
+    });
   }
   function disconnectNow() {
+    setActionError(null);
     startTransition(async () => {
-      const disconnected = await disconnectGoogleCalendarAction();
-      if (!disconnected.ok) { setActionError(disconnected.message); return; }
-      setActionError(null);
-      setCalendars(null);
-      setPreview(null);
-      router.refresh();
+      try {
+        const disconnected = await disconnectGoogleCalendarAction();
+        if (!disconnected.ok) { setActionError(disconnected.message); return; }
+        setCalendars(null);
+        setPreview(null);
+        router.refresh();
+      } catch {
+        setActionError("Disconnect could not be confirmed. Reload Settings to check the saved authorization before trying again.");
+      }
     });
   }
 
@@ -98,7 +120,7 @@ export function GoogleCalendarConnectionCard({
         {urlMessage?.status === "connected" && connected ? (
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            Authorization saved - pick a calendar below.
+            {selectedCalendarId ? "Authorization saved. Calendar selected." : "Authorization saved - pick a calendar below."}
           </p>
         ) : null}
 
@@ -126,18 +148,18 @@ export function GoogleCalendarConnectionCard({
         ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/google-calendar/oauth/connect"
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
           >
             Connect Google Calendar
           </a>
         ) : (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-[var(--color-text-primary)]">{needsReconnect ? "Needs reconnect" : verifiedAt ? "Verified live at " + new Date(verifiedAt).toLocaleString("en-US", { timeZone: "America/New_York" }) : "Saved authorization - not verified in this view"}</p>
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">{needsReconnect ? "Needs reconnect" : verifiedAt ? "Verified live at " + formatCalendarStart(verifiedAt) : "Saved authorization - not verified in this view"}</p>
             {needsReconnect ? <a className="inline-flex min-h-11 items-center text-sm text-[var(--color-accent)] underline" href="/api/integrations/google-calendar/oauth/connect">Reconnect Google Calendar</a> : null}
             <p className="text-xs text-[var(--color-text-secondary)]">
-              Token on file since {connectedAt ? new Date(connectedAt).toLocaleString() : "unknown"}.{" "}
+              Token on file since {connectedAt ? formatCalendarStart(connectedAt) : "unknown"}.{" "}
               {selectedCalendarSummary ? (
-                <>Selected calendar: <span className="text-[var(--color-text-primary)]">{selectedCalendarSummary}</span>.</>
+                <>Selected calendar: <span className="break-all text-[var(--color-text-primary)]">{selectedCalendarSummary}</span>.</>
               ) : (
                 "No calendar selected yet."
               )}
@@ -175,7 +197,7 @@ export function GoogleCalendarConnectionCard({
                   type="button"
                   onClick={() => pickCalendar(cal.id, cal.summary)}
                   disabled={busy}
-                  className={`min-h-11 w-full rounded-md border px-2.5 py-1.5 text-left text-xs ${
+                  className={`min-h-11 w-full break-words rounded-md border px-2.5 py-1.5 text-left text-xs ${
                     selectedCalendarId === cal.id ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]" : "border-[var(--color-border-strong)] text-[var(--color-text-secondary)]"
                   }`}
                 >
@@ -196,12 +218,12 @@ export function GoogleCalendarConnectionCard({
         {preview && preview.ok ? (
           <div className="space-y-1 text-xs">
             <p className="text-[var(--color-text-secondary)]">
-              {preview.events.length} event{preview.events.length === 1 ? "" : "s"} from {preview.range.from} to {preview.range.to}.
+              {preview.events.length} event{preview.events.length === 1 ? "" : "s"} from {formatDateOnly(preview.range.from)} to {formatDateOnly(preview.range.to)}. Times shown in Eastern time.
             </p>
             <ul className="max-h-48 space-y-1 overflow-y-auto">
               {preview.events.map((e) => (
-                <li key={e.id} className="text-[var(--color-text-muted)]">
-                  {e.start} — <span className="text-[var(--color-text-primary)]">{e.summary}</span>
+                <li key={e.id} className="break-words text-[var(--color-text-muted)]">
+                  {formatCalendarStart(e.start, e.isAllDay)} — <span className="text-[var(--color-text-primary)]">{e.summary}</span>
                   {e.isRecurringInstance ? " (recurring)" : ""}
                   {e.isAllDay ? " (all-day)" : ""}
                 </li>
