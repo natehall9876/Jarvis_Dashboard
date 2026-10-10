@@ -1,6 +1,6 @@
 # Jarvis overnight readiness — October 10, 2026
 
-Checkpoint: 00:41 America/New_York. Deadline: 07:00 America/New_York.
+Checkpoint: 01:10 America/New_York. Deadline: 07:00 America/New_York.
 Objective: finish Calendar OAuth and verify actual reads, then Homeworks health,
 mobile usability, and broad regression coverage. Skip owner sign-in blockers
 until the final handoff. Do not mistake passed automated tests for production
@@ -13,7 +13,7 @@ or physical-phone acceptance.
   A real production event preview succeeded at 00:12 Eastern. Read-only scope.
 - Homeworks production reports all 21 source streams successful, 73 customer
   source records and 234 scheduled-work source records (including source archives).
-  The all-source checkpoint advanced to 00:35 Eastern. Current 5-minute automatic
+  The all-source checkpoint advanced to 01:05 Eastern. Current 5-minute automatic
   configuration is visible in production. No source record was modified for testing.
 - Jarvis AI answered a real schedule question using the business snapshot.
   ChatGPT QuickBooks access works, but the separate Jarvis QuickBooks read is
@@ -51,8 +51,28 @@ Original checkout and its untracked screenshots were preserved.
   and added it plus the synthetic ownership database regressions to GitHub CI.
 - Removed one genuinely unused constant to clear the existing lint warning.
 
-Release is awaiting GitHub checks/merge and production acceptance at this
-checkpoint. A READY deployment alone does not verify the new Calendar UI.
+PR #9 merged as e2e5e09060b7a76e28740300d2976c05760c4a84. Production
+ deployment dpl_9DwkPV5NUjRaguTDTHG9s7TsDHEy is READY. Actual Calendar
+preview succeeded after production reload at 00:46 Eastern.
+
+## 01:10 QuickBooks recovery repair
+
+Branch: fix/quickbooks-ui-recovery-20261010 in the same previously clean,
+isolated worktree, based on current main. No credentials or records changed.
+
+- Reproduced unhandled verification, preview and disconnect action failures;
+  the failure message also lacked an accessible alert. Four targeted tests
+  failed before the fix (six passed).
+- Caught thrown requests with safe, retryable verification/preview messages.
+  A lost disconnect response instructs a reload to check persisted state; it
+  never claims authorization was removed. Successful disconnect still refreshes.
+- Failure messages announce as alerts, success as status; Connect has a 44px
+  minimum height. These are code checks, not physical mobile acceptance.
+- Targeted tests now pass 10/10. Full isolated suite passes 499/499 across
+  39 files. Typecheck, zero-warning lint, build, diff check and the 30-file
+  client-secret scan passed. Synthetic tests use no real accounting writes.
+- Awaiting exact-head CI, merge and deployed read-only error-state verification.
+  The existing Intuit 403 / 3100 authorization blocker remains unresolved.
 
 ## Blocked / explicitly unverified
 
@@ -79,6 +99,6 @@ Inspect repository/PR/deployment state before edits; preserve concurrent work.
 Use current live sessions if available. Never request secrets in chat, weaken
 security, send messages/payments, or delete business records.
 
-Next: finish this PR, verify Calendar preview after production reload, then
+Next: finish the QuickBooks recovery PR, verify its deployed error state, then
 exercise other reachable read-only desktop flows and only fix demonstrated bugs.
 Keep mobile/voice and sign-in requirements visible in the final scorecard.
