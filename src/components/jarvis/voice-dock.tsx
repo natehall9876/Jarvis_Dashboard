@@ -6,7 +6,7 @@ import { Mic, Square, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 import { AskAdvisor } from "@/components/ai-advisor/ask-advisor";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
-import { IntelligenceNetwork } from "@/components/jarvis/intelligence-network";
+import { JarvisCore } from "@/components/jarvis/jarvis-core";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
 import { VoiceDiagnostics } from "@/components/jarvis/voice-diagnostics";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -45,10 +45,11 @@ export function VoiceDock() {
 
   const onAdvisorPage = pathname === "/ai-advisor";
   const busy = loading || speaking;
-  const status = listening && interim ? interim : STATE_LABEL[visualState];
+  const status = listening && interim ? interim : jarvis.progress ?? STATE_LABEL[visualState];
 
   function micPress() {
-    if (listening) jarvis.stopListening();
+    if (loading) jarvis.stopResponse();
+    else if (listening) jarvis.stopListening();
     else if (speaking) jarvis.stopSpeaking();
     else jarvis.startListening();
   }
@@ -91,7 +92,7 @@ export function VoiceDock() {
             <p className="mt-1.5 text-sm text-[var(--color-warning)]">{bubble.error}</p>
           ) : (
             <p className="mt-1.5 line-clamp-5 whitespace-pre-line text-sm text-[var(--color-text-primary)]" data-testid="jarvis-bubble-answer">
-              {bubble.answer || "Checking…"}
+              {bubble.status === "cancelled" ? "Response stopped." : bubble.answer || jarvis.progress || "Thinking…"}
             </p>
           )}
           {bubble.proposedAction ? (
@@ -122,7 +123,7 @@ export function VoiceDock() {
           aria-label={panelOpen ? "Close Jarvis conversation" : "Open Jarvis conversation"}
           className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-0)] ring-1 ring-[var(--color-border-strong)]"
         >
-          <IntelligenceNetwork variant="orb" className="h-full w-full" />
+          <JarvisCore state={visualState} className="h-full w-full" />
         </button>
         <span
           className={`max-w-[9.5rem] truncate text-xs sm:max-w-[13rem] ${visualState === "idle" ? "text-[var(--color-text-secondary)]" : visualState === "error" ? "text-[var(--color-warning)]" : "text-[var(--color-accent)]"}`}
@@ -144,14 +145,14 @@ export function VoiceDock() {
         <button
           type="button"
           onClick={micPress}
-          disabled={!hydrated || (loading && !speaking)}
-          aria-label={listening ? "Stop listening" : speaking ? "Stop speaking" : voiceSupported ? "Talk to Jarvis" : "Open Jarvis"}
+          disabled={!hydrated}
+          aria-label={loading ? "Stop response" : listening ? "Stop listening" : speaking ? "Stop speaking" : voiceSupported ? "Talk to Jarvis" : "Open Jarvis"}
           className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[#062012] transition-transform active:scale-95 disabled:opacity-50 ${
             listening ? "bg-[var(--color-critical)] text-white" : "bg-[var(--color-accent)] shadow-[0_0_28px_-4px_var(--color-accent-glow)]"
           }`}
           onContextMenu={(e) => e.preventDefault()}
         >
-          {listening || (speaking && busy) ? <Square className="h-5 w-5" /> : <Mic className="h-6 w-6" />}
+          {loading || listening || (speaking && busy) ? <Square className="h-5 w-5" /> : <Mic className="h-6 w-6" />}
         </button>
       </div>
 
@@ -162,7 +163,7 @@ export function VoiceDock() {
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
               <div className="flex items-center gap-3">
                 <span className="h-9 w-9 overflow-hidden rounded-full bg-[var(--color-surface-0)] ring-1 ring-[var(--color-border-strong)]">
-                  <IntelligenceNetwork variant="orb" className="h-full w-full" />
+                  <JarvisCore state={visualState} className="h-full w-full" />
                 </span>
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Jarvis</h2>

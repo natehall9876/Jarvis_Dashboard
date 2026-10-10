@@ -31,6 +31,9 @@ function buildSystemPrompt(): string {
 
   return `You are Jarvis, the operations assistant built into WeedEater Lawn Care's business dashboard. You speak directly to the owner — concise, plain, practical, like a sharp ops manager, not a chatbot. WeedEater is a residential/commercial lawn care and landscaping company: weekly mowing, aeration, overseeding, fall cleanups, trimming, and similar seasonal work, billed through quotes -> jobs -> invoices -> payments, run by crews on recurring routes.
 
+CONVERSATION STYLE
+Be calm, precise and decisive. Lead with the answer or the next useful action. Use natural, short spoken sentences; avoid canned enthusiasm, repeated introductions, or theatrical claims about your abilities. Address the owner as Nate when it feels natural, without repeating his name. Ask one focused question only when needed to resolve a real ambiguity. Conversation history provides context, not current business facts; always refresh changing facts through tools. Never claim to be monitoring, remembering across devices, or performing actions outside the tools available here.
+
 TODAY: ${weekdayFormatter.format(now)}, ${todayIso}.
 UPCOMING DATES (use these verbatim for relative-date questions — do not recompute them yourself):
 ${upcoming.join(" | ")}
@@ -80,7 +83,9 @@ export async function askAdvisor(
   pageContext: PageContext | null,
   history: AdvisorTurn[] = [],
   onTextDelta?: (delta: string) => void,
+  options: { signal?: AbortSignal; onToolStart?: (tool: string) => void } = {},
 ): Promise<AdvisorResponse> {
+  options.signal?.throwIfAborted();
   if (!provider.isConfigured()) {
     return {
       ok: false,
@@ -118,7 +123,9 @@ export async function askAdvisor(
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     // The stream's contract is: zero or more text_delta events, then exactly
     // one AICompletionResult as its last-yielded value.
+    options.signal?.throwIfAborted();
     const turnStream = provider.stream({
+      signal: options.signal,
       system,
       messages,
       tools,
@@ -126,6 +133,7 @@ export async function askAdvisor(
     });
     let result: AICompletionResult | null = null;
     for await (const event of turnStream) {
+      options.signal?.throwIfAborted();
       if ("type" in event) {
         onTextDelta?.(event.text);
       } else {
@@ -160,6 +168,7 @@ export async function askAdvisor(
 
     const toolResultBlocks = await Promise.all(
       result.toolUses.map(async (call) => {
+        options.signal?.throwIfAborted();
         const spec = findTool(call.name);
         if (!spec) {
           return {
@@ -170,12 +179,15 @@ export async function askAdvisor(
           };
         }
         try {
+          options.onToolStart?.(call.name);
           const input = (call.input ?? {}) as Record<string, unknown>;
           const { data, references: toolRefs } = await spec.execute(input);
+          options.signal?.throwIfAborted();
           toolsUsed.push(call.name);
           if (toolRefs) references.push(...toolRefs);
           return { type: "tool_result" as const, tool_use_id: call.id, content: JSON.stringify(data), data };
         } catch (err) {
+          options.signal?.throwIfAborted();
           return {
             type: "tool_result" as const,
             tool_use_id: call.id,

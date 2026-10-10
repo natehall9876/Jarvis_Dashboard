@@ -21,7 +21,7 @@ function MountProbe() {
 /** Development-only harness: the real JarvisProvider + VoiceDock over stand-in pages, so voice and navigation persistence can be exercised without a login. */
 export function LabShell({ children }: { children: ReactNode }) {
   return (
-    <JarvisProvider pathPrefix="/voice-lab">
+    <JarvisProvider pathPrefix="/voice-lab" memoryOwner="voice-lab">
       <MountProbe />
       <nav className="flex gap-4 border-b border-[var(--color-border)] p-4 text-sm">
         <Link href="/voice-lab">Lab home</Link>
