@@ -38,6 +38,14 @@ export function addDaysISO(date: string, days: number): string {
 
 export type DateRange = { from: string; to: string };
 
+/** Monday through Sunday containing the current business-local date. */
+export function currentBusinessWeek(now: Date = new Date()): DateRange {
+  const today = todayInZone(now);
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  const from = addDaysISO(today, -((weekday + 6) % 7));
+  return { from, to: addDaysISO(from, 6) };
+}
+
 export const MAX_RANGE_DAYS = 92;
 
 /** Inclusive range: today through `days` days later, all in the business timezone. */
