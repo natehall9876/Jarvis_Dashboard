@@ -173,6 +173,34 @@ No customer, property, authorization, sync configuration, or database row change
   live read-only audit reported no matching phone/email across 27 active
   clients. The source-deleted records remain available in Homeworks history.
 
+## 05:08 owner-task recovery and mobile control
+
+Branch: fix/task-card-recovery-0500-20261010, cleanly based on current main.
+No task or other business record was created, completed, or changed during testing.
+
+- The owner task card allowed thrown create/complete Server Actions to escape.
+  Because a lost response can follow a committed write, an immediate blind retry
+  could duplicate a task or repeat a completion request.
+- Both actions now catch transport failures, show a safe assistive-technology
+  alert without raw exception details, refresh server truth, and tell the owner
+  to check the refreshed state before retrying. An uncertain create retains the
+  typed draft; successful creation still clears it.
+- The completion control is disabled while a task action is pending and its tap
+  target increased from 32px to 44px. This is code/static-render evidence, not
+  a rendered-phone or physical-iPhone claim.
+- Three focused regressions failed against the previous component and then
+  passed after the repair. The full isolated suite passes 512/512 across 40
+  files. Synthetic database regressions, typecheck, zero-warning lint,
+  production build, diff check and the 30-file client-secret scan passed.
+- PR #18 merged as 7bd1a84cdc40b2529bd78bf841c72bae7cef3c3b
+  after exact-head GitHub CI run 127 and the Vercel preview passed. Production
+  deployment dpl_HJYk62f79PgUtxFcpQ2aZ83Ms8aS is READY.
+- An authenticated production reload showed the deployed command center, the
+  owner task inputs and empty-task state, plus Homeworks current / database
+  reachable at the 05:05 Eastern all-source checkpoint. No production task
+  action was invoked, so live create/complete persistence remains deliberately
+  untested without a dedicated authorized demo record.
+
 ## Blocked / explicitly unverified
 
 - Google OAuth remains External / Testing. The saved refresh token can expire
