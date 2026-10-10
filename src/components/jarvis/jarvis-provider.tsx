@@ -6,6 +6,7 @@ import type { EntityReference } from "@/lib/ai/tool-types";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { JarvisVisualState } from "@/lib/jarvis/network-engine";
 import { parseNavigationIntent, takeSpeakableSentences, toolToCapabilities } from "@/lib/jarvis/voice-utils";
+import { deviceMemoryKey, readDeviceMemory, writeDeviceMemory, retainSessionExchanges, toolProgressLabel } from "@/lib/jarvis/device-memory";
 import { getFirstJobToday } from "@/lib/actions/jobs";
 
 /**
@@ -47,7 +48,9 @@ export type Exchange = {
   id: string;
   question: string;
   answer: string | null;
-  status: "streaming" | "done" | "error";
+  status: "streaming" | "done" | "error" | "cancelled";
+  createdAt: number;
+  restored?: boolean;
   error: string | null;
   references: EntityReference[];
   toolsUsed: string[];
@@ -62,6 +65,9 @@ type JarvisContextValue = {
   listening: boolean;
   speaking: boolean;
   loading: boolean;
+  progress: string | null;
+  memoryAvailable: boolean;
+  stopResponse: () => void;
   voiceSupported: boolean;
   speechOutputSupported: boolean;
   muted: boolean;
@@ -113,23 +119,9 @@ export function useJarvis(): JarvisContextValue {
   return ctx;
 }
 
-const STORAGE_KEY = "jarvis.session.v1";
 const ENTITY_PATHS: Partial<Record<EntityReference["type"], string>> = { client: "/clients", property: "/properties", job: "/jobs" };
 
-function loadPersisted(): Exchange[] {
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Exchange[];
-    // A restored exchange never carries a live proposed action: a stale Confirm
-    // button must not survive a reload.
-    return parsed.filter((e) => e.status === "done").map((e) => ({ ...e, proposedAction: null })).slice(0, 20);
-  } catch {
-    return [];
-  }
-}
-
-export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactNode; pathPrefix?: string }) {
+export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }: { children: ReactNode; pathPrefix?: string; memoryOwner?: string | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const pathRef = useRef(pathname);
@@ -145,6 +137,10 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
 
   const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
+  const requestRef = useRef<{ id: string; abort: AbortController } | null>(null);
+  const speechEpochRef = useRef(0);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [memoryAvailable, setMemoryAvailable] = useState(false);
   const [gotFirstToken, setGotFirstToken] = useState(false);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
@@ -186,6 +182,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   // Persisting must not run before the stored session has been read back, or the
   // initial empty list would overwrite it.
   const hydratedRef = useRef(false);
+  const memoryResetRef = useRef<string | null>(null);
 
   const later = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(fn, ms);
@@ -200,28 +197,47 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
     const init = window.setTimeout(() => {
       setVoiceSupported(Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition));
       setSpeechOutputSupported("speechSynthesis" in window);
-      setExchanges(loadPersisted());
+      // Discard the previous unscoped session; it must not leak between accounts.
+      try {
+        window.sessionStorage.removeItem("jarvis.session.v1");
+        if (memoryOwner) {
+          memoryResetRef.current = window.localStorage.getItem(`${deviceMemoryKey(memoryOwner)}:reset`);
+          const saved = readDeviceMemory(window.localStorage.getItem(deviceMemoryKey(memoryOwner)), memoryOwner);
+          setExchanges(saved.exchanges);
+          exchangesRef.current = saved.exchanges;
+          mutedRef.current = saved.muted;
+          setMuted(saved.muted);
+          window.localStorage.setItem(deviceMemoryKey(memoryOwner), writeDeviceMemory(memoryOwner, saved.exchanges, saved.muted));
+          setMemoryAvailable(true);
+        }
+      } catch { setMemoryAvailable(false); }
       hydratedRef.current = true;
     }, 0);
     const timers = timersRef.current;
+    const speechEpoch = speechEpochRef;
     return () => {
       window.clearTimeout(init);
       mountedRef.current = false;
+      requestRef.current?.abort.abort();
+      requestRef.current = null;
+      speechEpoch.current++;
       timers.forEach((t) => window.clearTimeout(t));
       recognitionRef.current?.abort?.();
       window.speechSynthesis?.cancel();
     };
-  }, []);
+  }, [memoryOwner]);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydratedRef.current || !memoryOwner) return;
     try {
-      const done = exchanges.filter((e) => e.status === "done").slice(0, 20);
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(done));
+      // A sleeping tab cannot resurrect history cleared elsewhere before its storage event runs.
+      if (window.localStorage.getItem(`${deviceMemoryKey(memoryOwner)}:reset`) !== memoryResetRef.current) return;
+      window.localStorage.setItem(deviceMemoryKey(memoryOwner), writeDeviceMemory(memoryOwner, exchanges, muted));
     } catch {
-      // Storage unavailable (private mode, quota) — the live session still works.
+      // Storage disabled or full: keep this session usable, report no durable memory.
+      later(() => setMemoryAvailable(false), 0);
     }
-  }, [exchanges]);
+  }, [exchanges, muted, memoryOwner, later]);
 
   // Microphone permission state, where the browser can report it without an
   // active getUserMedia/SpeechRecognition request. Chrome/Edge support
@@ -283,14 +299,19 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
     const next = speakQueueRef.current.shift();
     if (!next) {
       setSpeaking(false);
-      if (streamDoneRef.current && conversationModeRef.current && !mutedRef.current) later(() => startListeningRef.current(), 450);
+      if (streamDoneRef.current && conversationModeRef.current && !mutedRef.current) {
+        const epoch = speechEpochRef.current;
+        later(() => { if (epoch === speechEpochRef.current && conversationModeRef.current && !loadingRef.current) startListeningRef.current(); }, 450);
+      }
       return;
     }
     const utterance = new SpeechSynthesisUtterance(next);
     utterance.lang = "en-US";
     utterance.rate = 1.03;
-    utterance.onend = () => pumpRef.current();
+    const epoch = speechEpochRef.current;
+    utterance.onend = () => { if (epoch === speechEpochRef.current) pumpRef.current(); };
     utterance.onerror = () => {
+      if (epoch !== speechEpochRef.current) return;
       speakQueueRef.current = [];
       setSpeaking(false);
     };
@@ -312,6 +333,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   );
 
   const stopSpeaking = useCallback(() => {
+    speechEpochRef.current++;
     speakQueueRef.current = [];
     try {
       window.speechSynthesis?.cancel();
@@ -325,6 +347,27 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   const patch = useCallback((id: string, update: Partial<Exchange>) => {
     setExchanges((prev) => prev.map((e) => (e.id === id ? { ...e, ...update } : e)));
   }, []);
+
+  const stopResponse = useCallback(() => {
+    const current = requestRef.current;
+    requestRef.current = null; // Invalidate before abort; an old finally cannot unlock a newer request.
+    current?.abort.abort();
+    if (current) patch(current.id, { status: "cancelled", error: null, proposedAction: null, references: [], toolsUsed: [] });
+    loadingRef.current = false;
+    streamDoneRef.current = true;
+    conversationModeRef.current = false;
+    setConversationMode(false);
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    recognition?.abort?.();
+    setListening(false);
+    setInterim("");
+    setLoading(false);
+    setGotFirstToken(false);
+    setProgress(null);
+    setActiveCapabilities([]);
+    stopSpeaking();
+  }, [patch, stopSpeaking]);
 
   const finishFlash = useCallback((kind: "success" | "error", ms: number) => {
     setFlash(kind);
@@ -342,13 +385,13 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
 
       const id = crypto.randomUUID();
       setBubbleId(id);
-      const base: Exchange = { id, question: trimmed, answer: "", status: "streaming", error: null, references: [], toolsUsed: [], proposedAction: null, viaVoice };
+      const base: Exchange = { id, question: trimmed, answer: "", status: "streaming", error: null, references: [], toolsUsed: [], proposedAction: null, viaVoice, createdAt: Date.now() };
 
       // Deterministic navigation needs no language model.
       const nav = parseNavigationIntent(trimmed);
       if (nav.kind === "route") {
         const reply = `Opening ${nav.target.label}.`;
-        setExchanges((prev) => [{ ...base, answer: reply, status: "done" }, ...prev]);
+        setExchanges((prev) => retainSessionExchanges([{ ...base, answer: reply, status: "done" }, ...prev]));
         router.push(pathPrefix + nav.target.href);
         finishFlash("success", 1400);
         if (viaVoice) {
@@ -358,36 +401,15 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
         return;
       }
 
-      if (nav.kind === "first_job") {
-        // Still deterministic — resolved against the real, actually-
-        // scheduled data (getFirstJobToday, same query/order the Schedule
-        // page itself uses), never a language model guessing at "first".
-        setExchanges((prev) => [{ ...base, status: "streaming" }, ...prev]);
-        const result = await getFirstJobToday();
-        const reply = !result.ok
-          ? `Couldn't check today's schedule: ${result.message}`
-          : result.job
-            ? `Opening ${result.job.label}.`
-            : "There's nothing on today's schedule.";
-        patch(id, { answer: reply, status: result.ok ? "done" : "error", error: result.ok ? null : result.message });
-        if (result.ok && result.job) {
-          router.push(`${pathPrefix}/jobs/${result.job.id}`);
-          finishFlash("success", 1400);
-        } else if (!result.ok) {
-          finishFlash("error", 3500);
-        }
-        if (viaVoice) {
-          streamDoneRef.current = true;
-          enqueueSpeech([reply]);
-        }
-        return;
-      }
-
+      const request = { id, abort: new AbortController() };
+      requestRef.current = request;
+      const isCurrent = () => mountedRef.current && requestRef.current === request && !request.abort.signal.aborted;
       loadingRef.current = true;
       setLoading(true);
       setGotFirstToken(false);
+      setProgress(nav.kind === "first_job" ? "Checking today's first job" : "Thinking through your request");
       streamDoneRef.current = false;
-      setExchanges((prev) => [base, ...prev]);
+      setExchanges((prev) => retainSessionExchanges([base, ...prev]));
 
       const history = exchangesRef.current
         .filter((e) => e.status === "done" && e.answer)
@@ -397,12 +419,29 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
 
       let spokenIndex = 0;
       let full = "";
+      const deadline = window.setTimeout(() => {
+        if (!isCurrent()) return;
+        stopResponse();
+        patch(id, { status: "error", error: "This request took too long. Try a narrower question.", answer: null });
+        finishFlash("error", 3500);
+      }, 65_000);
       try {
+        if (nav.kind === "first_job") {
+          const result = await getFirstJobToday();
+          if (!isCurrent()) return;
+          const reply = !result.ok ? `Couldn't check today's schedule: ${result.message}` : result.job ? `Opening ${result.job.label}.` : "There's nothing on today's schedule.";
+          patch(id, { answer: reply, status: result.ok ? "done" : "error", error: result.ok ? null : result.message });
+          if (result.ok && result.job) { router.push(`${pathPrefix}/jobs/${result.job.id}`); finishFlash("success", 1400); }
+          if (viaVoice) enqueueSpeech([reply]);
+          return;
+        }
         const res = await fetch("/api/ai-advisor", {
           method: "POST",
+          signal: request.abort.signal,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ question: trimmed, path: pathRef.current, history }),
         });
+        if (!isCurrent()) { await res.body?.cancel(); return; }
         if (!res.ok || !res.body) {
           let message = "Something went wrong.";
           try {
@@ -410,6 +449,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
           } catch {
             // non-JSON error body
           }
+          if (!isCurrent()) return;
           patch(id, { status: "error", error: message, answer: null });
           finishFlash("error", 3500);
           return;
@@ -421,6 +461,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
         let settled = false;
         while (true) {
           const { done, value } = await reader.read();
+          if (!isCurrent()) { await reader.cancel(); return; }
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           let boundary: number;
@@ -433,7 +474,11 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
             const eventName = eventLine.slice(6).trim();
             const data = JSON.parse(dataLine.slice(5).trim());
 
-            if (eventName === "delta") {
+            if (eventName === "progress" && typeof data.tool === "string") {
+              setProgress(toolProgressLabel(data.tool));
+              setActiveCapabilities(toolToCapabilities(data.tool));
+            } else if (eventName === "delta") {
+              setProgress("Putting your answer together");
               setGotFirstToken(true);
               full += data.text;
               setExchanges((prev) => prev.map((e) => (e.id === id ? { ...e, answer: (e.answer ?? "") + data.text } : e)));
@@ -452,7 +497,7 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
               const caps = Array.from(new Set(toolsUsed.flatMap(toolToCapabilities)));
               if (caps.length) {
                 setActiveCapabilities(caps);
-                later(() => setActiveCapabilities([]), 6000);
+                later(() => { if (!requestRef.current) setActiveCapabilities([]); }, 6000);
               }
               // "Pull up Rob Elliott": navigate only when exactly one record matched.
               if (nav.kind === "entity") {
@@ -471,9 +516,15 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
           finishFlash("error", 3500);
         }
       } catch {
-        patch(id, { status: "error", error: "Couldn't reach Jarvis. Check your connection and try again.", answer: null });
+        if (requestRef.current !== request || !mountedRef.current) return;
+        stopSpeaking();
+        patch(id, { status: "error", error: request.abort.signal.aborted ? "This request took too long. Try a narrower question." : "Couldn't reach Jarvis. Check your connection and try again.", answer: null });
         finishFlash("error", 3500);
       } finally {
+        window.clearTimeout(deadline);
+        if (requestRef.current !== request || !mountedRef.current) return;
+        requestRef.current = null;
+        setProgress(null);
         loadingRef.current = false;
         streamDoneRef.current = true;
         // The bubble fades out on its own once the answer has been readable for a while.
@@ -486,13 +537,13 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
         if (!speakQueueRef.current.length && !window.speechSynthesis?.speaking) pumpSpeech();
       }
     },
-    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopSpeaking, unlockSpeech],
+    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopResponse, stopSpeaking, unlockSpeech],
   );
 
   const retry = useCallback(
     (id: string) => {
       const ex = exchangesRef.current.find((e) => e.id === id);
-      if (!ex) return;
+      if (!ex || loadingRef.current) return;
       setExchanges((prev) => prev.filter((e) => e.id !== id));
       void submit(ex.question, { viaVoice: ex.viaVoice });
     },
@@ -607,14 +658,34 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
   }, []);
 
   const clear = useCallback(() => {
-    stopSpeaking();
+    stopResponse();
+    exchangesRef.current = [];
     setExchanges([]);
+    setBubbleId(null);
     try {
-      window.sessionStorage.removeItem(STORAGE_KEY);
+      if (memoryOwner) {
+        memoryResetRef.current = crypto.randomUUID();
+        window.localStorage.setItem(`${deviceMemoryKey(memoryOwner)}:reset`, memoryResetRef.current);
+        window.localStorage.removeItem(deviceMemoryKey(memoryOwner));
+      }
     } catch {
       // ignore
     }
-  }, [stopSpeaking]);
+  }, [stopResponse, memoryOwner]);
+
+  useEffect(() => {
+    if (!memoryOwner) return;
+    const resetFromOtherTab = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage || event.key !== `${deviceMemoryKey(memoryOwner)}:reset`) return;
+      memoryResetRef.current = event.newValue;
+      stopResponse();
+      exchangesRef.current = [];
+      setExchanges([]);
+      setBubbleId(null);
+    };
+    window.addEventListener("storage", resetFromOtherTab);
+    return () => window.removeEventListener("storage", resetFromOtherTab);
+  }, [memoryOwner, stopResponse]);
 
   const noteActionSettled = useCallback(
     (outcome: "confirmed" | "cancelled") => {
@@ -636,6 +707,9 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       listening,
       speaking,
       loading,
+      progress,
+      memoryAvailable,
+      stopResponse,
       voiceSupported,
       speechOutputSupported,
       muted,
@@ -670,6 +744,9 @@ export function JarvisProvider({ children, pathPrefix = "" }: { children: ReactN
       listening,
       speaking,
       loading,
+      progress,
+      memoryAvailable,
+      stopResponse,
       voiceSupported,
       speechOutputSupported,
       muted,

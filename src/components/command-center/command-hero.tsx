@@ -2,99 +2,65 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowUpRight, CalendarDays, Mic, Send } from "lucide-react";
-import { IntelligenceNetwork } from "@/components/jarvis/intelligence-network";
+import { ArrowRight, ArrowUpRight, CalendarDays, Mic, Send, Square } from "lucide-react";
+import { JarvisCore } from "@/components/jarvis/jarvis-core";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
 import type { Briefing } from "@/lib/jarvis/briefing";
 
-const TONE = { ok: "text-[var(--color-accent)]", warn: "text-[var(--color-warning)]", muted: "text-[var(--color-text-secondary)]" } as const;
+const TONE = { ok: "text-[#c5f49b]", warn: "text-[var(--color-warning)]", muted: "text-[#b7c6d3]" } as const;
+const STATE_TEXT = { idle: "Ready for your command", listening: "Listening to you", processing: "Working on it", responding: "Responding", action: "Applying your change", success: "Complete", error: "Needs your attention" } as const;
 
-const STATE_TEXT = {
-  idle: "Jarvis is idle",
-  listening: "Listening",
-  processing: "Thinking",
-  responding: "Responding",
-  action: "Applying a change",
-  success: "Done",
-  error: "Something went wrong",
-} as const;
-
-/**
- * The Command Center's signature panel: the living network behind a briefing
- * that is composed only from today's real job rows (see lib/jarvis/briefing).
- * If there is no data, it says so instead of inventing a summary.
- */
 export function CommandHero({ briefing, dataError }: { briefing: Briefing | null; dataError: string | null }) {
   const jarvis = useJarvis();
   const hydrated = useHydrated();
   const [command, setCommand] = useState("");
-  const { visualState, listening } = jarvis;
-
+  const { visualState, listening, loading, speaking } = jarvis;
+  const busy = loading || speaking;
+  const controlLabel = loading ? "Stop response" : listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk to Jarvis";
+  function voiceControl() {
+    if (loading) jarvis.stopResponse();
+    else if (listening) jarvis.stopListening();
+    else if (speaking) jarvis.stopSpeaking();
+    else { jarvis.setPanelOpen(true); jarvis.startListening(); }
+  }
+  function ask(text: string) { if (!text.trim() || loading) return; jarvis.setPanelOpen(true); void jarvis.submit(text.trim()); setCommand(""); }
   return (
-    <section aria-label="Jarvis command center" className="relative isolate overflow-hidden rounded-3xl border border-[var(--color-border-strong)] bg-[var(--color-surface-0)] shadow-[var(--shadow-raised)]">
-      <IntelligenceNetwork variant="hero" className="absolute inset-y-0 right-0 -z-10 h-full w-full opacity-65 lg:w-[62%]" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[var(--color-surface-0)] via-[var(--color-surface-0)]/70 to-transparent sm:via-[var(--color-surface-0)]/45" />
-      <div className="absolute inset-x-0 bottom-0 -z-10 h-24 bg-gradient-to-t from-[var(--color-surface-0)]/80 to-transparent" />
-
-      <div className="flex h-full flex-col justify-between gap-7 p-5 sm:p-8 lg:p-9">
-        <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">WeedEater / Owner workspace</p><Link href="/settings" className="flex min-h-8 items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">Connections<ArrowUpRight className="h-3.5 w-3.5" /></Link></div>
-        <div className="max-w-2xl space-y-3">
-          <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-accent)]">
-            <span className={`h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] ${visualState === "idle" ? "" : "animate-pulse"}`} />
-            {STATE_TEXT[visualState]}
-          </p>
-          {briefing ? (
-            <>
-              <h1 className="text-3xl font-semibold leading-tight tracking-[-0.035em] text-[var(--color-text-primary)] sm:text-4xl lg:text-5xl">{briefing.greeting}</h1>
-              <p className="max-w-lg text-base leading-6 text-[var(--color-text-secondary)]">{briefing.headline}</p>
-              {briefing.facts.length > 0 ? (
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 pt-2 text-sm">
-                  {briefing.facts.map((f) => (
-                    <div key={f.label} className="flex flex-col">
-                      <dt className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)]">{f.label}</dt>
-                      <dd className={TONE[f.tone]}>{f.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-            </>
-          ) : (
-            <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-              Today&apos;s briefing isn&apos;t available{dataError ? `: ${dataError}` : "."}
-            </h2>
-          )}
+    <section aria-label="Jarvis command center" className="command-console relative isolate overflow-hidden rounded-[1.75rem] border border-[#26404e] bg-[#0b121b] shadow-[0_24px_80px_-40px_#000]">
+      <div aria-hidden="true" className="command-grid absolute inset-0 -z-10 opacity-40" />
+      <div className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-4 sm:px-8">
+        <p className="flex items-center gap-3 text-[11px] font-medium tracking-[.24em] text-[#c0d3e1]"><span className="h-1.5 w-1.5 rounded-full bg-[#71d8ed]" />J.A.R.V.I.S.<span className="hidden border-l border-white/15 pl-3 text-[10px] tracking-[.12em] text-[#8499ac] sm:inline">WEEDEATER</span></p>
+        <Link href="/settings" className="flex min-h-11 items-center gap-1 text-xs text-[#a7bbce] hover:text-white">Connections<ArrowUpRight className="h-3.5 w-3.5" /></Link>
+      </div>
+      <div className="grid items-center gap-2 px-5 pt-5 sm:px-8 sm:pt-7 xl:grid-cols-[1fr_340px]">
+        <div className="min-w-0">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#75d9ec]">Your operations. In focus.</p>
+          <h1 className="text-[2rem] font-medium leading-[1.12] tracking-[-.045em] text-[#edf6fd] sm:text-[2.75rem]">{briefing?.greeting ?? "At your service."}</h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-[#a9bdce] sm:text-base">{briefing?.headline ?? "Your briefing is unavailable. You can still open your workspace or ask a question."}</p>
+          {dataError && <p role="alert" className="mt-3 max-w-xl text-sm text-[var(--color-warning)]">{dataError}</p>}
+          {briefing && briefing.facts.length > 0 && <dl className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 sm:mt-7">
+            {briefing.facts.map(f => <div key={f.label} className="border-l border-[#2b4354] pl-3"><dt className="text-[10px] uppercase tracking-[.1em] text-[#8b9fb2]">{f.label}</dt><dd className={`mt-1 text-sm font-medium ${TONE[f.tone]}`}>{f.value}</dd></div>)}
+          </dl>}
         </div>
-        {dataError && briefing && <p role="alert" className="max-w-xl text-sm text-[var(--color-warning)]">{dataError}</p>}
-        <form className="flex w-full max-w-2xl items-center gap-2 rounded-2xl border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/95 p-2 shadow-[var(--shadow-card)] focus-within:border-[var(--color-accent)]" onSubmit={event => {
-          event.preventDefault();
-          if (!command.trim() || jarvis.loading) return;
-          jarvis.setPanelOpen(true); void jarvis.submit(command.trim()); setCommand("");
-        }}>
-          <label htmlFor="workspace-command" className="sr-only">Ask Jarvis from your workspace</label>
-          <input id="workspace-command" value={command} onChange={event => setCommand(event.target.value)} maxLength={2000} disabled={!hydrated || jarvis.loading} placeholder="What needs my attention?" className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-base outline-none placeholder:text-[var(--color-text-muted)] sm:text-sm" />
-          <button type="submit" disabled={!hydrated || !command.trim() || jarvis.loading} aria-label="Send to Jarvis" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)] text-[#10200c] transition-transform active:scale-95 disabled:opacity-40"><Send className="h-4 w-4" /></button>
-        </form>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={!hydrated || jarvis.loading}
-            onClick={() => {
-              jarvis.setPanelOpen(true);
-              if (!listening) jarvis.startListening();
-            }}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 text-xs font-semibold text-[#062012] transition-transform active:scale-95 disabled:opacity-50"
-          >
-            <Mic className="h-4 w-4" />
-            {listening ? "Listening…" : "Talk to Jarvis"}
+        <div className="relative flex flex-col items-center justify-center py-2 xl:py-0">
+          <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="group relative h-[180px] w-[180px] rounded-full outline-none transition-transform duration-200 hover:scale-[1.025] focus-visible:ring-2 focus-visible:ring-[#72ddf2] active:scale-[.97] sm:h-[230px] sm:w-[230px] xl:h-[296px] xl:w-[296px]">
+            <JarvisCore state={visualState} className="h-full w-full" />
           </button>
-          <Link
-            href="/schedule"
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/70 px-4 text-xs font-medium text-[var(--color-text-primary)] hover:border-[var(--color-accent)]/60"
-          >
-            <CalendarDays className="h-4 w-4" />
-            Open schedule
-          </Link>
+          <p className="max-w-full text-center text-xs font-medium text-[#97e4f2]" role="status">{listening && jarvis.interim ? jarvis.interim : jarvis.progress ?? STATE_TEXT[visualState]}</p>
+          <p className="mt-1 text-[10px] tracking-wide text-[#8b9fb2]">{busy ? "Tap the core to stop" : listening ? "Tap the core when you’re done" : "Tap the core to speak"}</p>
+        </div>
+      </div>
+      <div className="px-5 pt-5 pb-5 sm:px-8 sm:pb-7">
+        <form className="flex items-center gap-1.5 rounded-2xl border border-[#355364] bg-[#101e2a]/85 p-1.5 transition-colors focus-within:border-[#73d8ea]" onSubmit={event => { event.preventDefault(); ask(command); }}>
+          <label htmlFor="workspace-command" className="sr-only">Ask Jarvis from your workspace</label>
+          <input id="workspace-command" value={command} onChange={event => setCommand(event.target.value)} maxLength={2000} disabled={!hydrated || loading || listening} placeholder="What needs my attention?" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-base text-[#edf6fd] outline-none placeholder:text-[#91a7b9]" />
+          <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-[#92d9e8] hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-[#72ddf2]">{busy || listening ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}</button>
+          {!loading && <button type="submit" disabled={!hydrated || !command.trim() || listening} aria-label="Send to Jarvis" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#83def0] text-[#092431] transition-transform active:scale-95 disabled:opacity-35"><Send className="h-4 w-4" /></button>}
+        </form>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#afc3d3]">
+          <button type="button" onClick={() => ask("Give me a concise owner briefing and the most useful next action.")} disabled={!hydrated || loading} className="flex min-h-11 items-center gap-1.5 hover:text-white disabled:opacity-40">Brief me<ArrowRight className="h-3 w-3" /></button>
+          <Link href="/schedule" className="flex min-h-11 items-center gap-1.5 hover:text-white"><CalendarDays className="h-3.5 w-3.5" />Open schedule</Link>
+          <span className="ml-auto text-[10px] text-[#8b9fb2]">{hydrated && jarvis.memoryAvailable ? "Context saved on this device" : "Your command workspace"}</span>
         </div>
       </div>
     </section>

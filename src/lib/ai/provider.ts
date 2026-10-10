@@ -85,5 +85,6 @@ export interface AIProvider {
     tools: ToolDefinition[];
     maxTokens?: number;
     toolChoice?: AIToolChoice;
+    signal?: AbortSignal;
   }): AsyncGenerator<AIStreamDelta | AICompletionResult>;
 }

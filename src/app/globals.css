@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --color-surface-0: #101513;
-  --color-surface-1: #161d19;
-  --color-surface-2: #1c2520;
-  --color-surface-3: #253029;
-  --color-surface-raised: #2a372f;
-  --color-border: #2c3831;
-  --color-border-strong: #405147;
+  --color-surface-0: #0b1017;
+  --color-surface-1: #111923;
+  --color-surface-2: #17222e;
+  --color-surface-3: #1e2d3b;
+  --color-surface-raised: #263746;
+  --color-border: #273644;
+  --color-border-strong: #3d5265;
 
-  --color-text-primary: #f2f6f3;
-  --color-text-secondary: #b4c2b9;
-  --color-text-muted: #95a79c;
+  --color-text-primary: #edf4fb;
+  --color-text-secondary: #b2c2d1;
+  --color-text-muted: #94a7b9;
 
   /* WeedEater brand green — the app's one distinctive color, used
      everywhere an accent is needed (active nav, primary actions, live
@@ -153,4 +153,22 @@ body {
      flashing at full opacity and then snapping back to 0 when its delayed
      animation actually starts. */
   animation: fade-in 0.2s ease-out backwards;
+}
+
+/* The command core reflects state only; idle stays still. */
+.command-console { background-image: radial-gradient(ellipse at 90% 30%, #0d354847, transparent 65%); }
+.command-grid { background-image: linear-gradient(#75d9ec09 1px, transparent 1px), linear-gradient(90deg, #75d9ec09 1px, transparent 1px); background-size: 40px 40px; mask-image: linear-gradient(90deg, transparent, black); }
+.jarvis-core { color: #7adff2; }
+.jarvis-core[data-state="error"] { color: #f4b457; }
+.jarvis-core[data-state="success"] { color: #b1ef78; }
+.jarvis-core-orbit, .jarvis-core-inner { transform-origin: 160px 160px; }
+.jarvis-core[data-state="processing"] .jarvis-core-orbit,
+.jarvis-core[data-state="action"] .jarvis-core-orbit { animation: core-orbit 5s linear infinite; }
+.jarvis-core[data-state="responding"] .jarvis-core-inner { animation: core-orbit 12s linear infinite reverse; }
+.jarvis-core[data-state="listening"] .jarvis-core-bars path,
+.jarvis-core[data-state="responding"] .jarvis-core-bars path { transform-box: fill-box; transform-origin: center; animation: core-voice 900ms ease-in-out infinite alternate; }
+@keyframes core-orbit { to { transform: rotate(360deg); } }
+@keyframes core-voice { from { transform: scaleY(.55); opacity: .6; } to { transform: scaleY(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-core *, .command-console * { animation: none !important; transition: none !important; }
 }

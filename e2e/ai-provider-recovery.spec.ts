@@ -119,3 +119,12 @@ test("photo extraction has a cancellation deadline and bypasses caches", async (
   expect(request?.signal).toBeInstanceOf(AbortSignal);
   expect(request?.cache).toBe("no-store");
 });
+
+test("cancelling the owner request cancels the upstream AI fetch", async () => {
+  const owner = new AbortController();
+  let upstream: AbortSignal | null | undefined;
+  const ai = provider(async (_url, init) => { upstream = init?.signal; return new Response(null, { status: 503 }); });
+  for await (const event of ai.stream({ system: "Test", messages: [], tools: [], signal: owner.signal })) void event;
+  owner.abort();
+  expect(upstream?.aborted).toBe(true);
+});

@@ -3,6 +3,8 @@ import { askAdvisor, type AdvisorTurn } from "@/lib/ai/advisor";
 import { getPageContext } from "@/lib/ai/page-context";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const maxDuration = 60;
+
 function isValidHistory(value: unknown): value is AdvisorTurn[] {
   if (!Array.isArray(value)) return false;
   return value.every(
@@ -53,39 +55,45 @@ export async function POST(request: Request) {
   const pageContext = typeof path === "string" ? await getPageContext(path) : null;
   const conversationHistory = isValidHistory(history) ? history : [];
 
-  // Server-Sent Events instead of one buffered JSON response: the agentic
-  // loop can take several seconds end to end (tool calls + generation), and
-  // the previous "await the whole thing, then send one blob" shape meant the
-  // owner stared at a static spinner for all of it. Streaming the model's
-  // text as it's generated moves the perceived wait down to time-to-first-
-  // token, which is what a chat UI is actually judged on.
   const encoder = new TextEncoder();
+  const abort = new AbortController();
+  let closed = false;
+  let cleanup = () => {};
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       function send(event: string, data: unknown) {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        if (!closed) controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       }
+      function close() {
+        if (closed) return;
+        closed = true;
+        controller.close();
+      }
+      const disconnected = () => { abort.abort(); close(); cleanup(); };
+      const deadline = setTimeout(() => {
+        send("error", { error: "This request took too long. Try a narrower question.", reason: "timeout" });
+        abort.abort(); close(); cleanup();
+      }, 55_000);
+      cleanup = () => { clearTimeout(deadline); request.signal.removeEventListener("abort", disconnected); };
+      request.signal.addEventListener("abort", disconnected, { once: true });
+      if (request.signal.aborted) { disconnected(); return; }
       try {
-        const result = await askAdvisor(question.trim(), pageContext, conversationHistory, (delta) => {
+        const result = await askAdvisor(question.trim(), pageContext, conversationHistory.slice(-6), (delta) => {
           send("delta", { text: delta });
-        });
-
+        }, { signal: abort.signal, onToolStart: tool => send("progress", { tool }) });
+        if (abort.signal.aborted) return;
         if (!result.ok) {
           send("error", { error: result.message, reason: result.reason });
         } else {
-          send("done", {
-            answer: result.answer,
-            references: result.references,
-            toolsUsed: result.toolsUsed,
-            proposedAction: result.proposedAction,
-          });
+          send("done", { answer: result.answer, references: result.references, toolsUsed: result.toolsUsed, proposedAction: result.proposedAction });
         }
-      } catch (err) {
-        send("error", { error: err instanceof Error ? err.message : "The advisor failed unexpectedly.", reason: "upstream_error" });
+      } catch {
+        if (!abort.signal.aborted) send("error", { error: "Jarvis couldn't complete this response. Please retry.", reason: "upstream_error" });
       } finally {
-        controller.close();
+        cleanup(); close();
       }
     },
+    cancel() { closed = true; abort.abort(); cleanup(); },
   });
 
   return new Response(stream, {

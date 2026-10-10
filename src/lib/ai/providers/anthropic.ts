@@ -70,6 +70,7 @@ export class AnthropicProvider implements AIProvider {
     tools: ToolDefinition[];
     maxTokens?: number;
     toolChoice?: "auto" | "none";
+    signal?: AbortSignal;
   }): AsyncGenerator<AIStreamDelta | AICompletionResult> {
     if (!this.isConfigured()) {
       yield {
@@ -87,7 +88,7 @@ export class AnthropicProvider implements AIProvider {
       response = await fetch(ANTHROPIC_API_URL, {
         method: "POST",
         cache: "no-store",
-        signal: AbortSignal.timeout(45_000),
+        signal: params.signal ? AbortSignal.any([params.signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000),
         headers: {
           "content-type": "application/json",
           "x-api-key": integrationEnv.aiProvider.apiKey,

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Loader2, Mic, RotateCw, Send, Sparkles, Square, Trash2, Volume2, VolumeX, Wrench } from "lucide-react";
+import { AlertTriangle, Mic, RotateCw, Send, Sparkles, Square, Trash2, Volume2, VolumeX, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getContextualQuestions, getPageContextLabel } from "@/lib/ai/questions";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
@@ -72,12 +72,13 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
       >
         <Sparkles className={`ml-2 h-4 w-4 shrink-0 text-[var(--color-accent)] transition-opacity ${loading ? "animate-pulse" : "opacity-60 group-focus-within:opacity-100"}`} />
         <input
+          maxLength={2000}
           value={listening ? interim : question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={listening ? "Listening..." : "Ask Jarvis, or tap the mic and speak..."}
           aria-label="Ask Jarvis a question"
           disabled={loading || listening}
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60"
         />
         <Button
           type="button"
@@ -85,36 +86,36 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
           aria-label={listening ? "Stop listening" : "Ask Jarvis by voice"}
           disabled={loading}
           onClick={listening ? jarvis.stopListening : jarvis.startListening}
-          className="rounded-xl px-2.5"
+          className="min-h-11 rounded-xl px-2.5"
         >
           {listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
-        <Button type="submit" disabled={loading || listening || !question.trim()} aria-label="Ask" className="rounded-xl px-2.5 sm:px-3">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          <span className="hidden sm:inline">Ask</span>
-        </Button>
+        {loading ? <Button type="button" variant="secondary" onClick={jarvis.stopResponse} aria-label="Stop response" className="min-h-11 rounded-xl px-3"><Square className="h-4 w-4" /><span className="hidden sm:inline">Stop</span></Button> : <Button type="submit" disabled={listening || !question.trim()} aria-label="Ask" className="min-h-11 rounded-xl px-3"><Send className="h-4 w-4" /><span className="hidden sm:inline">Ask</span></Button>}
+
       </form>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
         {speechOutputSupported ? (
-          <button type="button" onClick={jarvis.toggleMute} className="flex items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={muted}>
+          <button type="button" onClick={jarvis.toggleMute} className="flex min-h-11 items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={muted}>
             {muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
             {muted ? "Spoken replies muted" : "Spoken replies on (for voice questions)"}
           </button>
         ) : null}
         {voiceSupported ? (
-          <button type="button" onClick={jarvis.toggleConversationMode} className="flex items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={conversationMode}>
+          <button type="button" onClick={jarvis.toggleConversationMode} className="flex min-h-11 items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={conversationMode}>
             <Mic className="h-3 w-3" />
             Hands-free: {conversationMode ? "on — listens again after each reply" : "off"}
           </button>
         ) : null}
         {exchanges.length > 0 ? (
-          <button type="button" onClick={jarvis.clear} className="flex items-center gap-1 hover:text-[var(--color-text-primary)]">
+          <button type="button" onClick={jarvis.clear} className="flex min-h-11 items-center gap-1 hover:text-[var(--color-text-primary)]">
             <Trash2 className="h-3 w-3" />
             Clear conversation
           </button>
         ) : null}
       </div>
+
+      <p className="text-[11px] leading-5 text-[var(--color-text-muted)]">{jarvis.memoryAvailable ? "Last 20 completed exchanges stay on this device for 7 days. Clear conversation forgets them." : "Conversation is available for this session."} {speechOutputSupported ? "Voice uses your browser’s speech service." : ""}</p>
 
       {listening ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
@@ -133,14 +134,14 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         </p>
       ) : null}
 
-      {loading && first?.status === "streaming" && !first?.answer ? (
+      {loading && first?.status === "streaming" ? (
         <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
           <span className="flex gap-0.5">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)] [animation-delay:-0.3s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)] [animation-delay:-0.15s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent)]" />
           </span>
-          Jarvis is checking the numbers...
+          {jarvis.progress ?? "Thinking through your request…"}
         </div>
       ) : null}
 
@@ -167,13 +168,14 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
                 {exchange.question}
               </p>
               <div className="p-3">
-                {exchange.status !== "error" ? (
+                {exchange.status === "cancelled" ? <div className="space-y-2"><p className="text-sm text-[var(--color-text-secondary)]">Response stopped.</p>{exchange.answer && <div className="opacity-65"><MarkdownMessage text={exchange.answer} /><p className="mt-1 text-[10px] text-[var(--color-text-muted)]">Partial response</p></div>}</div> : exchange.status !== "error" ? (
                   <>
                     <div className="flex items-start gap-2">
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)]">
                         <Sparkles className={`h-3 w-3 text-[var(--color-accent)] ${exchange.status === "streaming" ? "animate-pulse" : ""}`} />
                       </span>
                       <div className="min-w-0 flex-1">
+                        {exchange.restored && <p className="mb-2 text-[10px] text-[var(--color-text-muted)]">Earlier conversation · ask again for current information</p>}
                         <MarkdownMessage text={exchange.answer ?? ""} />
                         {exchange.status === "streaming" && exchange.answer ? (
                           <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[var(--color-accent)] align-middle" />

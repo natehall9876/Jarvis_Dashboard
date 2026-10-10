@@ -1,3 +1,4 @@
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { SourceHealthBanner } from "@/components/command-center/source-health";
 import { HomeworksLiveRefresh } from "@/components/homeworks-live-refresh";
 import type { ReactNode } from "react";
@@ -7,7 +8,9 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { JarvisProvider } from "@/components/jarvis/jarvis-provider";
 import { VoiceDock } from "@/components/jarvis/voice-dock";
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
   return (
     // The sidebar is `fixed` (see Sidebar) and taken out of normal flow
     // entirely, so this stays a plain, normally-scrolling page — no nested
@@ -19,7 +22,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     // JarvisProvider sits at the layout level, which Next.js keeps mounted across
     // client-side navigation — that is what makes the conversation, microphone
     // and speech output persist while moving between pages.
-    <JarvisProvider>
+    <JarvisProvider key={user?.id ?? "anonymous"} memoryOwner={user?.id}>
     <HomeworksLiveRefresh />
     <div className="min-h-screen w-full lg:pl-60">
       <Sidebar />
