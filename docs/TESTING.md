@@ -16,6 +16,20 @@ installed, or install them with npx playwright install. The default suite
 can start its own localhost:3000 dev server; avoid running a production
 build against the same .next directory while that server is compiling.
 
+## Credential-free isolated suite
+
+`npm run test:isolated` runs the explicitly listed module, server-rendered
+component, and anonymous API tests in `playwright.isolated.config.ts`.
+It starts its own local server on port 3126 and does not launch browser
+automation or require real credentials. External provider boundaries use
+synthetic fixtures. This is also a CI gate, followed by the isolated
+Homeworks database regressions. It does not replace signed-in production,
+phone viewport, physical iPhone, or real microphone acceptance.
+
+Calendar display/recovery coverage includes Eastern/DST conversion,
+all-day date preservation, callback status, rejected list/preview requests,
+retry, and uncertain selection/disconnect results without leaking errors.
+
 ## What the default suite covers
 
 e2e includes pure domain/integration tests and browser tests in Chromium

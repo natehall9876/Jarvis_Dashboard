@@ -11,6 +11,7 @@
     "typegen": "next typegen",
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test",
+    "test:isolated": "playwright test --config playwright.isolated.config.ts",
     "test:persistence": "playwright test --config playwright.persistence.config.ts",
     "test:ownership:db": "node scripts/test-homeworks-ownership.mjs"
   },
