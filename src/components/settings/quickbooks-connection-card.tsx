@@ -49,20 +49,36 @@ export function QuickBooksConnectionCard({
   function verify() {
     setPreview(null);
     setResult(null);
-    startTransition(async () => setResult(await verifyQuickBooksConnection()));
+    startTransition(async () => {
+      try {
+        setResult(await verifyQuickBooksConnection());
+      } catch {
+        setResult({ ok: false, message: "Company information could not be loaded. Check your connection and try Verify again." });
+      }
+    });
   }
   function runPreview() {
     setResult(null);
     setPreview(null);
-    startPreviewTransition(async () => setPreview(await previewQuickBooksFinancials()));
+    startPreviewTransition(async () => {
+      try {
+        setPreview(await previewQuickBooksFinancials());
+      } catch {
+        setPreview({ ok: false, message: "Financial summary could not be loaded. Check your connection and try Preview again." });
+      }
+    });
   }
   function disconnectNow() {
+    setResult(null);
+    setPreview(null);
     startTransition(async () => {
-      const disconnected = await disconnectQuickBooksAction();
-      if (!disconnected.ok) { setResult(disconnected); setPreview(null); return; }
-      setResult(null);
-      setPreview(null);
-      router.refresh();
+      try {
+        const disconnected = await disconnectQuickBooksAction();
+        if (!disconnected.ok) { setResult(disconnected); return; }
+        router.refresh();
+      } catch {
+        setResult({ ok: false, message: "Disconnect could not be confirmed. Reload Settings to check the saved authorization before trying again." });
+      }
     });
   }
 
@@ -97,7 +113,7 @@ export function QuickBooksConnectionCard({
         ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/quickbooks/oauth/connect"
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
           >
             Connect QuickBooks
           </a>
@@ -127,14 +143,14 @@ export function QuickBooksConnectionCard({
         )}
 
         {result ? (
-          <p className={`flex items-start gap-1.5 text-xs ${result.ok ? "text-[var(--color-accent)]" : "text-[var(--color-critical)]"}`}>
+          <p role={result.ok ? "status" : "alert"} className={`flex items-start gap-1.5 text-xs ${result.ok ? "text-[var(--color-accent)]" : "text-[var(--color-critical)]"}`}>
             {result.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
             {result.ok ? `Verified — connected to "${result.companyName}".` : result.message}
           </p>
         ) : null}
 
         {preview && !preview.ok ? (
-          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+          <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {preview.message}
           </p>
