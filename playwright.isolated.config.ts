@@ -12,6 +12,7 @@ export default defineConfig({
     "ai-source-context.spec.ts",
     "calendar-display-recovery.spec.ts",
     "ci-runtime.spec.ts",
+    "client-address-maps.spec.ts",
     "collections-review.spec.ts",
     "homeworks-automatic.spec.ts",
     "homeworks-enrich.spec.ts",

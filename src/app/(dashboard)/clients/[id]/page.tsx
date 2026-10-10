@@ -11,7 +11,8 @@ import { ConfirmSubmit } from "@/components/ui/confirm-submit";
 import { Modal } from "@/components/ui/modal";
 import { ClientForm } from "@/components/clients/client-form";
 import { EmptyState, ErrorState, NotConfiguredState } from "@/components/ui/states";
-import { formatCurrency, formatDateOnly, clientDisplayName, propertyAddress } from "@/lib/format";
+import { formatCurrency, formatDateOnly, clientDisplayName } from "@/lib/format";
+import { PropertyMapLinks } from "@/components/clients/property-map-links";
 import { getClientById } from "@/lib/data/clients";
 import { getClientPhotos } from "@/lib/data/client-photos";
 import { getServiceOptions } from "@/lib/data/options";
@@ -130,9 +131,7 @@ export default async function ClientDetailPage({
             <ul className="divide-y divide-[var(--color-border)]">
               {properties.map((p) => (
                 <li key={p.id} className="py-2.5">
-                  <Link href={`/properties/${p.id}`} className="text-sm font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)]">
-                    {propertyAddress(p)}
-                  </Link>
+                  <PropertyMapLinks property={p} />
                 </li>
               ))}
             </ul>
