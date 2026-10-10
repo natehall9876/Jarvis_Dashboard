@@ -117,7 +117,7 @@ export function GoogleCalendarConnectionCard({
               <summary className="cursor-pointer py-2 font-medium">Deployment setup details</summary>
               <ol className="mt-2 list-decimal space-y-3 pl-4">
                 <li>Enable the Google Calendar API and create a web application OAuth client.</li>
-                <li>Add this exact redirect URI:<code className="mt-1 block break-all rounded-lg bg-[var(--color-surface-3)] p-2">https://jarvis-dashboard-fawn.vercel.app/api/integrations/google-calendar/oauth/callback</code></li>
+                <li>Add this exact redirect URI:<code className="mt-1 block break-all rounded-lg bg-[var(--color-surface-3)] p-2">https://jarvis-dashboard-weedeater.vercel.app/api/integrations/google-calendar/oauth/callback</code></li>
                 <li>Set <code>GOOGLE_CALENDAR_CLIENT_ID</code> and <code>GOOGLE_CALENDAR_CLIENT_SECRET</code> in the production deployment, then redeploy.</li>
                 <li>Return here, connect your Google account, choose a calendar, and preview events to verify access.</li>
               </ol>
