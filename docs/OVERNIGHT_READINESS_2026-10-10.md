@@ -1,6 +1,6 @@
 # Jarvis overnight readiness — October 10, 2026
 
-Checkpoint: 02:06 America/New_York. Deadline: 07:00 America/New_York.
+Checkpoint: 02:12 America/New_York. Deadline: 07:00 America/New_York.
 Objective: finish Calendar OAuth and verify actual reads, then Homeworks health,
 mobile usability, and broad regression coverage. Skip owner sign-in blockers
 until the final handoff. Do not mistake passed automated tests for production
@@ -13,7 +13,7 @@ or physical-phone acceptance.
   A real production event preview succeeded at 00:12 Eastern. Read-only scope.
 - Homeworks production reports all 21 source streams successful, 73 customer
   source records and 234 scheduled-work source records (including source archives).
-  The all-source checkpoint advanced to 01:10 Eastern. Current 5-minute automatic
+  The all-source checkpoint advanced to 02:05 Eastern. Current 5-minute automatic
   configuration is visible in production. No source record was modified for testing.
 - Jarvis AI answered a real schedule question using the business snapshot.
   ChatGPT QuickBooks access works, but the separate Jarvis QuickBooks read is
@@ -26,7 +26,7 @@ or physical-phone acceptance.
   return 401; an empty execute-action payload returns the expected 400.
   All 15 checks passed. The initial script incorrectly expected 401 for that
   malformed action; code inspection confirmed validation precedes execution.
-- 505 isolated module/server-render/API tests passed. These include Calendar,
+- 506 isolated module/server-render/API tests passed. These include Calendar,
   QuickBooks, and Homeworks verification/reconciliation recovery cases.
 - Synthetic PGlite PostgreSQL tests passed: ownership/anti-spoofing, native
   overlays, idempotency, atomic checkpoints, dependency rollback, source invoice
@@ -91,8 +91,27 @@ No source records, authorization, or sync configuration changed.
 - Targeted suite moved from 5 failed / 1 passed to 6/6 passing. The complete
   isolated suite passes 505/505 across 40 files. Typecheck, zero-warning lint,
   build, diff check and the 30-file client-secret scan passed locally.
-- Awaiting exact-head CI, merge and deployed read-only verification. Synthetic
-  tests used mocks and did not mutate Homeworks or production data.
+- PR #11 merged as 068bb6d8492c6f13b8eeb3f100a0faa20931eed4 after
+  its exact-head CI passed, including synthetic database regressions.
+  Production deployment dpl_49TWRtNFh73UQoB3EMS18oiCdfR3 is READY.
+- After production reload, actual retrieval returned five Homeworks customers.
+  The first read-only day reconciliation hit the concurrency guard, exposed an
+  accessible retry message, used zero partial events, then succeeded on retry:
+  one Homeworks job matched the same Jarvis event ID, zero were missing.
+- That reconciliation also exposed one explicit QA/demo fixture as a false
+  operational "extra"; no record was deleted or modified.
+
+## 02:12 confirmed-demo reconciliation correction
+
+Branch: fix/reconcile-demo-exclusion-20261010, cleanly based on PR #11 main.
+
+- Added an explicit client data-source marker to reconciliation inputs and
+  excluded only rows whose database provenance is exactly `demo`.
+  Unverified and real records remain in reconciliation.
+- The new targeted case failed before the change (one false extra) and the
+  reconciliation range suite now passes 9/9. Full release gates are running.
+- This is a read-only filter. No customer, property, job, authorization, sync
+  configuration or production database row changed.
 
 ## Blocked / explicitly unverified
 
@@ -119,6 +138,6 @@ Inspect repository/PR/deployment state before edits; preserve concurrent work.
 Use current live sessions if available. Never request secrets in chat, weaken
 security, send messages/payments, or delete business records.
 
-Next: finish the Homeworks recovery PR, verify its deployed read-only customer
-and schedule-reconciliation paths, then continue only with demonstrated defects.
+Next: finish the confirmed-demo reconciliation correction, verify the deployed
+day result is clean, then continue only with demonstrated defects.
 Keep mobile/voice and sign-in requirements visible in the final scorecard.
