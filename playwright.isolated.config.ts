@@ -23,6 +23,7 @@ export default defineConfig({
     "homeworks-schedule-completeness.spec.ts",
     "homeworks-status-safety.spec.ts",
     "homeworks-sync-failures.spec.ts",
+    "homeworks-ui-recovery.spec.ts",
     "homeworks-webhook.spec.ts",
     "homeworks-write-safety.spec.ts",
     "integration-api-safety.spec.ts",
