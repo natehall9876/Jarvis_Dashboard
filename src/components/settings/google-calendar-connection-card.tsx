@@ -109,7 +109,10 @@ export function GoogleCalendarConnectionCard({
               <p className="text-sm font-medium text-[var(--color-warning)]">Setup required</p>
               <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">Jarvis needs its Google app credentials before you can sign in and choose a calendar.</p>
             </div>
-            <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--color-surface-3)] px-4 text-sm font-medium">Open Google Cloud setup</a>
+            <div className="flex flex-wrap gap-2">
+              <a href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--color-accent)] px-4 text-sm font-medium text-[#062012]">Open Google Calendar</a>
+            </div>
+            <p className="text-xs leading-5 text-[var(--color-text-secondary)]">Google Calendar opens directly above. Linking its events inside Jarvis is a separate one-time OAuth setup; until then, Jarvis cannot read your calendar automatically.</p>
             <details className="text-xs leading-5 text-[var(--color-text-secondary)]">
               <summary className="cursor-pointer py-2 font-medium">Deployment setup details</summary>
               <ol className="mt-2 list-decimal space-y-3 pl-4">
