@@ -21,31 +21,35 @@ export function DuplicateAuditPanel() {
   function run() {
     setResult(null);
     startTransition(async () => {
-      setResult(await findDuplicateClients());
+      try {
+        setResult(await findDuplicateClients());
+      } catch {
+        setResult({ ok: false, message: "Duplicate audit could not be completed. Try again." });
+      }
     });
   }
 
   return (
     <details className="rounded-lg border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-3">
-      <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
+      <summary className="flex min-h-11 cursor-pointer items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
         <ChevronDown className="h-3.5 w-3.5" />
         Check for duplicate client records
       </summary>
       <div className="mt-2 space-y-2">
-        <Button type="button" variant="secondary" onClick={run} disabled={pending}>
+        <Button type="button" variant="secondary" onClick={run} disabled={pending} className="min-h-11 w-full sm:w-auto">
           {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-          Run audit (read-only — checks phone/email matches across all clients)
+          Run audit (read-only — checks active, non-demo clients)
         </Button>
         {result && !result.ok ? (
-          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+          <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {result.message}
           </p>
         ) : null}
         {result && result.ok && result.clusters.length === 0 ? (
-          <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+          <p role="status" className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            No matching phone/email across {result.totalClientsChecked} clients — no likely duplicates found.
+            No matching phone/email across {result.totalClientsChecked} active clients — no likely duplicates found.
           </p>
         ) : null}
         {result && result.ok && result.clusters.length > 0 ? (
