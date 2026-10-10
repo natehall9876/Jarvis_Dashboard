@@ -19,7 +19,7 @@ type JobRow = {
   scheduled_date: string | null;
   scheduled_start_time: string | null;
   status: string;
-  property: { street: string | null; city: string | null; client: { first_name: string | null; last_name: string | null; company_name: string | null } | null } | null;
+  property: { street: string | null; city: string | null; client: { first_name: string | null; last_name: string | null; company_name: string | null; data_source: string | null } | null } | null;
 };
 
 function toJarvisJob(j: JobRow): ReconJarvisJob {
@@ -31,10 +31,11 @@ function toJarvisJob(j: JobRow): ReconJarvisJob {
     status: j.status,
     clientName: clientNameOf(j.property?.client),
     propertyLabel: [j.property?.street, j.property?.city].filter(Boolean).join(", ") || "(no address)",
+    clientDataSource: j.property?.client?.data_source ?? null,
   };
 }
 
-const JOB_SELECT = "id, homeworks_id, scheduled_date, scheduled_start_time, status, property:properties(street, city, client:clients(first_name, last_name, company_name))";
+const JOB_SELECT = "id, homeworks_id, scheduled_date, scheduled_start_time, status, property:properties(street, city, client:clients(first_name, last_name, company_name, data_source))";
 
 /**
  * Entirely read-only. Compares one calendar day in Homeworks against the same

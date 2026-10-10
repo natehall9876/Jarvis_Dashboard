@@ -118,6 +118,26 @@ test.describe("reconcileRange", () => {
     expect(r.days[1].totals.extra).toBe(0);
   });
 
+  test("confirmed demo jobs never create false operational discrepancies", () => {
+    const demo = job("demo", "2026-09-21", {
+      id: "qa-fixture",
+      homeworks_id: null,
+      clientName: "Synthetic QA client",
+      clientDataSource: "demo",
+    } as Partial<ReconJarvisJob>);
+    const r = reconcileRange({
+      from: "2026-09-21",
+      to: "2026-09-21",
+      dates: ["2026-09-21"],
+      hwEvents: [],
+      jarvisJobs: [demo],
+      linkedPropertyHwIds: new Set(),
+      hwLookup: new Map(),
+    });
+    expect(r.totals).toEqual({ homeworks: 0, jarvis: 0, matched: 0, missing: 0, extra: 0 });
+    expect(r.days[0].rows).toEqual([]);
+  });
+
   test("an empty range (no Homeworks events, no Jarvis jobs) reconciles cleanly to all zeros", () => {
     const r = reconcileRange({
       from: "2026-09-21",

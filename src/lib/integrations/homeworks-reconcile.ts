@@ -25,6 +25,8 @@ export type ReconJarvisJob = {
   status: string;
   clientName: string;
   propertyLabel: string;
+  /** Explicit database provenance only; "unverified" is never treated as demo. */
+  clientDataSource?: string | null;
 };
 
 export type ReconRow = {
@@ -71,6 +73,12 @@ export function reconcileDay(input: {
 }): ReconResult {
   const { date } = input;
   const rows: ReconRow[] = [];
+  // Reconciliation is an operational integrity view. Explicit seed/demo rows
+  // are not real Jarvis jobs and must not create false discrepancies.
+  const jarvisJobsOnDate = input.jarvisJobsOnDate.filter((j) => j.clientDataSource !== "demo");
+  const jarvisJobsByHwId = new Map(
+    Array.from(input.jarvisJobsByHwId).filter(([, job]) => job.clientDataSource !== "demo"),
+  );
   const dayEvents = input.hwEvents.filter((e) => e.startDate === date || (e.startDate < date && !!e.endDate && e.endDate >= date));
   const dayIds = new Set(dayEvents.map((e) => e.id));
 
@@ -83,7 +91,7 @@ export function reconcileDay(input: {
       localTime: e.hasTime && e.startTime ? (hhmm(e.startTime) ?? e.startTime) : UNSCHEDULED,
       hwStatus: e.status,
     };
-    const jarvis = input.jarvisJobsByHwId.get(e.id);
+    const jarvis = jarvisJobsByHwId.get(e.id);
     if (jarvis && jarvis.scheduled_date === date) {
       rows.push({ ...base, state: "matched", jarvisJobId: jarvis.id, jarvisStatus: jarvis.status, reason: "Same Homeworks event ID on the same date." });
       continue;
@@ -98,7 +106,7 @@ export function reconcileDay(input: {
     rows.push({ ...base, state: "missing", jarvisJobId: jarvis?.id ?? null, jarvisStatus: jarvis?.status ?? null, reason });
   }
 
-  for (const j of input.jarvisJobsOnDate) {
+  for (const j of jarvisJobsOnDate) {
     if (j.homeworks_id && dayIds.has(j.homeworks_id)) continue;
     const base = {
       hwId: j.homeworks_id,
@@ -127,7 +135,7 @@ export function reconcileDay(input: {
   const count = (s: ReconRow["state"]) => rows.filter((r) => r.state === s).length;
   return {
     date,
-    totals: { homeworks: dayEvents.length, jarvis: input.jarvisJobsOnDate.length, matched: count("matched"), missing: count("missing"), extra: count("extra") },
+    totals: { homeworks: dayEvents.length, jarvis: jarvisJobsOnDate.length, matched: count("matched"), missing: count("missing"), extra: count("extra") },
     rows,
   };
 }
@@ -172,14 +180,15 @@ export function reconcileRange(input: {
   linkedPropertyHwIds: Set<string>;
   hwLookup: Map<string, ReconEvent>;
 }): ReconRangeResult {
+  const jarvisJobs = input.jarvisJobs.filter((j) => j.clientDataSource !== "demo");
   const jarvisJobsByHwId = new Map<string, ReconJarvisJob>();
-  for (const j of input.jarvisJobs) if (j.homeworks_id) jarvisJobsByHwId.set(j.homeworks_id, j);
+  for (const j of jarvisJobs) if (j.homeworks_id) jarvisJobsByHwId.set(j.homeworks_id, j);
 
   const days = input.dates.map((date) =>
     reconcileDay({
       date,
       hwEvents: input.hwEvents,
-      jarvisJobsOnDate: input.jarvisJobs.filter((j) => j.scheduled_date === date),
+      jarvisJobsOnDate: jarvisJobs.filter((j) => j.scheduled_date === date),
       jarvisJobsByHwId,
       linkedPropertyHwIds: input.linkedPropertyHwIds,
       hwLookup: input.hwLookup,
