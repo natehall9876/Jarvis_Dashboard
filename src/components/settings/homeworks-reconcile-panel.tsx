@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { reconcileHomeworksDay, reconcileHomeworksRange, type ReconcileActionResult, type ReconcileRangeActionResult } from "@/lib/actions/homeworks-reconcile";
-import { BUSINESS_TIMEZONE, todayInZone, addDaysISO } from "@/lib/integrations/homeworks-dates";
+import { BUSINESS_TIMEZONE, todayInZone, addDaysISO, currentBusinessWeek } from "@/lib/integrations/homeworks-dates";
 import type { ReconRow } from "@/lib/integrations/homeworks-reconcile";
 
 const STATE_TONE = {
@@ -80,6 +80,11 @@ export function HomeworksReconcilePanel() {
     setFrom(start);
     setTo(addDaysISO(start, days));
   }
+  function presetThisWeek() {
+    const week = currentBusinessWeek();
+    setFrom(week.from);
+    setTo(week.to);
+  }
 
   const r = dayResult && dayResult.ok ? dayResult : null;
   const rr = rangeResult && rangeResult.ok ? rangeResult : null;
@@ -141,7 +146,7 @@ export function HomeworksReconcilePanel() {
             className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
             aria-label="Range end"
           />
-          <Button type="button" variant="ghost" onClick={() => preset(6)}>
+          <Button type="button" variant="ghost" onClick={presetThisWeek}>
             This week
           </Button>
           <Button type="button" variant="ghost" onClick={() => preset(29)}>
