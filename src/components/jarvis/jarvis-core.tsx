@@ -13,6 +13,12 @@ export function JarvisCore({ state, className = "" }: { state: JarvisVisualState
         <radialGradient id={`${id}-eye`}><stop stopColor="#fff" /><stop offset=".13" stopColor="#d9ffff" /><stop offset=".3" stopColor="currentColor" stopOpacity=".75" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></radialGradient>
         <linearGradient id={`${id}-arc`}><stop stopColor="currentColor" stopOpacity="0" /><stop offset=".6" stopColor="currentColor" /><stop offset="1" stopColor="#fff" /></linearGradient>
       </defs>
+      <g className="jarvis-core-satellites" stroke="currentColor" opacity=".65">
+        <ellipse cx="240" cy="240" rx="237" ry="122" transform="rotate(-28 240 240)" strokeWidth=".7" />
+        <ellipse cx="240" cy="240" rx="237" ry="122" transform="rotate(58 240 240)" strokeWidth=".7" />
+        <circle cx="31" cy="343" r="3" fill="#dcffff" />
+        <circle cx="447" cy="136" r="4" fill="#ffcb83" stroke="#ffcb83" />
+      </g>
       <circle cx="240" cy="240" r="235" fill={`url(#${id}-halo)`} />
       <g stroke="currentColor">
         <circle cx="240" cy="240" r="224" strokeOpacity=".2" />
@@ -41,12 +47,18 @@ export function JarvisCore({ state, className = "" }: { state: JarvisVisualState
           <circle cx="240" cy="240" r="114" strokeWidth="1.5" strokeDasharray="290 42 60 42" />
           <path d="M240 119v11m121 110h-11M240 361v-11M119 240h11" stroke="#ffbf69" strokeWidth="4" />
         </g>
-        <circle cx="240" cy="240" r="99" fill="#04141e" fillOpacity=".9" strokeOpacity=".5" />
+        <circle cx="240" cy="240" r="99" fill="#020c14" fillOpacity=".85" strokeOpacity=".6" />
+        <g className="jarvis-core-sphere" strokeWidth=".65" strokeOpacity=".45">
+          {[24, 48, 72, 94].map(radius => <ellipse key={`longitude-${radius}`} cx="240" cy="240" rx={radius} ry="97" />)}
+          {[-72, -48, -24, 0, 24, 48, 72].map(y => <ellipse key={`latitude-${y}`} cx="240" cy={240 + y} rx={Math.sqrt(97 * 97 - y * y)} ry={12} />)}
+          <path d="M143 240h194M240 143v194" strokeOpacity=".7" />
+        </g>
         <circle cx="240" cy="240" r="92" strokeOpacity=".16" strokeWidth="5" />
         <g className="jarvis-core-lens">
           <circle cx="240" cy="240" r="83" fill={`url(#${id}-eye)`} stroke="none" />
           <circle cx="240" cy="240" r="60" strokeOpacity=".45" strokeDasharray="2 5" />
           <path d="M204 219l36-21 36 21v42l-36 21-36-21z" strokeOpacity=".8" strokeWidth="1.5" />
+          <circle cx="240" cy="240" r="39" stroke="#dcffff" strokeWidth="2" strokeDasharray="65 17" />
           <path d="M204 219l36 21 36-21m-36 21v42" strokeOpacity=".6" />
           <circle cx="240" cy="240" r="10" fill="#eaffff" strokeWidth="5" strokeOpacity=".2" />
         </g>
