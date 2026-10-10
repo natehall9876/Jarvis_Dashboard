@@ -20,25 +20,31 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
   const [pending, start] = useTransition();
 
   function run() {
-    start(async () => setResult(await getHomeworksSyncStatus()));
+    start(async () => {
+      try {
+        setResult(await getHomeworksSyncStatus());
+      } catch {
+        setResult({ ok: false, message: "Legacy sync history could not be loaded. Try again." });
+      }
+    });
   }
 
   const s = result && result.ok ? result.status : null;
 
   return (
     <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-medium text-[var(--color-text-primary)]">Legacy sync history</p>
-        <Button type="button" variant="secondary" onClick={run} disabled={pending}>
+        <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={run} disabled={pending}>
           {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Check legacy history
         </Button>
       </div>
-      <a href="/homeworks" className="text-xs text-[var(--color-accent)] hover:underline">View current automatic synchronization status</a>
+      <a href="/homeworks" className="inline-flex min-h-11 items-center text-xs text-[var(--color-accent)] hover:underline">View current automatic synchronization status</a>
       <p className="text-[11px] text-[var(--color-text-muted)]">Token stored since {connectedAt ? when(connectedAt) : "never — not connected"}. That alone doesn&apos;t mean anything has synced.</p>
 
       {result && !result.ok ? (
-        <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+        <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {result.message}
         </p>
@@ -46,7 +52,7 @@ export function HomeworksSyncStatusPanel({ connectedAt }: { connectedAt: string 
 
       {s ? (
         <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-2 text-xs">
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-1 gap-2 text-center sm:grid-cols-3">
             <div className="rounded-md bg-[var(--color-surface-2)] p-2">
               <div className="text-base font-semibold text-[var(--color-text-primary)]">
                 {s.clientsLinked}/{s.clientsTotal}

@@ -163,6 +163,55 @@ test("Homeworks range reconciliation recovers from a thrown read", async () => {
   expect(ui.html()).toContain("Provider range denied.");
 });
 
+function syncStatusActions(actions: Record<string, unknown>) {
+  return hookHarness((hooks) => {
+    const loaded = loadServerModule<{ HomeworksSyncStatusPanel: (input: { connectedAt: string | null }) => ReactNode }>(
+      "src/components/settings/homeworks-sync-status-panel.tsx",
+      {
+        react: { useState: hooks.useState, useTransition: hooks.useTransition },
+        "@/components/ui/button": componentStubs["@/components/ui/button"],
+        "@/lib/actions/homeworks-sync-status": actions,
+      },
+    );
+    return loaded.HomeworksSyncStatusPanel({ connectedAt: "2026-09-19T03:24:58Z" });
+  });
+}
+
+test("Homeworks legacy history recovers from a thrown read and remains retryable", async () => {
+  let fails = true;
+  const ui = syncStatusActions({
+    getHomeworksSyncStatus: async () => fails ? transportFailure() : { ok: false, message: "History query denied." },
+  });
+  await ui.click("Check legacy history");
+  expect(ui.html()).toContain("Legacy sync history could not be loaded. Try again.");
+  expect(ui.html()).toContain('role="alert"');
+  expect(ui.html()).not.toContain("raw transport secret");
+  fails = false;
+  await ui.click("Check legacy history");
+  expect(ui.html()).toContain("History query denied.");
+  expect(ui.html()).not.toContain("could not be loaded");
+});
+
+test("Homeworks legacy history controls and counts are mobile responsive", async () => {
+  const ui = syncStatusActions({
+    getHomeworksSyncStatus: async () => ({
+      ok: true,
+      status: {
+        clientsLinked: 73, clientsTotal: 79,
+        propertiesLinked: 28, propertiesTotal: 36,
+        jobsLinked: 234, jobsTotal: 256,
+        lastWebhookDeliveryAt: null, lastBulkImportAt: null, lastLinkedAt: null,
+        lastEnrichedAt: "2026-09-25T01:59:00Z", lastHistoricalSyncAt: null,
+        recentActivity: [], recentFailures: [],
+      },
+    }),
+  });
+  expect(ui.html()).toContain("min-h-11 w-full sm:w-auto");
+  expect(ui.html()).toContain("inline-flex min-h-11 items-center");
+  await ui.click("Check legacy history");
+  expect(ui.html()).toContain("grid grid-cols-1 gap-2 text-center sm:grid-cols-3");
+});
+
 test("Homeworks connection failures and connect action meet accessibility requirements", () => {
   const loaded = loadServerModule<{ HomeworksConnectionCard: React.ComponentType<Record<string, unknown>> }>(
     "src/components/settings/homeworks-connection-card.tsx",
