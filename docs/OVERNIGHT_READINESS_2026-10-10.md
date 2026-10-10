@@ -201,6 +201,30 @@ No task or other business record was created, completed, or changed during testi
   action was invoked, so live create/complete persistence remains deliberately
   untested without a dedicated authorized demo record.
 
+## 06:10 duplicate-audit recovery and mobile access
+
+Branch: fix/duplicate-audit-recovery-0600-20261010, cleanly based on current main.
+No customer, property, authorization, sync configuration, or database row changed.
+
+- The duplicate-client audit allowed a thrown read-only Server Action to escape,
+  exposed normal feedback without assistive-technology status semantics, described
+  a narrower active/non-demo scan as all clients, and used sub-44px disclosure and
+  run controls.
+- The panel now catches audit transport failures with a safe retry message, marks
+  failure as an alert and clean results as status, accurately states the scan
+  population, and provides 44px controls. This is code/static-render evidence,
+  not a rendered-phone or physical-iPhone claim.
+- Three focused regressions failed against the prior component and passed after
+  the repair. The full isolated suite passes 515/515 across 40 files. Synthetic
+  database regressions, typecheck, zero-warning lint, production build, diff
+  check and the post-build 30-file client-secret scan passed.
+- PR #20 merged as e42993d6f9be52427ba51053dbc53751b54ec143 after
+  exact-head GitHub CI run 131 and its Vercel preview passed. Production deployment
+  dpl_BweoZoSn12ohkhM72WPnxTDAgVj4 is READY.
+- After production reload at the 06:05 Eastern all-source checkpoint, the deployed
+  read-only audit accurately stated that it checks active, non-demo clients and
+  reported no matching phone/email across 27 active clients.
+
 ## Blocked / explicitly unverified
 
 - Google OAuth remains External / Testing. The saved refresh token can expire
