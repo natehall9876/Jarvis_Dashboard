@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, CalendarDays, Home, LogOut, Menu, MoreHorizontal, Sparkles, X } from "lucide-react";
+import { Briefcase, CalendarDays, Home, LogOut, Menu, MoreHorizontal, Sparkles, X, Receipt, Route, UserRoundPlus, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS, BRAND } from "./nav-config";
 import { signOut } from "@/app/(auth)/login/actions";
@@ -94,6 +94,19 @@ export function MobileNav() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">Quick access</p>
+            <div className="mb-5 grid grid-cols-2 gap-2">
+              {[
+                { label: "Invoices", href: "/invoices", icon: Receipt },
+                { label: "Leads", href: "/leads", icon: UserRoundPlus },
+                { label: "Money", href: "/money", icon: Wallet },
+                { label: "Routes", href: "/routes", icon: Route },
+              ].map((action) => {
+                const Icon = action.icon;
+                return <Link key={action.href} href={action.href} onClick={() => setOpen(false)} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 text-xs font-semibold text-[var(--color-text-primary)]"><Icon className="h-4 w-4 text-[var(--color-accent)]" />{action.label}</Link>;
+              })}
+            </div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">All sections</p>
             <nav className="space-y-0.5">
               {NAV_ITEMS.map((item) => {
                 const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
