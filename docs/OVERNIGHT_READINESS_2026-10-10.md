@@ -1,6 +1,6 @@
 # Jarvis overnight readiness — October 10, 2026
 
-Checkpoint: 02:17 America/New_York. Deadline: 07:00 America/New_York.
+Checkpoint: 03:12 America/New_York. Deadline: 07:00 America/New_York.
 Objective: finish Calendar OAuth and verify actual reads, then Homeworks health,
 mobile usability, and broad regression coverage. Skip owner sign-in blockers
 until the final handoff. Do not mistake passed automated tests for production
@@ -13,7 +13,7 @@ or physical-phone acceptance.
   A real production event preview succeeded at 00:12 Eastern. Read-only scope.
 - Homeworks production reports all 21 source streams successful, 73 customer
   source records and 234 scheduled-work source records (including source archives).
-  The all-source checkpoint advanced to 02:15 Eastern. Current 5-minute automatic
+  The all-source checkpoint advanced to 03:05 Eastern. Current 5-minute automatic
   configuration is visible in production. No source record was modified for testing.
 - Jarvis AI answered a real schedule question using the business snapshot.
   ChatGPT QuickBooks access works, but the separate Jarvis QuickBooks read is
@@ -26,7 +26,7 @@ or physical-phone acceptance.
   return 401; an empty execute-action payload returns the expected 400.
   All 15 checks passed. The initial script incorrectly expected 401 for that
   malformed action; code inspection confirmed validation precedes execution.
-- 506 isolated module/server-render/API tests passed. These include Calendar,
+- 508 isolated module/server-render/API tests passed. These include Calendar,
   QuickBooks, and Homeworks verification/reconciliation recovery cases.
 - Synthetic PGlite PostgreSQL tests passed: ownership/anti-spoofing, native
   overlays, idempotency, atomic checkpoints, dependency rollback, source invoice
@@ -120,6 +120,27 @@ Branch: fix/reconcile-demo-exclusion-20261010, cleanly based on PR #11 main.
 - This is a read-only filter. No customer, property, job, authorization, sync
   configuration or production database row changed. Evidence:
   Jarvis-Homeworks-Reconciliation-Clean-2026-10-10.jpg.
+
+## 03:12 legacy-history recovery and mobile hardening
+
+Branch: fix/legacy-history-recovery-0310-20261010, cleanly based on current main.
+No source records, authorization, sync configuration, or business data changed.
+
+- A live production legacy-history read succeeded: 73/79 clients, 28/36
+  properties and 234/256 jobs linked, with 20 recent activity entries and no
+  recorded failures. It correctly labels retired webhook/bulk-import timestamps
+  as Never and points to current automatic synchronization instead.
+- The client still allowed a thrown Server Action request to escape without a
+  recovery message. The check now catches that failure, shows an assistive-tech
+  alert without raw exception details, and remains retryable.
+- On narrow screens, the check control now spans the width with a 44px minimum
+  tap height, the current-sync link has a 44px target, and the three counts stack
+  until the small breakpoint. These are static responsive assertions, not a
+  rendered-phone or physical-iPhone claim.
+- Two new targeted cases pass; the affected suite passes 8/8. The full isolated
+  suite passes 508/508 across 40 files. Synthetic database regressions,
+  typecheck, zero-warning lint, production build and the 30-file client-secret
+  scan passed locally.
 
 ## Blocked / explicitly unverified
 
