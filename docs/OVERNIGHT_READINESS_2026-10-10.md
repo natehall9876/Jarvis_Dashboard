@@ -1,6 +1,6 @@
 # Jarvis overnight readiness — October 10, 2026
 
-Checkpoint: 03:12 America/New_York. Deadline: 07:00 America/New_York.
+Checkpoint: 03:15 America/New_York. Deadline: 07:00 America/New_York.
 Objective: finish Calendar OAuth and verify actual reads, then Homeworks health,
 mobile usability, and broad regression coverage. Skip owner sign-in blockers
 until the final handoff. Do not mistake passed automated tests for production
@@ -13,7 +13,7 @@ or physical-phone acceptance.
   A real production event preview succeeded at 00:12 Eastern. Read-only scope.
 - Homeworks production reports all 21 source streams successful, 73 customer
   source records and 234 scheduled-work source records (including source archives).
-  The all-source checkpoint advanced to 03:05 Eastern. Current 5-minute automatic
+  The all-source checkpoint advanced to 03:10 Eastern. Current 5-minute automatic
   configuration is visible in production. No source record was modified for testing.
 - Jarvis AI answered a real schedule question using the business snapshot.
   ChatGPT QuickBooks access works, but the separate Jarvis QuickBooks read is
@@ -141,6 +141,12 @@ No source records, authorization, sync configuration, or business data changed.
   suite passes 508/508 across 40 files. Synthetic database regressions,
   typecheck, zero-warning lint, production build and the 30-file client-secret
   scan passed locally.
+- PR #14 merged as 652ff0ae1c8f97e39adad633dded1cd329140304 after its
+  exact-head CI and Vercel preview passed. Production deployment
+  dpl_CSUUiiFZ8VVzKkGTq6xP5KRUi3FF is READY.
+- After production reload, the all-source checkpoint showed 03:10 Eastern and
+  the live legacy-history read again returned the same linked counts, 20 recent
+  activity entries and no recorded failures.
 
 ## Blocked / explicitly unverified
 
