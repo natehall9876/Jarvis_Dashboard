@@ -86,6 +86,7 @@ export default async function SettingsPage({ searchParams }: {
           statusError={!homeworksConnection.connected ? homeworksConnection.error : null}
           configured={isHomeworksOAuthConfigured()} urlMessage={homeworksMessage} /></div>
       </details>
+      <p className="flex flex-wrap gap-4 text-xs text-[var(--color-accent)]"><Link href="/privacy" className="inline-flex min-h-11 items-center underline underline-offset-4">How Jarvis uses your data</Link><Link href="/terms" className="inline-flex min-h-11 items-center underline underline-offset-4">Terms of use</Link></p>
       <div className="flex items-start gap-3 text-xs leading-5 text-[var(--color-text-muted)]"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>QuickBooks and Calendar previews are read-only. Homeworks remains the source for scheduled jobs and business records.</p></div>
     </div>
   );
