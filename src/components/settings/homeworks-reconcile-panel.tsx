@@ -69,11 +69,23 @@ export function HomeworksReconcilePanel() {
 
   function runDay() {
     setDayResult(null);
-    startTransition(async () => setDayResult(await reconcileHomeworksDay(date)));
+    startTransition(async () => {
+      try {
+        setDayResult(await reconcileHomeworksDay(date));
+      } catch {
+        setDayResult({ ok: false, message: "Schedule reconciliation could not be completed. Check the Homeworks connection and try again." });
+      }
+    });
   }
   function runRange() {
     setRangeResult(null);
-    startTransition(async () => setRangeResult(await reconcileHomeworksRange(from, to)));
+    startTransition(async () => {
+      try {
+        setRangeResult(await reconcileHomeworksRange(from, to));
+      } catch {
+        setRangeResult({ ok: false, message: "Schedule reconciliation could not be completed. Check the Homeworks connection and try again." });
+      }
+    });
   }
   function preset(days: number) {
     const start = todayInZone();
@@ -160,13 +172,13 @@ export function HomeworksReconcilePanel() {
       )}
 
       {mode === "day" && dayResult && !dayResult.ok ? (
-        <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+        <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {dayResult.message}
         </p>
       ) : null}
       {mode === "range" && rangeResult && !rangeResult.ok ? (
-        <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+        <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {rangeResult.message}
         </p>

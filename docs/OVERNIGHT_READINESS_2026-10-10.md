@@ -1,6 +1,6 @@
 # Jarvis overnight readiness — October 10, 2026
 
-Checkpoint: 01:10 America/New_York. Deadline: 07:00 America/New_York.
+Checkpoint: 02:06 America/New_York. Deadline: 07:00 America/New_York.
 Objective: finish Calendar OAuth and verify actual reads, then Homeworks health,
 mobile usability, and broad regression coverage. Skip owner sign-in blockers
 until the final handoff. Do not mistake passed automated tests for production
@@ -13,7 +13,7 @@ or physical-phone acceptance.
   A real production event preview succeeded at 00:12 Eastern. Read-only scope.
 - Homeworks production reports all 21 source streams successful, 73 customer
   source records and 234 scheduled-work source records (including source archives).
-  The all-source checkpoint advanced to 01:05 Eastern. Current 5-minute automatic
+  The all-source checkpoint advanced to 01:10 Eastern. Current 5-minute automatic
   configuration is visible in production. No source record was modified for testing.
 - Jarvis AI answered a real schedule question using the business snapshot.
   ChatGPT QuickBooks access works, but the separate Jarvis QuickBooks read is
@@ -26,9 +26,8 @@ or physical-phone acceptance.
   return 401; an empty execute-action payload returns the expected 400.
   All 15 checks passed. The initial script incorrectly expected 401 for that
   malformed action; code inspection confirmed validation precedes execution.
-- 494 isolated module/server-render/API tests passed. These include 9 new
-  Calendar tests for Eastern/DST time, all-day dates, callback selection state,
-  failure recovery, retry, and ambiguous write responses.
+- 505 isolated module/server-render/API tests passed. These include Calendar,
+  QuickBooks, and Homeworks verification/reconciliation recovery cases.
 - Synthetic PGlite PostgreSQL tests passed: ownership/anti-spoofing, native
   overlays, idempotency, atomic checkpoints, dependency rollback, source invoice
   lines and timezone boundaries. No production database writes were used.
@@ -71,8 +70,29 @@ isolated worktree, based on current main. No credentials or records changed.
 - Targeted tests now pass 10/10. Full isolated suite passes 499/499 across
   39 files. Typecheck, zero-warning lint, build, diff check and the 30-file
   client-secret scan passed. Synthetic tests use no real accounting writes.
-- Awaiting exact-head CI, merge and deployed read-only error-state verification.
-  The existing Intuit 403 / 3100 authorization blocker remains unresolved.
+- PR #10 merged as c9a47b21f669ef06d5b9e2bee2ec81811184adfb. Production
+  deployment dpl_FzxvWkncPYiRZvxwwXkvWX66P8kQ is READY. A live read after
+  reload showed the repaired accessible error state and the existing Intuit
+  403 / 3100 authorization blocker. No accounting records changed.
+
+## 02:06 Homeworks UI recovery repair
+
+Branch: fix/homeworks-ui-recovery-20261010, cleanly based on current main.
+No source records, authorization, or sync configuration changed.
+
+- Reproduced five failures: thrown customer verification and day/range
+  reconciliation requests vanished; uncertain disconnect retained stale success;
+  and visible connection failures were not accessibility alerts.
+- Added safe, retryable messages for verification and reconciliation transport
+  failures. Uncertain disconnect now clears stale verification and instructs a
+  reload to check persisted authorization without claiming success.
+- Homeworks errors announce as alerts, success as status, and Connect has a
+  44px minimum tap height. This is code coverage, not physical phone acceptance.
+- Targeted suite moved from 5 failed / 1 passed to 6/6 passing. The complete
+  isolated suite passes 505/505 across 40 files. Typecheck, zero-warning lint,
+  build, diff check and the 30-file client-secret scan passed locally.
+- Awaiting exact-head CI, merge and deployed read-only verification. Synthetic
+  tests used mocks and did not mutate Homeworks or production data.
 
 ## Blocked / explicitly unverified
 
@@ -99,6 +119,6 @@ Inspect repository/PR/deployment state before edits; preserve concurrent work.
 Use current live sessions if available. Never request secrets in chat, weaken
 security, send messages/payments, or delete business records.
 
-Next: finish the QuickBooks recovery PR, verify its deployed error state, then
-exercise other reachable read-only desktop flows and only fix demonstrated bugs.
+Next: finish the Homeworks recovery PR, verify its deployed read-only customer
+and schedule-reconciliation paths, then continue only with demonstrated defects.
 Keep mobile/voice and sign-in requirements visible in the final scorecard.

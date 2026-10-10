@@ -31,16 +31,24 @@ export function HomeworksConnectionCard({
   function verify() {
     setResult(null);
     startTransition(async () => {
-      setResult(await verifyHomeworksConnection());
+      try {
+        setResult(await verifyHomeworksConnection());
+      } catch {
+        setResult({ ok: false, message: "Homeworks customers could not be loaded. Check the connection and try Verify again." });
+      }
     });
   }
 
   function disconnectNow() {
+    setResult(null);
     startTransition(async () => {
-      const disconnected = await disconnectHomeworksAction();
-      if (!disconnected.ok) { setResult(disconnected); return; }
-      setResult(null);
-      router.refresh();
+      try {
+        const disconnected = await disconnectHomeworksAction();
+        if (!disconnected.ok) { setResult(disconnected); return; }
+        router.refresh();
+      } catch {
+        setResult({ ok: false, message: "Disconnect could not be confirmed. Reload Settings to check the saved authorization before trying again." });
+      }
     });
   }
 
@@ -52,19 +60,19 @@ export function HomeworksConnectionCard({
       />
       <CardBody className="space-y-3">
         {urlMessage?.status === "error" ? (
-          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+          <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {urlMessage.message ?? "The connection attempt failed."}
           </p>
         ) : null}
         {urlMessage?.status === "connected" && connected ? (
-          <p className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+          <p role="status" className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
             Authorization saved - click Verify below to confirm real data comes back.
           </p>
         ) : null}
         {statusError ? (
-          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+          <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Couldn&apos;t read the connection status: {statusError}. If this mentions the table not existing, the
             <code className="mx-1 rounded bg-[var(--color-surface-3)] px-1 py-0.5">homeworks-oauth-migration.sql</code>
@@ -79,7 +87,7 @@ export function HomeworksConnectionCard({
         ) : statusError ? null : !connected ? (
           <a
             href="/api/integrations/homeworks/oauth/connect"
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[#062012] transition-opacity hover:opacity-90"
           >
             Connect Homeworks
           </a>
@@ -103,13 +111,13 @@ export function HomeworksConnectionCard({
         )}
 
         {result && !result.ok ? (
-          <p className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
+          <p role="alert" className="flex items-start gap-1.5 text-xs text-[var(--color-critical)]">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {result.message}
           </p>
         ) : null}
         {result && result.ok ? (
-          <div className="space-y-1.5 rounded-lg border border-[var(--color-border)] p-2">
+          <div role="status" className="space-y-1.5 rounded-lg border border-[var(--color-border)] p-2">
             <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-accent)]">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {result.customers.length} real customer{result.customers.length === 1 ? "" : "s"} retrieved from Homeworks:
