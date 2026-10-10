@@ -52,7 +52,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
   const first = exchanges[0];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="hud-conversation flex flex-col gap-4">
       {contextLabel ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
           <Sparkles className="h-3 w-3" />
@@ -64,7 +64,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
           e.preventDefault();
           submit(question);
         }}
-        className={`group flex items-center gap-2 rounded-2xl border bg-[var(--color-surface-2)] p-1.5 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] transition-all duration-300 ${
+        className={`group flex items-center gap-2 rounded-2xl border bg-[var(--color-surface-2)] p-1.5 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] transition-colors duration-150 ${
           loading || listening
             ? "border-[var(--color-accent)] shadow-[0_0_24px_-6px_var(--color-accent-glow)]"
             : "border-[var(--color-border-strong)] focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_20px_-8px_var(--color-accent-glow)]"
@@ -75,7 +75,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
           maxLength={2000}
           value={listening ? interim : question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder={listening ? "Listening..." : "Ask Jarvis, or tap the mic and speak..."}
+          placeholder={listening ? "Listening..." : "Your command, Nate."}
           aria-label="Ask Jarvis a question"
           disabled={loading || listening}
           className="min-w-0 flex-1 bg-transparent py-1.5 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60"
@@ -94,7 +94,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
 
       </form>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+      <div className="hud-options flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
         {speechOutputSupported ? (
           <button type="button" onClick={jarvis.toggleMute} className="flex min-h-11 items-center gap-1 hover:text-[var(--color-text-primary)]" aria-pressed={muted}>
             {muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
@@ -115,7 +115,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         ) : null}
       </div>
 
-      <p className="text-[11px] leading-5 text-[var(--color-text-muted)]">{jarvis.memoryAvailable ? "Last 20 completed exchanges stay on this device for 7 days. Clear conversation forgets them." : "Conversation is available for this session."} {speechOutputSupported ? "Voice uses your browser’s speech service." : ""}</p>
+      <p className="hud-memory text-[11px] leading-5 text-[var(--color-text-muted)]">{jarvis.memoryAvailable ? "Last 20 completed exchanges stay on this device for 7 days. Clear conversation forgets them." : "Conversation is available for this session."} {speechOutputSupported ? "Voice uses your browser’s speech service." : ""}</p>
 
       {listening ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
@@ -145,14 +145,14 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="hud-questions flex flex-wrap gap-1.5">
         {questionsToShow.map((q) => (
           <button
             key={q}
             type="button"
             onClick={() => submit(q)}
             disabled={loading}
-            className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
+            className="hud-question rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
           >
             {q}
           </button>
@@ -162,7 +162,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
       {exchanges.length > 0 ? (
         <div className="space-y-3">
           {exchanges.map((exchange) => (
-            <div key={exchange.id} className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] shadow-sm">
+            <div key={exchange.id} className="hud-exchange overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] shadow-sm">
               <p className="flex items-center gap-1.5 border-b border-[var(--color-border)]/60 bg-[var(--color-surface-1)]/40 px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
                 {exchange.viaVoice ? <Mic className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" aria-label="Spoken" /> : null}
                 {exchange.question}

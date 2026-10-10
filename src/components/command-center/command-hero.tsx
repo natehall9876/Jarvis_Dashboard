@@ -2,19 +2,19 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, ArrowUpRight, CalendarDays, Mic, Send, Square } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarDays, Mic, Pause, Play, Send, Square } from "lucide-react";
 import { JarvisCore } from "@/components/jarvis/jarvis-core";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
 import type { Briefing } from "@/lib/jarvis/briefing";
 
-const TONE = { ok: "text-[#c5f49b]", warn: "text-[var(--color-warning)]", muted: "text-[#b7c6d3]" } as const;
-const STATE_TEXT = { idle: "Ready for your command", listening: "Listening to you", processing: "Working on it", responding: "Responding", action: "Applying your change", success: "Complete", error: "Needs your attention" } as const;
+const STATE_TEXT = { idle: "At your service.", listening: "I’m listening.", processing: "On it, Nate.", responding: "Here’s what I found.", action: "Making it happen.", success: "Consider it done.", error: "Let’s take a look." } as const;
 
 export function CommandHero({ briefing, dataError }: { briefing: Briefing | null; dataError: string | null }) {
   const jarvis = useJarvis();
   const hydrated = useHydrated();
   const [command, setCommand] = useState("");
+  const [motion, setMotion] = useState(true);
   const { visualState, listening, loading, speaking } = jarvis;
   const busy = loading || speaking;
   const controlLabel = loading ? "Stop response" : listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk to Jarvis";
@@ -26,41 +26,63 @@ export function CommandHero({ briefing, dataError }: { briefing: Briefing | null
   }
   function ask(text: string) { if (!text.trim() || loading) return; jarvis.setPanelOpen(true); void jarvis.submit(text.trim()); setCommand(""); }
   return (
-    <section aria-label="Jarvis command center" className="command-console relative isolate overflow-hidden rounded-[1.75rem] border border-[#26404e] bg-[#0b121b] shadow-[0_24px_80px_-40px_#000]">
-      <div aria-hidden="true" className="command-grid absolute inset-0 -z-10 opacity-40" />
-      <div className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-4 sm:px-8">
-        <p className="flex items-center gap-3 text-[11px] font-medium tracking-[.24em] text-[#c0d3e1]"><span className="h-1.5 w-1.5 rounded-full bg-[#71d8ed]" />J.A.R.V.I.S.<span className="hidden border-l border-white/15 pl-3 text-[10px] tracking-[.12em] text-[#8499ac] sm:inline">WEEDEATER</span></p>
-        <Link href="/settings" className="flex min-h-11 items-center gap-1 text-xs text-[#a7bbce] hover:text-white">Connections<ArrowUpRight className="h-3.5 w-3.5" /></Link>
-      </div>
-      <div className="grid items-center gap-2 px-5 pt-5 sm:px-8 sm:pt-7 xl:grid-cols-[1fr_340px]">
-        <div className="min-w-0">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[.21em] text-[#75d9ec]">Your operations. In focus.</p>
-          <h1 className="text-[2rem] font-medium leading-[1.12] tracking-[-.045em] text-[#edf6fd] sm:text-[2.75rem]">{briefing?.greeting ?? "At your service."}</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-[#a9bdce] sm:text-base">{briefing?.headline ?? "Your briefing is unavailable. You can still open your workspace or ask a question."}</p>
-          {dataError && <p role="alert" className="mt-3 max-w-xl text-sm text-[var(--color-warning)]">{dataError}</p>}
-          {briefing && briefing.facts.length > 0 && <dl className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 sm:mt-7">
-            {briefing.facts.map(f => <div key={f.label} className="border-l border-[#2b4354] pl-3"><dt className="text-[10px] uppercase tracking-[.1em] text-[#8b9fb2]">{f.label}</dt><dd className={`mt-1 text-sm font-medium ${TONE[f.tone]}`}>{f.value}</dd></div>)}
-          </dl>}
-        </div>
-        <div className="relative flex flex-col items-center justify-center py-2 xl:py-0">
-          <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="group relative h-[180px] w-[180px] rounded-full outline-none transition-transform duration-200 hover:scale-[1.025] focus-visible:ring-2 focus-visible:ring-[#72ddf2] active:scale-[.97] sm:h-[230px] sm:w-[230px] xl:h-[296px] xl:w-[296px]">
-            <JarvisCore state={visualState} className="h-full w-full" />
-          </button>
-          <p className="max-w-full text-center text-xs font-medium text-[#97e4f2]" role="status">{listening && jarvis.interim ? jarvis.interim : jarvis.progress ?? STATE_TEXT[visualState]}</p>
-          <p className="mt-1 text-[10px] tracking-wide text-[#8b9fb2]">{busy ? "Tap the core to stop" : listening ? "Tap the core when you’re done" : "Tap the core to speak"}</p>
+    <section aria-label="Jarvis command center" className="command-console" data-motion={motion ? "on" : "paused"}>
+      <div aria-hidden="true" className="hud-grid" />
+      <div aria-hidden="true" className="hud-horizon" />
+      <div className="hud-topline">
+        <span className="hud-eyebrow"><i className="hud-light" />WEEDEATER / COMMAND</span>
+        <div className="flex items-center gap-2">
+          <button type="button" className="hud-icon-button" onClick={() => setMotion(!motion)} aria-label={motion ? "Pause visual motion" : "Resume visual motion"}>{motion ? <Pause size={14} /> : <Play size={14} />}</button>
+          <Link href="/settings" className="hud-settings">Connections<ArrowUpRight size={13} /></Link>
         </div>
       </div>
-      <div className="px-5 pt-5 pb-5 sm:px-8 sm:pb-7">
-        <form className="flex items-center gap-1.5 rounded-2xl border border-[#355364] bg-[#101e2a]/85 p-1.5 transition-colors focus-within:border-[#73d8ea]" onSubmit={event => { event.preventDefault(); ask(command); }}>
+      <div className="hud-identity">
+        <p className="hud-eyebrow">PERSONAL OPERATIONS INTELLIGENCE</p>
+        <h1>J.A.R.V.I.S.</h1>
+        <p className="hud-greeting">{briefing?.greeting ?? "Welcome back."} <span>Let’s get to work.</span></p>
+        {briefing && <p className="hud-mobile-brief">{briefing.headline}</p>}
+      </div>
+      <div className="hud-stage">
+        <div className="hud-briefing hud-wing">
+          <p className="hud-section-label"><span>01</span> MISSION BRIEF</p>
+          <p className="hud-mission-number">{briefing ? String(briefing.counts.jobs).padStart(2, "0") : "—"}<span>JOBS TODAY</span></p>
+          <p className="hud-mission-copy">{briefing?.headline ?? "Your briefing is unavailable. Ask a question or open your workspace."}</p>
+          <Link href="/schedule" className="hud-text-link">View schedule <ArrowUpRight size={14} /></Link>
+          <div className="hud-decor-bars" aria-hidden="true">{Array.from({length: 20}, (_, i) => <i key={i} style={{height: `${8 + ((i * 13) % 24)}px`}} />)}</div>
+        </div>
+        <div className="hud-core-stage">
+          <div className="hud-orbit-tag hud-orbit-tag-left" aria-hidden="true">VOICE<br /><span>INTERFACE</span></div>
+          <div className="hud-orbit-tag hud-orbit-tag-right" aria-hidden="true">CONTEXT<br /><span>ENGINE</span></div>
+          <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="hud-core-control"><JarvisCore state={visualState} className="h-full w-full" /></button>
+          <div className="hud-core-status">
+            <p role="status">{listening && jarvis.interim ? jarvis.interim : jarvis.progress ?? STATE_TEXT[visualState]}</p>
+            <span>{busy ? "TAP CORE TO STOP" : listening ? "TAP CORE TO FINISH" : "TAP CORE TO SPEAK"}</span>
+          </div>
+        </div>
+        <div className="hud-session hud-wing">
+          <p className="hud-section-label"><span>02</span> INTERACTION</p>
+          <dl className="hud-session-list">
+            <div><dt>VOICE CHANNEL</dt><dd>{!hydrated ? "Standby" : listening ? "Listening" : speaking ? "Speaking" : jarvis.voiceSupported ? "Ready on tap" : "Text available"}</dd></div>
+            <div><dt>CONVERSATION</dt><dd>{hydrated ? `${jarvis.exchanges.filter(e => e.status === "done").length} completed` : "Standby"}</dd></div>
+            <div><dt>CONTEXT</dt><dd>{hydrated && jarvis.memoryAvailable ? "Saved on this device" : "This session"}</dd></div>
+          </dl>
+          <button type="button" className="hud-text-link" onClick={() => jarvis.setPanelOpen(true)} disabled={!hydrated}>Open conversation <ArrowRight size={14} /></button>
+        </div>
+      </div>
+      {dataError && <p role="alert" className="hud-data-alert">{dataError}</p>}
+      {briefing && briefing.facts.length > 0 && <dl className="hud-facts">{briefing.facts.map((fact, i) => <div key={fact.label} data-tone={fact.tone}><dt><span>0{i + 1}</span>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>}
+      <div className="hud-command-area">
+        <form className="hud-command-input" onSubmit={event => { event.preventDefault(); ask(command); }}>
+          <span aria-hidden="true" className="hud-prompt">›</span>
           <label htmlFor="workspace-command" className="sr-only">Ask Jarvis from your workspace</label>
-          <input id="workspace-command" value={command} onChange={event => setCommand(event.target.value)} maxLength={2000} disabled={!hydrated || loading || listening} placeholder="What needs my attention?" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-base text-[#edf6fd] outline-none placeholder:text-[#91a7b9]" />
-          <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-[#92d9e8] hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-[#72ddf2]">{busy || listening ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}</button>
-          {!loading && <button type="submit" disabled={!hydrated || !command.trim() || listening} aria-label="Send to Jarvis" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#83def0] text-[#092431] transition-transform active:scale-95 disabled:opacity-35"><Send className="h-4 w-4" /></button>}
+          <input id="workspace-command" value={command} onChange={event => setCommand(event.target.value)} maxLength={2000} disabled={!hydrated || loading || listening} placeholder="Your command, Nate." />
+          <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="hud-input-mic">{busy || listening ? <Square size={18} /> : <Mic size={20} />}</button>
+          {!loading && <button type="submit" disabled={!hydrated || !command.trim() || listening} aria-label="Send to Jarvis" className="hud-send"><Send size={18} /></button>}
         </form>
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#afc3d3]">
-          <button type="button" onClick={() => ask("Give me a concise owner briefing and the most useful next action.")} disabled={!hydrated || loading} className="flex min-h-11 items-center gap-1.5 hover:text-white disabled:opacity-40">Brief me<ArrowRight className="h-3 w-3" /></button>
-          <Link href="/schedule" className="flex min-h-11 items-center gap-1.5 hover:text-white"><CalendarDays className="h-3.5 w-3.5" />Open schedule</Link>
-          <span className="ml-auto text-[10px] text-[#8b9fb2]">{hydrated && jarvis.memoryAvailable ? "Context saved on this device" : "Your command workspace"}</span>
+        <div className="hud-shortcuts">
+          <button type="button" onClick={() => ask("Give me a concise owner briefing and the most useful next action.")} disabled={!hydrated || loading}>Brief me<ArrowRight size={13} /></button>
+          <Link href="/schedule"><CalendarDays size={13} />Open schedule</Link>
+          <span>AWAITING YOUR COMMAND</span>
         </div>
       </div>
     </section>
