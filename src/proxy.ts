@@ -19,6 +19,12 @@ const PUBLIC_PATHS = ["/login", "/auth", "/reset-password", ...(process.env.NODE
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  // Static product/legal information only. Exact routes avoid accidentally
+  // making neighboring dashboard paths public. These pages load no business data.
+  if (new Set(["/about", "/privacy", "/terms"]).has(request.nextUrl.pathname)) {
+    return response;
+  }
+
   if (!supabaseEnv.url || !supabaseEnv.publishableKey) {
     return response;
   }

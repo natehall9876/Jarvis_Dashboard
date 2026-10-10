@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LayoutDashboard, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/form-fields";
@@ -71,6 +72,11 @@ export default async function LoginPage({
 
       <p className="mt-4 text-center text-xs text-[var(--color-text-muted)]">
         Access is by invitation only. Contact the account owner if you need a login.
+      </p>
+      <p className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-[var(--color-accent)]">
+        <Link href="/about" className="inline-flex min-h-11 items-center underline underline-offset-4">About Jarvis</Link>
+        <Link href="/privacy" className="inline-flex min-h-11 items-center underline underline-offset-4">Privacy</Link>
+        <Link href="/terms" className="inline-flex min-h-11 items-center underline underline-offset-4">Terms</Link>
       </p>
     </div>
   );
