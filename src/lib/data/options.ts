@@ -12,7 +12,9 @@ export async function getClientOptions() {
       .select("id, first_name, last_name, company_name, homeworks_id, data_source, homeworks_status, homeworks_deleted")
       .order("first_name");
     if (error) throw error;
-    return (data ?? []).filter(c => c.data_source !== "demo").map((c) => ({ ...c, label: clientDisplayName(c) }));
+    return (data ?? [])
+      .filter((c) => c.data_source !== "demo" && !c.homeworks_deleted)
+      .map((c) => ({ ...c, label: clientDisplayName(c) }));
   });
 }
 
@@ -24,15 +26,17 @@ export async function getPropertyOptions() {
       .select("id, property_name, street, city, state, zip, client_id, homeworks_id, homeworks_status, homeworks_deleted, client:clients(id, first_name, last_name, company_name, homeworks_id, data_source, homeworks_status, homeworks_deleted)")
       .order("street");
     if (error) throw error;
-    return (data ?? []).filter(p => p.client?.data_source !== "demo").map((p) => ({
-      id: p.id,
-      homeworks_id: p.homeworks_id,
-      homeworks_status: p.homeworks_status,
-      homeworks_deleted: p.homeworks_deleted,
-      client: p.client,
-      clientId: p.client_id,
-      label: `${propertyAddress(p)} — ${clientDisplayName(p.client as unknown as Parameters<typeof clientDisplayName>[0])}`,
-    }));
+    return (data ?? [])
+      .filter((p) => p.client?.data_source !== "demo" && !p.homeworks_deleted && !p.client?.homeworks_deleted)
+      .map((p) => ({
+        id: p.id,
+        homeworks_id: p.homeworks_id,
+        homeworks_status: p.homeworks_status,
+        homeworks_deleted: p.homeworks_deleted,
+        client: p.client,
+        clientId: p.client_id,
+        label: `${propertyAddress(p)} — ${clientDisplayName(p.client as unknown as Parameters<typeof clientDisplayName>[0])}`,
+      }));
   });
 }
 

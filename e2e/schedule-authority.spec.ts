@@ -127,13 +127,17 @@ test("source success followed by projection failure is reported as pending sync,
  expect(f.operations.at(-1)).toBe("release");
 });
 
-test("scheduling choices exclude archived routes and confirmed demo customers/properties",async()=>{
- const customers=[{id:"real",first_name:"Real",data_source:"homeworks_sync"},{id:"demo",first_name:"Demo",data_source:"demo"}];
+test("scheduling choices exclude archived routes, deleted Homeworks records, and confirmed demo customers/properties",async()=>{
+ const customers=[
+  {id:"real",first_name:"Real",data_source:"homeworks_sync",homeworks_deleted:false},
+  {id:"demo",first_name:"Demo",data_source:"demo",homeworks_deleted:false},
+  {id:"deleted",first_name:"Deleted",data_source:"homeworks_sync",homeworks_deleted:true},
+ ];
  const db=createClient("https://example.supabase.co","test",{auth:{persistSession:false},global:{fetch:async(input)=>{
   const url=new URL(String(input));
   if(url.pathname.endsWith("/routes"))return Response.json(url.searchParams.get("active")==="eq.true"?[{id:"active"}]:[{id:"active"},{id:"archived"}]);
   if(url.pathname.endsWith("/clients"))return Response.json(customers);
-  return Response.json(customers.map(c=>({id:c.id,client_id:c.id,street:c.id,client:c})));
+  return Response.json(customers.map(c=>({id:c.id,client_id:c.id,street:c.id,homeworks_deleted:false,client:c})));
  }}});
  const f=loadServerModule<typeof import("../src/lib/data/options")>("src/lib/data/options.ts",{
   "@/lib/supabase/server":{createSupabaseServerClient:async()=>db},"@/lib/env":{isSupabaseConfigured:()=>true}
@@ -141,4 +145,24 @@ test("scheduling choices exclude archived routes and confirmed demo customers/pr
  expect((await f.getRouteOptions()).data?.map(r=>r.id)).toEqual(["active"]);
  expect((await f.getClientOptions()).data?.map(r=>r.id)).toEqual(["real"]);
  expect((await f.getPropertyOptions()).data?.map(r=>r.id)).toEqual(["real"]);
+});
+
+test("duplicate client audit checks only active, non-demo customers",async()=>{
+ const rows=[
+  {id:"active",first_name:"Active",last_name:"Customer",phone:"4015550100",email:null,homeworks_id:"1",data_source:"homeworks_sync",created_at:"2026-10-01",homeworks_deleted:false},
+  {id:"deleted",first_name:"Deleted",last_name:"Customer",phone:"4015550100",email:null,homeworks_id:"2",data_source:"homeworks_sync",created_at:"2026-10-02",homeworks_deleted:true},
+  {id:"demo",first_name:"Demo",last_name:"Customer",phone:"4015550100",email:null,homeworks_id:null,data_source:"demo",created_at:"2026-10-03",homeworks_deleted:false},
+ ];
+ const db=createClient("https://example.supabase.co","test",{auth:{persistSession:false},global:{fetch:async(input)=>{
+  const url=new URL(String(input));let filtered=rows;
+  if(url.searchParams.get("homeworks_deleted")==="eq.false")filtered=filtered.filter(r=>!r.homeworks_deleted);
+  if(url.searchParams.get("data_source")==="neq.demo")filtered=filtered.filter(r=>r.data_source!=="demo");
+  return Response.json(filtered);
+ }}});
+ const f=loadServerModule<{findDuplicateClients:()=>Promise<{ok:boolean;clusters:unknown[];totalClientsChecked:number}>}>("src/lib/actions/client-duplicate-audit.ts",{
+  "@/lib/supabase/server":{createSupabaseServerClient:async()=>db}
+ });
+ const result=await f.findDuplicateClients();
+ expect(result.ok).toBe(true);
+ if(result.ok){expect(result.totalClientsChecked).toBe(1);expect(result.clusters).toEqual([]);}
 });
