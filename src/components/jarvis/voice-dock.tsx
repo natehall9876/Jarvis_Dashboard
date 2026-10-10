@@ -112,7 +112,6 @@ export function VoiceDock() {
       ) : null}
       <div
         className={`hud-dock fixed right-3 z-[60] flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-1)]/90 p-1.5 pr-2 shadow-[var(--shadow-raised)] backdrop-blur-md lg:bottom-6 ${panelOpen && !onAdvisorPage ? "lg:right-[34rem]" : "lg:right-6"}`}
-        style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
         role="region"
         aria-label="Jarvis voice"
       >

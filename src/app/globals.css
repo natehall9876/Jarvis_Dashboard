@@ -246,7 +246,7 @@ body {
 @keyframes core-breathe { from { opacity: .65; transform: scale(.96); } to { opacity: 1; transform: scale(1.04); } }
 @keyframes core-voice { from { transform: scaleY(.4); opacity: .5; } to { transform: scaleY(1.2); opacity: 1; } }
 [data-motion="paused"] .jarvis-core * { animation-play-state: paused !important; }
-.hud-dock { border-color: #478298 !important; border-radius: 4px !important; background: #061923ed !important; box-shadow: 0 0 25px #28cfff14,0 12px 35px #0009 !important; }
+.hud-dock { bottom: calc(4.75rem + env(safe-area-inset-bottom)); border-color: #478298 !important; border-radius: 4px !important; background: #061923ed !important; box-shadow: 0 0 25px #28cfff14,0 12px 35px #0009 !important; }
 .hud-drawer { background: radial-gradient(ellipse at 50% 10%,#0b354a88,transparent 55%),#04121c !important; border-color: #4a9bb6 !important; }
 .hud-drawer-header { border-bottom: 1px solid #397a9255; }
 .hud-drawer-identity { position: relative; text-align: center; padding: 0 0 22px; margin-bottom: 8px; border-bottom: 1px solid #34738a77; }
@@ -323,3 +323,5 @@ body {
   .hud-command-area { order: 1; }
   .hud-facts { order: 2; }
 }
+
+@media (min-width: 1024px) { .hud-dock { bottom: 24px; } }
