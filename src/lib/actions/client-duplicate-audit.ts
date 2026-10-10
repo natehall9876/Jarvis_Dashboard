@@ -32,6 +32,8 @@ export async function findDuplicateClients(): Promise<DuplicateAuditResult> {
   const { data: clients, error } = await supabase
     .from("clients")
     .select("id, first_name, last_name, company_name, phone, email, homeworks_id, data_source, created_at")
+    .filter("homeworks_deleted", "eq", false)
+    .neq("data_source", "demo")
     .order("created_at", { ascending: true });
   if (error) return { ok: false, message: error.message };
 
