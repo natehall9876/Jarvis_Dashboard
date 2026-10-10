@@ -148,6 +148,31 @@ No source records, authorization, sync configuration, or business data changed.
   the live legacy-history read again returned the same linked counts, 20 recent
   activity entries and no recorded failures.
 
+## 04:17 active-client audit and form-choice correction
+
+Branch: fix/active-client-audit-0405-20261010, cleanly based on current main.
+No customer, property, authorization, sync configuration, or database row changed.
+
+- A live read-only production duplicate audit initially reported two possible
+  phone-match groups. Source tracing proved each group was one active Homeworks
+  customer plus one source-deleted Homeworks customer retained for history.
+  The normal client table already excluded the deleted rows; the audit and
+  form-choice loaders did not consistently honor the same deletion markers.
+- The duplicate audit now checks only active, non-demo customers. Client choices
+  exclude source-deleted customers, and property choices exclude both deleted
+  properties and properties owned by a deleted source customer.
+- Both regression assertions failed against the previous implementation, then
+  passed after the minimal read-filter repair. The full isolated suite passes
+  509/509 across 40 files. Synthetic database ownership/projection regressions,
+  typecheck, zero-warning lint, production build, diff check and the post-build
+  30-file client-secret scan passed.
+- PR #16 merged as 3ce30f520602bffcb1a240c48585b733f43bfe43 after
+  exact-head GitHub CI run 123 and the Vercel preview passed. Production
+  deployment dpl_2zNPTdbenvtx2XL6JwHHNMooYKAQ is READY.
+- After production reload at the 04:15 Eastern all-source checkpoint, the same
+  live read-only audit reported no matching phone/email across 27 active
+  clients. The source-deleted records remain available in Homeworks history.
+
 ## Blocked / explicitly unverified
 
 - Google OAuth remains External / Testing. The saved refresh token can expire
