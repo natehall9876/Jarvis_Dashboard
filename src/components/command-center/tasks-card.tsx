@@ -19,21 +19,31 @@ export function TasksCard({ tasks, needsMigration, error, today }: { tasks: Owne
   function add() {
     setMessage(null);
     start(async () => {
-      const res = await createTask({ title, dueDate: due || null });
-      if (res.ok) {
-        setTitle("");
-        setDue("");
+      try {
+        const res = await createTask({ title, dueDate: due || null });
+        if (res.ok) {
+          setTitle("");
+          setDue("");
+          router.refresh();
+        } else setMessage(res.message);
+      } catch {
+        setMessage("Task creation could not be confirmed. The task list was refreshed; check whether it was added before trying again.");
         router.refresh();
-      } else setMessage(res.message);
+      }
     });
   }
 
   function complete(id: string) {
     setMessage(null);
     start(async () => {
-      const res = await setTaskStatus(id, "done");
-      if (res.ok) router.refresh();
-      else setMessage(res.message);
+      try {
+        const res = await setTaskStatus(id, "done");
+        if (res.ok) router.refresh();
+        else setMessage(res.message);
+      } catch {
+        setMessage("Task completion could not be confirmed. The task list was refreshed; check its current status before trying again.");
+        router.refresh();
+      }
     });
   }
 
@@ -75,7 +85,7 @@ export function TasksCard({ tasks, needsMigration, error, today }: { tasks: Owne
           Add
         </Button>
       </form>
-      {message ? <p className="text-xs text-[var(--color-warning)]">{message}</p> : null}
+      {message ? <p role="alert" className="text-xs text-[var(--color-warning)]">{message}</p> : null}
       {error ? <p className="text-xs text-[var(--color-warning)]">{error}</p> : null}
       {tasks.length === 0 ? (
         <p className="text-xs text-[var(--color-text-muted)]">No open tasks. Try saying &ldquo;remind me to bring the dethatcher.&rdquo;</p>
@@ -85,7 +95,7 @@ export function TasksCard({ tasks, needsMigration, error, today }: { tasks: Owne
             const overdue = t.dueDate !== null && t.dueDate < today;
             return (
               <li key={t.id} className="flex items-start gap-3 py-2.5">
-                <button type="button" onClick={() => complete(t.id)} aria-label={`Mark done: ${t.title}`} className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-accent)]">
+                <button type="button" onClick={() => complete(t.id)} disabled={pending} aria-label={`Mark done: ${t.title}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-accent)] disabled:cursor-wait disabled:opacity-60">
                   <Circle className="h-5 w-5" />
                 </button>
                 <div className="min-w-0 flex-1">
