@@ -11,6 +11,7 @@ import { businessTools } from "@/lib/ai/tools/business";
 import { attentionTools } from "@/lib/ai/tools/attention";
 import { actionTools } from "@/lib/ai/tools/actions";
 import { taskTools } from "@/lib/ai/tools/tasks";
+import { connectionTools } from "@/lib/ai/tools/connections";
 import type { ToolSpec } from "@/lib/ai/tool-types";
 
 /**
@@ -32,6 +33,7 @@ import type { ToolSpec } from "@/lib/ai/tool-types";
  * remains strictly read-only.
  */
 export const ALL_TOOLS: ToolSpec[] = [
+  ...connectionTools,
   ...businessTools,
   ...attentionTools,
   ...actionTools,

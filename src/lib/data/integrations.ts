@@ -2,6 +2,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { isIntegrationConfigured, integrationEnv, homeworksWebhookEnv, supabaseServiceRoleKey } from "@/lib/env.server";
 import { getWeatherForCoordinates } from "@/lib/integrations/weather";
+import { getCompanyInfo } from "@/lib/integrations/quickbooks-api";
+import { getConnectionStatus as getCalendarConnection } from "@/lib/integrations/google-calendar-connection";
+import { listEvents } from "@/lib/integrations/google-calendar-api";
+import { todayInZone } from "@/lib/integrations/homeworks-dates";
+import type { ServiceCheck, WorkspaceReadiness } from "@/lib/jarvis/workspace";
 
 type IntegrationKey = keyof typeof integrationEnv;
 
@@ -179,4 +184,34 @@ export async function getIntegrationCards(): Promise<IntegrationCard[]> {
     ),
     getAIProviderStatus(),
   ];
+}
+
+/** Cheap live reads, isolated per provider. Configuration never becomes a green check. */
+export async function getWorkspaceReadiness(): Promise<WorkspaceReadiness> {
+  const checks = await Promise.allSettled([
+    (async (): Promise<ServiceCheck> => {
+      if (!isIntegrationConfigured("quickbooks")) return { id: "quickbooks", name: "QuickBooks", state: "setup", detail: "App credentials are missing. Complete setup in Connections." };
+      const result = await getCompanyInfo();
+      return result.ok
+        ? { id: "quickbooks", name: "QuickBooks", state: "live", detail: "Company access verified. Financial totals are checked separately in Money." }
+        : { id: "quickbooks", name: "QuickBooks", state: "attention", detail: result.message };
+    })(),
+    (async (): Promise<ServiceCheck> => {
+      if (!isIntegrationConfigured("googleCalendar")) return { id: "calendar", name: "Google Calendar", state: "setup", detail: "Google app setup is missing. Homeworks jobs remain available." };
+      const connection = await getCalendarConnection();
+      if (!connection.connected) return { id: "calendar", name: "Google Calendar", state: "attention", detail: "Calendar authorization needs attention in Connections." };
+      if (!connection.selectedCalendarId) return { id: "calendar", name: "Google Calendar", state: "setup", detail: "Choose a calendar in Connections to finish setup." };
+      const today = todayInZone();
+      const result = await listEvents(connection.selectedCalendarId, { from: today, to: today });
+      return result.ok
+        ? { id: "calendar", name: "Google Calendar", state: "live", detail: "Selected calendar read verified. Events stay separate from paid jobs." }
+        : { id: "calendar", name: "Google Calendar", state: "attention", detail: result.message };
+    })(),
+  ]);
+  const aiReady = isIntegrationConfigured("aiProvider");
+  const services: ServiceCheck[] = [{ id: "ai", name: "Jarvis AI", state: aiReady ? "ready" : "setup", detail: aiReady ? "Configured. Run a review to verify a live answer." : "The AI provider key needs configuration." }];
+  checks.forEach((result, index) => services.push(result.status === "fulfilled" ? result.value : {
+    id: index === 0 ? "quickbooks" : "calendar", name: index === 0 ? "QuickBooks" : "Google Calendar", state: "attention", detail: "The live check could not finish. Open Connections to retry.",
+  }));
+  return { checkedAt: new Date().toISOString(), services };
 }

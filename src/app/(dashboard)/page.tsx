@@ -14,6 +14,8 @@ import { UpcomingWork } from "@/components/command-center/upcoming-work";
 import { WeatherCard } from "@/components/command-center/weather-card";
 import { getTodaysMission } from "@/lib/data/command-center";
 import { getWorkloadSummary } from "@/lib/data/jobs";
+import { WorkReviews } from "@/components/command-center/work-reviews";
+import { WorkspaceConnections } from "@/components/command-center/workspace-connections";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +46,13 @@ export default async function CommandCenterPage() {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-7">
       <div className="animate-fade-in">
         <CommandHero briefing={briefing} dataError={mission.error ?? (mission.data?.unavailableSections?.length ? "Some business data could not be checked. See Today's Mission." : null)} />
       </div>
+
+      <WorkspaceConnections />
+      <WorkReviews />
 
       {/* Explicit grid-cols-1 matters here, not just cosmetic: Tailwind's
           `grid` utility alone sets display:grid with no grid-template-columns,
@@ -60,7 +65,7 @@ export default async function CommandCenterPage() {
         <div className="lg:col-span-2">
           <TodaysMission data={mission.data} error={mission.error} />
         </div>
-        <WeatherCard />
+        <div className="min-w-0 space-y-6"><WeatherCard /><UpcomingWork data={upcoming.data} error={upcoming.error} /></div>
       </div>
 
       <div className="animate-fade-in" style={{ animationDelay: "30ms" }}>
@@ -74,12 +79,13 @@ export default async function CommandCenterPage() {
 
       <Suspense fallback={<p role="status">Checking owner priorities and this week&apos;s work…</p>}><OwnerOperations /></Suspense>
       <Suspense fallback={<p role="status">Loading recorded receivables…</p>}><OperationalReceivables /></Suspense>
-      <Suspense fallback={<p role="status">Reading QuickBooks…</p>}><QuickBooksMoney /></Suspense>
-      <Suspense fallback={<p role="status">Checking Google Calendar…</p>}><CalendarAgenda /></Suspense>
-
-      <div className="animate-fade-in" style={{ animationDelay: "60ms" }}>
-        <UpcomingWork data={upcoming.data} error={upcoming.error} />
-      </div>
+      <details className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+        <summary className="cursor-pointer px-5 py-5 text-sm font-medium">Accounting &amp; calendar details</summary>
+        <div className="grid min-w-0 grid-cols-1 gap-5 border-t border-[var(--color-border)] p-4">
+          <Suspense fallback={<p role="status">Reading QuickBooks…</p>}><QuickBooksMoney /></Suspense>
+          <Suspense fallback={<p role="status">Checking Google Calendar…</p>}><CalendarAgenda /></Suspense>
+        </div>
+      </details>
 
 
     </div>

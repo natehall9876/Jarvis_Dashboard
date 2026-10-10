@@ -20,7 +20,7 @@ export default async function HomeworksPage({ searchParams }: { searchParams: Pr
     db.from("homeworks_sync_runs").select("*").order("started_at",{ascending:false}).limit(1).maybeSingle(),
     db.from("homeworks_sync_state").select("stream,last_success_at,last_error"),
   ]);
-  const stale = !run.data?.completed_at || Date.now()-Date.parse(run.data.completed_at)>15*60_000;
+  const stale = !run.data?.completed_at || new Date().getTime()-Date.parse(run.data.completed_at)>15*60_000;
   return <div className="space-y-6">
     <div><h1 className="text-2xl font-semibold">Homeworks live operations</h1><p className="text-sm text-zinc-400">Automatic sync every 5 minutes. Full reconciliation daily. Times shown in America/New_York.</p></div>
     <div className="rounded-xl border border-zinc-700 p-4"><p>Last run: <strong>{display(run.data?.status)}</strong> · {date(run.data?.completed_at ?? run.data?.started_at)}</p>{stale && <p className="text-amber-400">Sync is not yet verified current. Check the latest run below.</p>}{run.data?.error && <p className="text-red-400">{run.data.error}</p>}<p className="text-sm text-zinc-400">{states.data?.filter(s=>s.last_success_at).length ?? 0} source streams have a successful checkpoint. {run.data?.records ?? 0} records changed in the latest run.</p></div>

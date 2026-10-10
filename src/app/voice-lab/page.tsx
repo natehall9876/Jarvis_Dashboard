@@ -1,5 +1,7 @@
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { CommandHero } from "@/components/command-center/command-hero";
+import { WorkReviews } from "@/components/command-center/work-reviews";
+import { WorkspaceConnections } from "@/components/command-center/workspace-connections";
 import { AgentNetwork } from "@/components/command-center/agent-network";
 import { TasksCard } from "@/components/command-center/tasks-card";
 import { TodaysMission } from "@/components/command-center/todays-mission";
@@ -116,6 +118,8 @@ export default function LabHome() {
       <h1 className="text-xl">Voice lab home</h1>
 
       <CommandHero briefing={sample} dataError={null} />
+      <WorkspaceConnections />
+      <WorkReviews />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

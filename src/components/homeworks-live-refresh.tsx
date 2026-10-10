@@ -13,7 +13,7 @@ export function HomeworksLiveRefresh() {
       if (document.visibilityState !== "visible" || inFlight) return;
       inFlight = true;
       try {
-        const response = await fetch("/api/integrations/homeworks/status", { cache: "no-store", signal: controller.signal });
+        const response = await fetch("/api/integrations/homeworks/status", { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
         if (!response.ok) return;
         const state = await response.json();
         if (disposed) return;

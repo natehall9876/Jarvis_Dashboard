@@ -2,10 +2,29 @@ import { getJobs, getJobById, getWorkloadSummary } from "@/lib/data/jobs";
 import { clientDisplayName, propertyAddress } from "@/lib/format";
 import { unwrap, type ToolSpec } from "@/lib/ai/tool-types";
 import type { JobStatus } from "@/types/domain";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const JOB_STATUSES: JobStatus[] = ["scheduled", "in_progress", "completed", "cancelled", "skipped"];
 
 export const jobTools: ToolSpec[] = [
+  {
+    name: "get_homeworks_job_source",
+    description: "Read the original Homeworks event title and notes for a known Jarvis job. Use when a service is missing, a zero-price visit might be an estimate appointment, or the owner asks what an appointment is for. Returns only selected source fields, not a new job or a change.",
+    input_schema: { type: "object", properties: { job_id: { type: "string", description: "Exact job UUID from a job read." } }, required: ["job_id"] },
+    execute: async input => {
+      if (typeof input.job_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.job_id)) return { data: { error: "A valid job ID is required." } };
+      try {
+        const db = await createSupabaseServerClient() as unknown as SupabaseClient;
+        const { data, error } = await db.from("homeworks_records").select("homeworks_id,changed_at,projected_id,payload").eq("entity", "events").eq("projected_id", input.job_id).maybeSingle();
+        if (error) return { data: { error: "The Homeworks source record could not be read." } };
+        if (!data) return { data: { source: "Homeworks", found: false, message: "No linked source event was found; do not infer the purpose of this visit." } };
+        const p = data.payload && typeof data.payload === "object" ? data.payload as Record<string, unknown> : {};
+        const text = (value: unknown) => typeof value === "string" ? value.slice(0, 4000) : null;
+        return { data: { source: "Homeworks", job_id: input.job_id, homeworks_id: data.homeworks_id, updated_in_jarvis: data.changed_at, title: text(p.title) ?? text(p.name), notes: text(p.description), status: text(p.status), date: text(p.startDate), time: p.hasTime === true ? text(p.startTime) : null, total: typeof p.total === "number" ? p.total : null }, references: [{ type: "job", id: input.job_id, label: text(p.title) ?? "Homeworks appointment" }] };
+      } catch { return { data: { error: "The Homeworks source record is unavailable. No appointment details were inferred." } }; }
+    },
+  },
   {
     name: "get_jobs",
     description:

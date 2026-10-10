@@ -6,10 +6,12 @@ import { Loader2, Mic, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addJobNote } from "@/lib/actions/notes-tasks";
 import type { JobNote } from "@/lib/data/notes-tasks";
+import { useHydrated } from "@/lib/use-hydrated";
 
 /** Dated, attributed notes on one job. Typed notes and notes Jarvis added by voice appear in the same list. */
 export function JobNotes({ jobId, notes, needsMigration, error }: { jobId: string; notes: JobNote[]; needsMigration: boolean; error: string | null }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [text, setText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -48,12 +50,12 @@ export function JobNotes({ jobId, notes, needsMigration, error }: { jobId: strin
           onChange={(e) => setText(e.target.value)}
           rows={2}
           maxLength={2000}
-          disabled={pending}
+          disabled={!hydrated || pending}
           placeholder="Add a note about this job…"
           aria-label="New job note"
           className="min-h-[3rem] flex-1 resize-y rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
         />
-        <Button type="button" onClick={submit} disabled={pending || !text.trim()} className="h-11 sm:h-auto">
+        <Button type="button" onClick={submit} disabled={!hydrated || pending || !text.trim()} className="h-11 sm:h-auto">
           {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           Save note
         </Button>

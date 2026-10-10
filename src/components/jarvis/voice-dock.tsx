@@ -9,6 +9,7 @@ import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card
 import { IntelligenceNetwork } from "@/components/jarvis/intelligence-network";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
 import { VoiceDiagnostics } from "@/components/jarvis/voice-diagnostics";
+import { useHydrated } from "@/lib/use-hydrated";
 
 const STATE_LABEL = {
   idle: "Ask Jarvis",
@@ -30,6 +31,7 @@ const STATE_LABEL = {
  */
 export function VoiceDock() {
   const pathname = usePathname();
+  const hydrated = useHydrated();
   const jarvis = useJarvis();
   const { panelOpen, setPanelOpen, listening, speaking, loading, visualState, interim, muted, voiceSupported, speechOutputSupported, exchanges, bubbleId, voiceError } = jarvis;
   const bubble = !panelOpen ? exchanges.find((e) => e.id === bubbleId) : undefined;
@@ -116,6 +118,7 @@ export function VoiceDock() {
         <button
           type="button"
           onClick={() => !onAdvisorPage && setPanelOpen(!panelOpen)}
+          disabled={!hydrated}
           aria-label={panelOpen ? "Close Jarvis conversation" : "Open Jarvis conversation"}
           className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-0)] ring-1 ring-[var(--color-border-strong)]"
         >
@@ -141,7 +144,7 @@ export function VoiceDock() {
         <button
           type="button"
           onClick={micPress}
-          disabled={loading && !speaking}
+          disabled={!hydrated || (loading && !speaking)}
           aria-label={listening ? "Stop listening" : speaking ? "Stop speaking" : voiceSupported ? "Talk to Jarvis" : "Open Jarvis"}
           className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[#062012] transition-transform active:scale-95 disabled:opacity-50 ${
             listening ? "bg-[var(--color-critical)] text-white" : "bg-[var(--color-accent)] shadow-[0_0_28px_-4px_var(--color-accent-glow)]"
