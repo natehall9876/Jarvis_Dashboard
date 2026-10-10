@@ -1,6 +1,6 @@
 # Jarvis overnight readiness — October 10, 2026
 
-Checkpoint: 02:12 America/New_York. Deadline: 07:00 America/New_York.
+Checkpoint: 02:17 America/New_York. Deadline: 07:00 America/New_York.
 Objective: finish Calendar OAuth and verify actual reads, then Homeworks health,
 mobile usability, and broad regression coverage. Skip owner sign-in blockers
 until the final handoff. Do not mistake passed automated tests for production
@@ -13,7 +13,7 @@ or physical-phone acceptance.
   A real production event preview succeeded at 00:12 Eastern. Read-only scope.
 - Homeworks production reports all 21 source streams successful, 73 customer
   source records and 234 scheduled-work source records (including source archives).
-  The all-source checkpoint advanced to 02:05 Eastern. Current 5-minute automatic
+  The all-source checkpoint advanced to 02:15 Eastern. Current 5-minute automatic
   configuration is visible in production. No source record was modified for testing.
 - Jarvis AI answered a real schedule question using the business snapshot.
   ChatGPT QuickBooks access works, but the separate Jarvis QuickBooks read is
@@ -109,9 +109,17 @@ Branch: fix/reconcile-demo-exclusion-20261010, cleanly based on PR #11 main.
   excluded only rows whose database provenance is exactly `demo`.
   Unverified and real records remain in reconciliation.
 - The new targeted case failed before the change (one false extra) and the
-  reconciliation range suite now passes 9/9. Full release gates are running.
+  reconciliation range suite now passes 9/9. Full isolated suite passes
+  506/506 across 40 files; typecheck, zero-warning lint, build, diff check and
+  the 30-file client-secret scan passed.
+- PR #12 merged as 4225b1b6c488752bb3911d8b95ab6b78a6e5e78f after its
+  exact-head CI passed, including synthetic database regressions. Production
+  deployment dpl_FawesmwynAUSm9Q4m6S71ppq5Rv8 is READY.
+- The same deployed day reconciliation now reports one Homeworks job, one
+  Jarvis job, one matching canonical ID, zero missing and zero extra.
 - This is a read-only filter. No customer, property, job, authorization, sync
-  configuration or production database row changed.
+  configuration or production database row changed. Evidence:
+  Jarvis-Homeworks-Reconciliation-Clean-2026-10-10.jpg.
 
 ## Blocked / explicitly unverified
 
@@ -138,6 +146,6 @@ Inspect repository/PR/deployment state before edits; preserve concurrent work.
 Use current live sessions if available. Never request secrets in chat, weaken
 security, send messages/payments, or delete business records.
 
-Next: finish the confirmed-demo reconciliation correction, verify the deployed
-day result is clean, then continue only with demonstrated defects.
+Next: inspect fresh concurrent work and continue only with demonstrated defects.
+Do not repeat successful optional checks merely to increase test counts.
 Keep mobile/voice and sign-in requirements visible in the final scorecard.
