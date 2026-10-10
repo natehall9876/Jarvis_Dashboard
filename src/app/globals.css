@@ -325,3 +325,88 @@ body {
 }
 
 @media (min-width: 1024px) { .hud-dock { bottom: 24px; } }
+
+/* Holographic depth: sharp vector geometry, layered light, real state labels. */
+.command-console {
+  container-type: inline-size;
+  border-color: #367487;
+  background: radial-gradient(ellipse at 50% 36%, #0b405365, transparent 45%),
+    linear-gradient(135deg, #051720 0%, #01070e 48%, #061723 100%);
+  box-shadow: 0 24px 70px #0005, inset 0 0 100px #0007;
+}
+.hud-grid { background-size: 48px 48px; opacity: .42; }
+.hud-circuit-field { position: absolute; inset: 0; width: 100%; height: 100%; color: #61dff8; opacity: .18; z-index: -1; pointer-events: none; }
+.hud-scanner { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 4px, #93efff03 4px 5px); }
+.hud-topline { border-bottom: 0; padding: 10px 24px; background: linear-gradient(90deg,#18405144,transparent); }
+.hud-identity { padding-top: 20px; }
+.hud-identity h1 { font-size: clamp(38px,7cqi,86px); font-weight: 200; letter-spacing: .29em; color: #edfeff; text-shadow: 0 0 2px #fff,0 0 28px #35dbff70; }
+.hud-identity-rule { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 12px auto 18px; max-width: 360px; color: #82b7c4; font-family: var(--font-mono),monospace; font-size: 8px; }
+.hud-identity-rule i { height: 1px; flex: 1; background: linear-gradient(90deg,transparent,#7adfee); }
+.hud-identity-rule i:last-child { transform: rotate(180deg); }
+.hud-greeting { font-size: 14px; }
+.hud-stage { grid-template-columns: minmax(140px,1fr) minmax(320px,2.8fr) minmax(140px,1fr); padding: 0 26px 20px; gap: 14px; }
+.hud-core-stage { padding: 26px 0 34px; }
+.hud-core-control { max-width: 560px; filter: drop-shadow(0 0 5px #47dbff45); }
+.hud-core-status { margin-top: 12px; }
+.hud-core-status p { font-size: 20px; font-weight: 300; letter-spacing: .015em; }
+.hud-core-status>span { color: #8cb9c6; letter-spacing: .22em; }
+.hud-orbit-tag { top: 45%; color: #baf5ff; letter-spacing: .12em; }
+.hud-orbit-tag-left { left: 0; }
+.hud-orbit-tag-right { right: 0; }
+.hud-projection-base { position: absolute; left: 14%; right: 14%; bottom: 94px; height: 44px; pointer-events: none; border-radius: 50%; background: radial-gradient(ellipse,#41d9ff28,transparent 70%); }
+.hud-projection-base i { position: absolute; inset: 2px 0; border: 1px solid #65d9f039; border-radius: 50%; }
+.hud-projection-base i:nth-child(2) { inset: 9px 14%; border-color: #a3faff44; }
+.hud-projection-base i:nth-child(3) { inset: 16px 30%; border-color: #b4fdff66; box-shadow: 0 0 20px #48dfff33; }
+.hud-wing { border-top: 1px solid #83ddec77; border-left: 1px solid #68c6dc22; padding: 17px 14px 12px; background: linear-gradient(120deg,#10344455,transparent); }
+.hud-wing::after { content: ''; position: absolute; right: 0; bottom: 0; height: 12px; width: 12px; border-right: 1px solid #6ac8dc77; border-bottom: 1px solid #6ac8dc77; }
+.hud-wing::before { left: -1px; width: 38px; height: 2px; background: #d5ffff; box-shadow: 0 0 12px #6cf1ff; }
+.hud-mission-number { color: #edffff; font-variant-numeric: tabular-nums; text-shadow: 0 0 28px #6bddff35; }
+.hud-facts { margin: 0 24px; background: linear-gradient(90deg,#0e2c3a77,#0a172344); border-color: #5a9cae55; }
+.hud-facts dd { font-size: 14px; }
+.hud-command-area { padding-top: 22px; }
+.hud-command-input { border-color: #6cdcec99; background: linear-gradient(100deg,#103342b3,#06121ccc); box-shadow: 0 0 24px #21ceff12,inset 3px 0 #b0faff; }
+.hud-send { background: #b2f4ff; box-shadow: 0 0 18px #7feeff22; }
+.jarvis-core-satellites,.jarvis-core-sphere { transform-origin: 240px 240px; }
+.jarvis-core-satellites { animation: core-orbit 75s linear infinite; }
+.jarvis-core-sphere { animation: core-orbit 90s linear infinite reverse; }
+.jarvis-core-gyroscope { stroke-opacity: .5; }
+.command-console[data-immersive="true"] .hud-stage { grid-template-columns: 1fr; }
+.command-console[data-immersive="true"] .hud-core-stage { width: min(100%,720px); justify-self: center; }
+.command-console[data-immersive="true"] .hud-core-control { max-width: 620px; }
+.command-console[data-immersive="true"] .hud-wing { display: none; }
+@container (max-width: 850px) {
+  .hud-stage { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; padding: 0 24px 26px; }
+  .hud-core-stage { grid-column: 1 / -1; grid-row: 1; width: min(100%,530px); justify-self: center; padding-bottom: 24px; }
+  .hud-core-control { max-width: 490px; }
+  .hud-briefing { grid-column: 1; }
+  .hud-session { grid-column: 2; }
+  .hud-session-list { gap: 10px; margin-top: 14px; }
+  .hud-session-list>div:nth-child(2) { display: none; }
+  .hud-mission-number { font-size: 50px; margin-top: 12px; }
+  .hud-decor-bars { display: none; }
+  .hud-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .hud-facts>div:nth-child(n+3) { border-top: 1px solid #34738a55; }
+}
+@media (max-width: 600px) {
+  .hud-topline { padding: 4px 12px; }
+  .hud-topline>.hud-eyebrow { font-size: 8px; letter-spacing: .08em; }
+  .hud-topline .flex { gap: 0; }
+  .hud-settings { font-size: 10px; }
+  .hud-identity { padding-top: 14px; }
+  .hud-identity-rule { max-width: 220px; margin: 10px auto 12px; }
+  .hud-stage { display: block; padding: 0 12px 8px; }
+  .hud-core-stage { width: 100%; padding: 16px 0 18px; }
+  .hud-core-control { max-width: 370px; }
+  .hud-wing { display: none; }
+  .hud-core-status p { font-size: 18px; }
+  .hud-orbit-tag { display: none; }
+  .hud-facts { margin: 0 12px; }
+  .hud-facts>div { padding: 12px; }
+  .hud-facts dd { font-size: 12px; }
+  .hud-command-area { padding: 16px 12px 5px; }
+  .hud-shortcuts>span { display: none; }
+  .hud-projection-base { bottom: 81px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-core-satellites,.jarvis-core-sphere { animation: none; }
+}

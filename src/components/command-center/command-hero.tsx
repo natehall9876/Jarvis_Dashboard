@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, ArrowUpRight, CalendarDays, Mic, Pause, Play, Send, Square } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarDays, Maximize2, Minimize2, Mic, Pause, Play, Send, Square } from "lucide-react";
 import { JarvisCore } from "@/components/jarvis/jarvis-core";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
@@ -15,6 +15,7 @@ export function CommandHero({ briefing, dataError }: { briefing: Briefing | null
   const hydrated = useHydrated();
   const [command, setCommand] = useState("");
   const [motion, setMotion] = useState(true);
+  const [immersive, setImmersive] = useState(false);
   const { visualState, listening, loading, speaking } = jarvis;
   const busy = loading || speaking;
   const controlLabel = loading ? "Stop response" : listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk to Jarvis";
@@ -26,12 +27,21 @@ export function CommandHero({ briefing, dataError }: { briefing: Briefing | null
   }
   function ask(text: string) { if (!text.trim() || loading) return; jarvis.setPanelOpen(true); void jarvis.submit(text.trim()); setCommand(""); }
   return (
-    <section aria-label="Jarvis command center" className="command-console" data-motion={motion ? "on" : "paused"}>
+    <section aria-label="Jarvis command center" className="command-console" data-immersive={immersive} onKeyDown={event => { if (event.key === "Escape") setImmersive(false); }} data-motion={motion ? "on" : "paused"}>
       <div aria-hidden="true" className="hud-grid" />
       <div aria-hidden="true" className="hud-horizon" />
+      <div aria-hidden="true" className="hud-scanner" />
+      <svg aria-hidden="true" className="hud-circuit-field" viewBox="0 0 1200 700" preserveAspectRatio="none" fill="none">
+        <g stroke="currentColor" strokeWidth="1">
+          <path d="M0 150h180l65 65h110M0 160h175l65 65h95M1200 140h-170l-80 80H840M0 480h190l60-60h120M1200 510h-170l-65-65H840M60 0v70l70 70M1140 0v70l-70 70" />
+          <path d="M0 350h110m980 0h110M600 0v55m0 590v55" strokeDasharray="3 8" />
+          <circle cx="355" cy="215" r="4"/><circle cx="840" cy="220" r="4"/><circle cx="370" cy="420" r="4"/><circle cx="840" cy="445" r="4"/>
+        </g>
+      </svg>
       <div className="hud-topline">
         <span className="hud-eyebrow"><i className="hud-light" />WEEDEATER / COMMAND</span>
         <div className="flex items-center gap-2">
+          <button type="button" className="hud-icon-button" onClick={() => setImmersive(!immersive)} aria-label={immersive ? "Exit immersive view" : "Enter immersive view"} aria-pressed={immersive}>{immersive ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
           <button type="button" className="hud-icon-button" onClick={() => setMotion(!motion)} aria-label={motion ? "Pause visual motion" : "Resume visual motion"}>{motion ? <Pause size={14} /> : <Play size={14} />}</button>
           <Link href="/settings" className="hud-settings">Connections<ArrowUpRight size={13} /></Link>
         </div>
@@ -39,6 +49,7 @@ export function CommandHero({ briefing, dataError }: { briefing: Briefing | null
       <div className="hud-identity">
         <p className="hud-eyebrow">PERSONAL OPERATIONS INTELLIGENCE</p>
         <h1>J.A.R.V.I.S.</h1>
+        <div className="hud-identity-rule" aria-hidden="true"><i /><span>W E E D E A T E R</span><i /></div>
         <p className="hud-greeting">{briefing?.greeting ?? "Welcome back."} <span>Let’s get to work.</span></p>
         {briefing && <p className="hud-mobile-brief">{briefing.headline}</p>}
       </div>
@@ -51,6 +62,7 @@ export function CommandHero({ briefing, dataError }: { briefing: Briefing | null
           <div className="hud-decor-bars" aria-hidden="true">{Array.from({length: 20}, (_, i) => <i key={i} style={{height: `${8 + ((i * 13) % 24)}px`}} />)}</div>
         </div>
         <div className="hud-core-stage">
+          <div className="hud-projection-base" aria-hidden="true"><i /><i /><i /></div>
           <div className="hud-orbit-tag hud-orbit-tag-left" aria-hidden="true">VOICE<br /><span>INTERFACE</span></div>
           <div className="hud-orbit-tag hud-orbit-tag-right" aria-hidden="true">CONTEXT<br /><span>ENGINE</span></div>
           <button type="button" onClick={voiceControl} disabled={!hydrated} aria-label={controlLabel} className="hud-core-control"><JarvisCore state={visualState} className="h-full w-full" /></button>
@@ -82,7 +94,7 @@ export function CommandHero({ briefing, dataError }: { briefing: Briefing | null
         <div className="hud-shortcuts">
           <button type="button" onClick={() => ask("Give me a concise owner briefing and the most useful next action.")} disabled={!hydrated || loading}>Brief me<ArrowRight size={13} /></button>
           <Link href="/schedule"><CalendarDays size={13} />Open schedule</Link>
-          <span>AWAITING YOUR COMMAND</span>
+          <span>{loading ? "PROCESSING YOUR REQUEST" : listening ? "VOICE INPUT ACTIVE" : speaking ? "VOICE OUTPUT ACTIVE" : "AWAITING YOUR COMMAND"}</span>
         </div>
       </div>
     </section>
