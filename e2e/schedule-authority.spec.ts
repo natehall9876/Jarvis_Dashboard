@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { createElement, isValidElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadServerModule } from "./load-server-module";
 const job = (id:string, overrides:Record<string,unknown>={}) => ({id,property_id:id,scheduled_date:"2026-10-05",scheduled_start_time:null,stop_order:null,route_id:null,homeworks_id:null,homeworks_deleted:false,status:"scheduled",property:{client:{data_source:"homeworks_sync"}},...overrides});
@@ -165,4 +167,66 @@ test("duplicate client audit checks only active, non-demo customers",async()=>{
  const result=await f.findDuplicateClients();
  expect(result.ok).toBe(true);
  if(result.ok){expect(result.totalClientsChecked).toBe(1);expect(result.clusters).toEqual([]);}
+});
+
+function duplicateAuditHarness(findDuplicateClients: () => Promise<unknown>) {
+ let cursor=0;
+ const state:unknown[]=[];
+ const work:Promise<unknown>[]=[];
+ const {DuplicateAuditPanel}=loadServerModule<{DuplicateAuditPanel:()=>ReactNode}>(
+  "src/components/clients/duplicate-audit-panel.tsx",
+  {
+   react:{
+    useState(initial:unknown){const index=cursor++;if(!(index in state))state[index]=initial;return [state[index],(value:unknown)=>{state[index]=value;}];},
+    useTransition:()=>[false,(run:()=>Promise<unknown>)=>{work.push(run());}],
+   },
+   "next/link":{default:(props:Record<string,unknown>&{children?:ReactNode})=>createElement("a",props,props.children)},
+   "@/components/ui/button":{Button:(props:Record<string,unknown>&{children?:ReactNode})=>createElement("button",props,props.children)},
+   "@/lib/actions/client-duplicate-audit":{findDuplicateClients},
+  },
+ );
+ function tree(){cursor=0;return DuplicateAuditPanel();}
+ function find(node:ReactNode,label:string):(()=>void)|undefined{
+  if(Array.isArray(node))return node.map(child=>find(child,label)).find(Boolean);
+  if(!isValidElement<{children?:ReactNode;onClick?:()=>void}>(node))return;
+  if(node.props.onClick&&renderToStaticMarkup(node).includes(label))return node.props.onClick;
+  return find(node.props.children,label);
+ }
+ return {
+  html:()=>renderToStaticMarkup(tree()),
+  async run(){const handler=find(tree(),"Run audit");expect(handler,"expected audit control").toBeTruthy();handler!();await Promise.allSettled(work.splice(0));},
+ };
+}
+
+test("duplicate audit transport failure is safe, announced, and retryable",async()=>{
+ let fails=true;
+ const ui=duplicateAuditHarness(async()=>{
+  if(fails)throw new Error("raw transport secret must not reach the UI");
+  return {ok:true,clusters:[],totalClientsChecked:27};
+ });
+ await ui.run();
+ expect(ui.html()).toContain("Duplicate audit could not be completed. Try again.");
+ expect(ui.html()).toContain('role="alert"');
+ expect(ui.html()).not.toContain("raw transport secret");
+ fails=false;
+ await ui.run();
+ expect(ui.html()).toContain("No matching phone/email across 27 active clients");
+ expect(ui.html()).toContain('role="status"');
+ expect(ui.html()).not.toContain("could not be completed");
+});
+
+test("duplicate audit provider errors are alerts",async()=>{
+ const ui=duplicateAuditHarness(async()=>({ok:false,message:"Client records could not be loaded."}));
+ await ui.run();
+ expect(ui.html()).toContain("Client records could not be loaded.");
+ expect(ui.html()).toContain('role="alert"');
+});
+
+test("duplicate audit controls are truthful and mobile reachable",()=>{
+ const ui=duplicateAuditHarness(async()=>({ok:true,clusters:[],totalClientsChecked:27}));
+ const html=ui.html();
+ expect(html).toContain("min-h-11");
+ expect(html).toContain("min-h-11 w-full sm:w-auto");
+ expect(html).toContain("checks active, non-demo clients");
+ expect(html).not.toContain("across all clients");
 });
