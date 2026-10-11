@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { JarvisVisualState } from "@/lib/jarvis/network-engine";
-import { parseNavigationIntent, takeSpeakableSentences, toolToCapabilities } from "@/lib/jarvis/voice-utils";
+import { parseNavigationIntent, stripForSpeech, toolToCapabilities, selectBrowserVoice } from "@/lib/jarvis/voice-utils";
 import { deviceMemoryKey, readDeviceMemory, writeDeviceMemory, retainSessionExchanges, toolProgressLabel } from "@/lib/jarvis/device-memory";
 import { getFirstJobToday } from "@/lib/actions/jobs";
 
@@ -176,6 +176,9 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speakQueueRef = useRef<string[]>([]);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const resumeTimerRef = useRef<number | null>(null);
+  const silentEndsRef = useRef(0);
   const streamDoneRef = useRef(true);
   const timersRef = useRef<number[]>([]);
   const mountedRef = useRef(true);
@@ -222,7 +225,11 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       requestRef.current = null;
       speechEpoch.current++;
       timers.forEach((t) => window.clearTimeout(t));
-      recognitionRef.current?.abort?.();
+      if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+      utteranceRef.current = null;
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+      recognition?.abort?.();
       window.speechSynthesis?.cancel();
     };
   }, [memoryOwner]);
@@ -264,12 +271,19 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     };
   }, []);
 
+  const startListeningRef = useRef<() => void>(() => {});
+  const pumpRef = useRef<() => void>(() => {});
+
   // ------------------------------------------------------------------ speech output
   const unlockSpeech = useCallback(() => {
     // iOS Safari only allows speech that begins from a user gesture; speaking
     // an empty utterance inside the tap unlocks later, asynchronous speech.
     try {
-      if ("speechSynthesis" in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+      if ("speechSynthesis" in window && !utteranceRef.current) {
+        const unlock = new SpeechSynthesisUtterance("");
+        unlock.onend = () => { if (speakQueueRef.current.length) pumpRef.current(); };
+        window.speechSynthesis.speak(unlock);
+      }
     } catch {
       // ignore
     }
@@ -290,34 +304,61 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     };
   }, [unlockSpeech]);
 
-  const startListeningRef = useRef<() => void>(() => {});
-  const pumpRef = useRef<() => void>(() => {});
+  const disableConversation = useCallback(() => {
+    conversationModeRef.current = false;
+    setConversationMode(false);
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = null;
+  }, []);
+
+  const resumeListening = useCallback(() => {
+    if (!mountedRef.current || !conversationModeRef.current || loadingRef.current ||
+        !streamDoneRef.current || recognitionRef.current || utteranceRef.current ||
+        speakQueueRef.current.length || resumeTimerRef.current !== null) return;
+    const epoch = speechEpochRef.current;
+    resumeTimerRef.current = window.setTimeout(() => {
+      resumeTimerRef.current = null;
+      if (mountedRef.current && epoch === speechEpochRef.current && conversationModeRef.current &&
+          !loadingRef.current && !recognitionRef.current && !utteranceRef.current) {
+        startListeningRef.current();
+      }
+    }, 450);
+  }, []);
 
   const pumpSpeech = useCallback(() => {
-    if (!("speechSynthesis" in window)) return;
+    if (utteranceRef.current) return;
+    if (!("speechSynthesis" in window)) { resumeListening(); return; }
     if (window.speechSynthesis.speaking) return;
     const next = speakQueueRef.current.shift();
     if (!next) {
       setSpeaking(false);
-      if (streamDoneRef.current && conversationModeRef.current && !mutedRef.current) {
-        const epoch = speechEpochRef.current;
-        later(() => { if (epoch === speechEpochRef.current && conversationModeRef.current && !loadingRef.current) startListeningRef.current(); }, 450);
-      }
+      resumeListening();
       return;
     }
     const utterance = new SpeechSynthesisUtterance(next);
-    utterance.lang = "en-US";
-    utterance.rate = 1.03;
+    const voice = selectBrowserVoice(window.speechSynthesis.getVoices?.() ?? []);
+    if (voice) utterance.voice = voice;
+    utterance.lang = voice?.lang ?? "en-GB";
+    utterance.rate = 1;
+    utteranceRef.current = utterance;
     const epoch = speechEpochRef.current;
-    utterance.onend = () => { if (epoch === speechEpochRef.current) pumpRef.current(); };
+    utterance.onend = () => {
+      if (epoch !== speechEpochRef.current || utteranceRef.current !== utterance) return;
+      utteranceRef.current = null;
+      pumpRef.current();
+    };
     utterance.onerror = () => {
       if (epoch !== speechEpochRef.current) return;
+      utteranceRef.current = null;
       speakQueueRef.current = [];
       setSpeaking(false);
+      disableConversation();
+      reportVoiceError("Spoken audio could not play. Tap the microphone to retry, or read the reply here.");
     };
     setSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-  }, [later]);
+    try { window.speechSynthesis.speak(utterance); }
+    catch { utterance.onerror?.({} as SpeechSynthesisErrorEvent); }
+  }, [resumeListening, disableConversation, reportVoiceError]);
 
   useEffect(() => {
     pumpRef.current = pumpSpeech;
@@ -325,15 +366,21 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   const enqueueSpeech = useCallback(
     (sentences: string[]) => {
-      if (mutedRef.current || !sentences.length || !("speechSynthesis" in window)) return;
+      if (mutedRef.current || !sentences.length || !("speechSynthesis" in window)) {
+        resumeListening();
+        return;
+      }
       speakQueueRef.current.push(...sentences);
       pumpSpeech();
     },
-    [pumpSpeech],
+    [pumpSpeech, resumeListening],
   );
 
   const stopSpeaking = useCallback(() => {
     speechEpochRef.current++;
+    if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = null;
+    utteranceRef.current = null;
     speakQueueRef.current = [];
     try {
       window.speechSynthesis?.cancel();
@@ -342,6 +389,13 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     }
     setSpeaking(false);
   }, []);
+
+  // UI interruption keeps an active hands-free conversation listening.
+  // Internal cancellation above must stay side-effect free for submit/cleanup.
+  const interruptSpeech = useCallback(() => {
+    stopSpeaking();
+    resumeListening();
+  }, [stopSpeaking, resumeListening]);
 
   // ------------------------------------------------------------------ advisor
   const patch = useCallback((id: string, update: Partial<Exchange>) => {
@@ -379,7 +433,6 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       const trimmed = text.trim();
       if (!trimmed || loadingRef.current) return;
       const viaVoice = options.viaVoice ?? false;
-      if (viaVoice) unlockSpeech();
       stopSpeaking();
       setVoiceError(null);
 
@@ -417,7 +470,6 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         .reverse()
         .map((e) => ({ question: e.question, answer: e.answer as string }));
 
-      let spokenIndex = 0;
       let full = "";
       const deadline = window.setTimeout(() => {
         if (!isCurrent()) return;
@@ -439,7 +491,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
           method: "POST",
           signal: request.abort.signal,
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question: trimmed, path: pathRef.current, history }),
+          body: JSON.stringify({ question: trimmed, path: pathRef.current, history, mode: viaVoice ? "voice" : "text" }),
         });
         if (!isCurrent()) { await res.body?.cancel(); return; }
         if (!res.ok || !res.body) {
@@ -482,18 +534,15 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
               setGotFirstToken(true);
               full += data.text;
               setExchanges((prev) => prev.map((e) => (e.id === id ? { ...e, answer: (e.answer ?? "") + data.text } : e)));
-              if (viaVoice) {
-                const { sentences, nextIndex } = takeSpeakableSentences(full, spokenIndex);
-                spokenIndex = nextIndex;
-                enqueueSpeech(sentences);
-              }
             } else if (eventName === "done") {
               settled = true;
               const answer: string = data.answer ?? full;
               const references: EntityReference[] = data.references ?? [];
               const toolsUsed: string[] = data.toolsUsed ?? [];
               patch(id, { status: "done", answer, references, toolsUsed, proposedAction: data.proposedAction ?? null });
-              if (viaVoice) enqueueSpeech(takeSpeakableSentences(answer, spokenIndex, true).sentences);
+              // A tool preamble and the final answer are different texts. Speak
+              // only the completed answer, as one phrase with natural prosody.
+              if (viaVoice) enqueueSpeech([stripForSpeech(answer)]);
               const caps = Array.from(new Set(toolsUsed.flatMap(toolToCapabilities)));
               if (caps.length) {
                 setActiveCapabilities(caps);
@@ -537,7 +586,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         if (!speakQueueRef.current.length && !window.speechSynthesis?.speaking) pumpSpeech();
       }
     },
-    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopResponse, stopSpeaking, unlockSpeech],
+    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopResponse, stopSpeaking],
   );
 
   const retry = useCallback(
@@ -555,11 +604,13 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     if (loadingRef.current || recognitionRef.current) return;
     const Ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Ctor) {
+      disableConversation();
       reportVoiceError("Voice input isn't available in this browser session. Type your command, or use your keyboard's dictation microphone in the question field.");
       setPanelOpen(true);
       return;
     }
-    stopSpeaking(); // barge-in: talking over Jarvis interrupts it
+    stopSpeaking(); // Explicit microphone tap interrupts current speech.
+    unlockSpeech();
     setVoiceError(null);
     const recognition = new Ctor();
     recognition.lang = "en-US";
@@ -580,6 +631,12 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       }
       if (finalText.trim()) {
         finalSubmitted = true;
+        silentEndsRef.current = 0;
+        // Detach before stopping: a synchronous onend or late final cannot
+        // reopen the microphone or execute this command twice.
+        recognitionRef.current = null;
+        setListening(false);
+        try { recognition.abort?.(); } catch { /* already ended */ }
         setInterim("");
         setLastTranscript(finalText.trim());
         setLastTranscriptAt(new Date().toISOString());
@@ -588,13 +645,26 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         setInterim(interimText);
       }
     };
+    const retrySilence = () => {
+      if (!conversationModeRef.current) return;
+      if (++silentEndsRef.current > 2) {
+        disableConversation();
+        reportVoiceError("I couldn't hear you. Hands-free paused; tap the microphone when you're ready.");
+      } else resumeListening();
+    };
     recognition.onerror = (event) => {
       if (recognitionRef.current !== recognition) return;
       // Some engines skip onend after an error; release the slot ourselves.
       recognitionRef.current = null;
       setListening(false);
       setInterim("");
+      if (event.error === "no-speech" && conversationModeRef.current) {
+        retrySilence();
+        return;
+      }
+      disableConversation();
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setMicPermission("denied");
         reportVoiceError("Microphone access is blocked. Allow the microphone for this site in your browser settings.");
       } else if (event.error === "no-speech") {
         reportVoiceError("Didn't catch that. Tap the mic and try again.");
@@ -610,6 +680,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       if (mountedRef.current) {
         setListening(false);
         setInterim("");
+        if (!finalSubmitted) retrySilence();
       }
     };
     recognitionRef.current = recognition;
@@ -619,20 +690,23 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     } catch {
       recognitionRef.current = null;
       setListening(false);
+      disableConversation();
+      reportVoiceError("The microphone couldn't start. Check this site's microphone permission, then tap to retry.");
     }
-  }, [stopSpeaking, submit, reportVoiceError]);
+  }, [stopSpeaking, submit, reportVoiceError, disableConversation, resumeListening, unlockSpeech]);
 
   useEffect(() => {
     startListeningRef.current = startListening;
   }, [startListening]);
 
   const stopListening = useCallback(() => {
+    disableConversation();
     const r = recognitionRef.current;
     if (!r) {
       setListening(false);
       return;
     }
-    r.stop();
+    try { r.stop(); } catch { recognitionRef.current = null; setListening(false); }
     // If the engine never fires onend, force-release after a moment.
     later(() => {
       if (recognitionRef.current === r) {
@@ -642,20 +716,26 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         setInterim("");
       }
     }, 1500);
-  }, [later]);
+  }, [later, disableConversation]);
 
   const toggleMute = useCallback(() => {
     const next = !mutedRef.current;
     mutedRef.current = next;
     setMuted(next);
-    if (next) stopSpeaking();
-  }, [stopSpeaking]);
+    if (next) { stopSpeaking(); resumeListening(); }
+  }, [stopSpeaking, resumeListening]);
 
   const toggleConversationMode = useCallback(() => {
-    const next = !conversationModeRef.current;
-    conversationModeRef.current = next;
-    setConversationMode(next);
-  }, []);
+    if (conversationModeRef.current) {
+      stopResponse();
+      return;
+    }
+    silentEndsRef.current = 0;
+    conversationModeRef.current = true;
+    setConversationMode(true);
+    unlockSpeech();
+    startListeningRef.current();
+  }, [stopResponse, unlockSpeech]);
 
   const clear = useCallback(() => {
     stopResponse();
@@ -729,7 +809,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       retry,
       startListening,
       stopListening,
-      stopSpeaking,
+      stopSpeaking: interruptSpeech,
       toggleMute,
       toggleConversationMode,
       setPanelOpen,
@@ -766,7 +846,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       retry,
       startListening,
       stopListening,
-      stopSpeaking,
+      interruptSpeech,
       toggleMute,
       toggleConversationMode,
       clear,

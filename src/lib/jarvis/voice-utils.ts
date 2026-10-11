@@ -123,3 +123,15 @@ export function toolToCapabilities(tool: string): string[] {
   if (t.includes("equipment")) return ["equipment"];
   return [];
 }
+
+
+/** Prefer an installed British voice; never claim a device voice is neural TTS. */
+export function selectBrowserVoice<T extends { name: string; lang: string; default?: boolean }>(voices: T[]): T | undefined {
+  const english = voices.filter(v => /^en(?:-|_)/i.test(v.lang));
+  const score = (v: T) =>
+    (/^en[-_]GB$/i.test(v.lang) ? 100 : 0) +
+    (/natural|premium|enhanced|neural/i.test(v.name) ? 40 : 0) +
+    (/daniel|ryan|george|arthur|oliver/i.test(v.name) ? 20 : 0) +
+    (v.default ? 1 : 0);
+  return english.slice().sort((a, b) => score(b) - score(a))[0];
+}
