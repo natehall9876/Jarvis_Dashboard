@@ -133,7 +133,7 @@ test.describe("voice flow (simulated microphone)", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].question).toBe("What's my schedule today?");
     expect(requests[0].path).toBe("/voice-lab");
-    await expect.poll(() => spoken(page)).toEqual(["You have 10 jobs today.", "The first is Jan Sparfven."]);
+    await expect.poll(() => spoken(page)).toEqual(["You have 10 jobs today. The first is Jan Sparfven."]);
   });
 
   test("a typed question is answered but not spoken", async ({ page }) => {

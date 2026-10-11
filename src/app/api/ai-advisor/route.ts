@@ -36,11 +36,13 @@ export async function POST(request: Request) {
   let question: unknown;
   let path: unknown;
   let history: unknown;
+  let mode: unknown;
   try {
     const body = await request.json();
     question = body?.question;
     path = body?.path;
     history = body?.history;
+    mode = body?.mode;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
       try {
         const result = await askAdvisor(question.trim(), pageContext, conversationHistory.slice(-6), (delta) => {
           send("delta", { text: delta });
-        }, { signal: abort.signal, onToolStart: tool => send("progress", { tool }) });
+        }, { signal: abort.signal, voice: mode === "voice", onToolStart: tool => send("progress", { tool }) });
         if (abort.signal.aborted) return;
         if (!result.ok) {
           send("error", { error: result.message, reason: result.reason });

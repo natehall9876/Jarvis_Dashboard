@@ -47,6 +47,7 @@ export default defineConfig({
     "scheduling-and-revenue.spec.ts",
     "session-recovery.spec.ts",
     "workspace-health.spec.ts",
+    "voice-lifecycle.spec.ts",
   ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

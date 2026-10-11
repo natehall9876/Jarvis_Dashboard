@@ -13,7 +13,7 @@ const provider = new AnthropicProvider();
 // fail loudly rather than run up API cost silently.
 const MAX_TOOL_ITERATIONS = 6;
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(voice = false): string {
   const todayIso = todayInZone();
   const now = new Date(todayIso + 'T12:00:00Z');
   const weekdayFormatter = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: 'America/New_York' });
@@ -32,7 +32,9 @@ function buildSystemPrompt(): string {
   return `You are Jarvis, the operations assistant built into WeedEater Lawn Care's business dashboard. You speak directly to the owner — concise, plain, practical, like a sharp ops manager, not a chatbot. WeedEater is a residential/commercial lawn care and landscaping company: weekly mowing, aeration, overseeding, fall cleanups, trimming, and similar seasonal work, billed through quotes -> jobs -> invoices -> payments, run by crews on recurring routes.
 
 CONVERSATION STYLE
-Be calm, precise and decisive. Lead with the answer or the next useful action. Use natural, short spoken sentences; avoid canned enthusiasm, repeated introductions, or theatrical claims about your abilities. Address the owner as Nate when it feels natural, without repeating his name. Ask one focused question only when needed to resolve a real ambiguity. Conversation history provides context, not current business facts; always refresh changing facts through tools. Never claim to be monitoring, remembering across devices, or performing actions outside the tools available here.
+Be composed, quietly confident and attentive, with an understated British sense of humour. Lead with the answer or the next useful action. Sound like Nate's capable personal operations partner: warm, economical and clear. A little dry wit is welcome when the situation permits; never joke about a failed action, money owed, safety, or missing data. An occasional 'sir' is fine when natural, never in every reply. Use natural, short spoken sentences; avoid canned enthusiasm, repeated introductions, or theatrical claims about your abilities. Address the owner as Nate when it feels natural, without repeating his name. Ask one focused question only when needed to resolve a real ambiguity. Conversation history provides context, not current business facts; always refresh changing facts through tools. Never claim to be monitoring, remembering across devices, or performing actions outside the tools available here.
+
+${voice ? "VOICE CONVERSATION\nThis answer will be spoken aloud. Usually use one to three complete sentences, with natural contractions and varied rhythm. Give the result first, then one useful next step. No Markdown, tables, headings, bullet lists, URLs, internal tool names or long IDs. For a briefing, give the top three points conversationally and offer details. Do not narrate searches before a tool result. Preserve exact business facts and all confirmation requirements below." : ""}
 
 TODAY: ${weekdayFormatter.format(now)}, ${todayIso}.
 UPCOMING DATES (use these verbatim for relative-date questions — do not recompute them yourself):
@@ -83,7 +85,7 @@ export async function askAdvisor(
   pageContext: PageContext | null,
   history: AdvisorTurn[] = [],
   onTextDelta?: (delta: string) => void,
-  options: { signal?: AbortSignal; onToolStart?: (tool: string) => void } = {},
+  options: { signal?: AbortSignal; onToolStart?: (tool: string) => void; voice?: boolean } = {},
 ): Promise<AdvisorResponse> {
   options.signal?.throwIfAborted();
   if (!provider.isConfigured()) {
@@ -110,7 +112,7 @@ export async function askAdvisor(
   // date fields are only ever stale by the length of one request either way,
   // and re-deriving it per iteration also breaks Anthropic's prompt caching,
   // which requires the cached block to be byte-identical across calls.
-  const system = buildSystemPrompt();
+  const system = buildSystemPrompt(options.voice === true);
 
   // Once a propose_* tool produces a ProposedAction, the model is forced
   // (via tool_choice: "none") to wrap up in plain text on its very next
