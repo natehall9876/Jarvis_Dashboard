@@ -15,6 +15,7 @@ import {
   Wallet,
   Wrench,
   Briefcase,
+  Orbit,
 } from "lucide-react";
 
 export type NavItem = {
@@ -25,6 +26,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", href: "/", icon: Home },
+  { label: "Workshop", href: "/workshop", icon: Orbit },
   { label: "Homeworks live", href: "/homeworks", icon: CalendarDays },
   { label: "Schedule", href: "/schedule", icon: CalendarDays },
   { label: "Clients", href: "/clients", icon: Users },

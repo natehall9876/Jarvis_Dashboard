@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { NAV_ITEMS, BRAND } from "./nav-config";
 
 const groups = [
-  { label: "Workspace", paths: ["/", "/schedule", "/jobs", "/routes", "/homeworks"] },
+  { label: "Workspace", paths: ["/", "/workshop", "/schedule", "/jobs", "/routes", "/homeworks"] },
   { label: "Business", paths: ["/clients", "/properties", "/leads", "/quotes", "/invoices", "/money", "/expenses", "/reports"] },
   { label: "Resources", paths: ["/employees", "/equipment"] },
 ];

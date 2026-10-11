@@ -7,6 +7,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { JarvisProvider } from "@/components/jarvis/jarvis-provider";
 import { VoiceDock } from "@/components/jarvis/voice-dock";
+import { ProactiveNotifier } from "@/components/jarvis/proactive-notifier";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const supabase = await createSupabaseServerClient();
@@ -24,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     // and speech output persist while moving between pages.
     <JarvisProvider key={user?.id ?? "anonymous"} memoryOwner={user?.id}>
     <HomeworksLiveRefresh />
+    <ProactiveNotifier ownerId={user?.id} />
     <div className="min-h-screen w-full lg:pl-60">
       <Sidebar />
       <div className="flex min-h-screen flex-col">

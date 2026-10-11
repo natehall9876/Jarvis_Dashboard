@@ -48,6 +48,8 @@ export default defineConfig({
     "session-recovery.spec.ts",
     "workspace-health.spec.ts",
     "voice-lifecycle.spec.ts",
+    "voice-neural.spec.ts",
+    "workshop-model.spec.ts",
   ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -57,7 +59,7 @@ export default defineConfig({
   timeout: 60_000,
   use: { baseURL: "http://localhost:3126" },
   webServer: {
-    command: "npm run dev -- --port 3126",
+    command: "npm run dev -- --port 3126 --hostname 127.0.0.1",
     url: "http://localhost:3126/login",
     reuseExistingServer: false,
     timeout: 120_000,

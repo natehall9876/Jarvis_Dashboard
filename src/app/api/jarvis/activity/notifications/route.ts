@@ -1,0 +1,7 @@
+import {activityOwner,activityFailure,assertSameOrigin,check,ActivityError} from '@/lib/jarvis/background-auth';
+export async function PATCH(request:Request){try{assertSameOrigin(request);const {db,ownerId}=await activityOwner();const b=await request.json();if(typeof b.id!=='string'||!/^[0-9a-f-]{36}$/i.test(b.id)||!['acknowledge','snooze','delivered'].includes(b.action))throw new ActivityError('Invalid notification action.',400);
+ if(b.action==='delivered'){const claimed=await db.rpc('jarvis_claim_notice',{p_id:b.id});check(claimed.error);return Response.json({claimed:Boolean(claimed.data?.length)});}
+ const now=new Date().toISOString();const patch=b.action==='acknowledge'?{acknowledged_at:now}:b.action==='delivered'?{delivered_at:now}:{snoozed_until:new Date(Date.now()+10*60_000).toISOString(),delivered_at:null};
+ const r=await db.from('jarvis_notifications').update(patch).eq('owner_id',ownerId).eq('id',b.id).select('id,reminder_id,source_version').maybeSingle();check(r.error);if(!r.data)throw new ActivityError('Notification not found.',404);
+ if(r.data.reminder_id&&b.action!=='delivered'){const rr=await db.from('jarvis_reminders').update(b.action==='acknowledge'?{acknowledged_at:now}:{snoozed_until:patch.snoozed_until}).eq('owner_id',ownerId).eq('id',r.data.reminder_id).eq('source_version',r.data.source_version);check(rr.error);}
+ return Response.json({ok:true});}catch(e){return activityFailure(e);}}

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/prepare-workshop-assets.mjs",
     "dev": "next dev",
     "build": "next build",
     "verify:no-client-secrets": "node scripts/check-no-client-secrets.mjs",
@@ -13,20 +14,25 @@
     "test:e2e": "playwright test",
     "test:isolated": "playwright test --config playwright.isolated.config.ts",
     "test:persistence": "playwright test --config playwright.persistence.config.ts",
-    "test:ownership:db": "node scripts/test-homeworks-ownership.mjs"
+    "test:ownership:db": "node scripts/test-homeworks-ownership.mjs",
+    "test:activity": "node --test scripts/test-jarvis-background.mjs"
   },
   "dependencies": {
+    "@lookingglass/webxr": "0.6.0",
+    "@mediapipe/tasks-vision": "1.1.0",
     "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.116.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.42.0",
-    "next": "16.3.4",
+    "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "three": "0.186.1",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
@@ -35,8 +41,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "0.186.0",
+    "@types/web-push": "3.6.4",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
