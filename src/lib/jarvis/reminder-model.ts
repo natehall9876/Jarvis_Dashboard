@@ -33,5 +33,6 @@ export function scheduleInstant(date: string, time: string|null, zone = BUSINESS
   let instant = Date.parse(`${target}:00Z`);
   const parts = (ms:number) => new Intl.DateTimeFormat('sv-SE',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(ms)).replace(' ','T');
   for(let i=0;i<3;i++) instant += Date.parse(`${target}:00Z`) - Date.parse(`${parts(instant)}:00Z`);
-  return parts(instant) === target ? new Date(instant).toISOString() : null;
+  if(parts(instant)!==target||parts(instant-3600000)===target||parts(instant+3600000)===target)return null;
+  return new Date(instant).toISOString();
 }

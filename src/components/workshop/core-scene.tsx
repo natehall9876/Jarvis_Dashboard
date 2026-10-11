@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useJarvis } from "@/components/jarvis/jarvis-provider";
-import { DEFAULT_VIEW, type WorkshopView } from "@/lib/jarvis/workshop-model";
+import { DEFAULT_VIEW, workshopActivityNodes, type WorkshopView } from "@/lib/jarvis/workshop-model";
 import { enterWorkshopXR, prepareLookingGlass } from "@/lib/jarvis/workshop-display";
 import styles from "./workshop.module.css";
 
@@ -16,14 +16,14 @@ export function CoreScene({ controlsRef, lowPower, mirrored, onSelect, audioLeve
   const live = useRef({ state: jarvis.visualState, tools: [] as string[], level: audioLevel, lowPower, onSelect });
   const [failure, setFailure] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
-  const toolNames = useMemo(() => jarvis.exchanges[0]?.toolsUsed ?? [], [jarvis.exchanges]);
+  const toolNames = useMemo(() => workshopActivityNodes(jarvis.loading, jarvis.progress, jarvis.activeCapabilities, jarvis.exchanges[0]?.toolsUsed ?? []).map(node => node.id), [jarvis.loading, jarvis.progress, jarvis.activeCapabilities, jarvis.exchanges]);
   useEffect(() => { live.current = { state: jarvis.visualState, tools: [...new Set(toolNames)].slice(-8), level: audioLevel, lowPower, onSelect }; }, [jarvis.visualState, toolNames, audioLevel, lowPower, onSelect]);
   useEffect(() => {
     const element = host.current;
     if (!element) return;
     let renderer: THREE.WebGLRenderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "low-power" }); }
-    catch { queueMicrotask(() => setFailure("3D rendering is unavailable. Your property work and Jarvis controlsRef still work.")); return; }
+    catch { queueMicrotask(() => setFailure("3D rendering is unavailable. Your property work and Jarvis controls still work.")); return; }
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
     const root = new THREE.Group();

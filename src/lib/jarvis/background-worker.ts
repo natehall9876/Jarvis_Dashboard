@@ -31,14 +31,14 @@ export async function runActivityWorker(){const db=createSupabaseAdminClient() a
  if(events.length>100)throw new Error('Upcoming timed events exceed the 100-event reminder limit. No partial refresh was saved.');
  const synced=await db.rpc('jarvis_sync_reminders',{p_owner:p.owner_id,p_events:events.map(e=>reminderFor(e,p))});check(synced.error);
  const due=await db.from('jarvis_reminders').select('*').eq('owner_id',p.owner_id).is('acknowledged_at',null).lte('due_at',now.toISOString()).gt('starts_at',now.toISOString()).limit(30);check(due.error);
- if(!isQuietTime(now,p))for(const r of due.data??[]){if(r.snoozed_until&&Date.parse(r.snoozed_until)>now.getTime())continue;const notice=await db.from('jarvis_notifications').upsert({owner_id:p.owner_id,dedup_key:`reminder:${r.id}:${r.source_version}`,reminder_id:r.id,source_version:r.source_version,title:'Time to prepare',body:r.body},{onConflict:'owner_id,dedup_key',ignoreDuplicates:true});check(notice.error);}
+ if(!isQuietTime(new Date(),p))for(const r of due.data??[]){if(Date.parse(r.starts_at)<=Date.now())continue;if(r.snoozed_until&&Date.parse(r.snoozed_until)>Date.now())continue;const notice=await db.from('jarvis_notifications').upsert({owner_id:p.owner_id,dedup_key:`reminder:${r.id}:${r.source_version}`,reminder_id:r.id,source_version:r.source_version,title:'Time to prepare',body:r.body},{onConflict:'owner_id,dedup_key',ignoreDuplicates:true});check(notice.error);}
  }
  const notices=await db.from('jarvis_notifications').select('*').eq('owner_id',p.owner_id).is('push_sent_at',null).is('acknowledged_at',null).lt('push_attempts',3).or(`push_lease_until.is.null,push_lease_until.lt.${now.toISOString()}`).order('created_at').limit(20);check(notices.error);
  const current=await db.from('jarvis_reminders').select('id,source_version,starts_at').eq('owner_id',p.owner_id).limit(1001);check(current.error);
- const eligible=(notices.data??[]).filter(n=>(!n.snoozed_until||Date.parse(n.snoozed_until)<=now.getTime())&&(!n.reminder_id||p.reminders_enabled&&(current.data??[]).some(r=>r.id===n.reminder_id&&r.source_version===n.source_version&&Date.parse(r.starts_at)>now.getTime())));
+ const eligible=(notices.data??[]).filter(n=>(!n.snoozed_until||Date.parse(n.snoozed_until)<=Date.now())&&(!n.reminder_id||p.reminders_enabled&&(current.data??[]).some(r=>r.id===n.reminder_id&&r.source_version===n.source_version&&Date.parse(r.starts_at)>Date.now())));
  await deliverPush(db,p.owner_id,p,eligible as ActivityNotification[],now,deadline);
  }catch(e){workerError=e instanceof Error?e.message.slice(0,500):'Reminder refresh failed.';sourceErrors.push(workerError);}
- const saved=await db.from('jarvis_activity_preferences').update({last_checked_at:now.toISOString(),last_worker_error:workerError,worker_lease_until:null,worker_lease_token:null}).eq('owner_id',p.owner_id).eq('worker_lease_token',ownerLease);check(saved.error);
+ const saved=await db.from('jarvis_activity_preferences').update({last_checked_at:new Date().toISOString(),last_worker_error:workerError,worker_lease_until:null,worker_lease_token:null}).eq('owner_id',p.owner_id).eq('worker_lease_token',ownerLease);check(saved.error);
  }
  return {completed,failed,ownersChecked:preferences.data?.length??0,sourceErrors};
 }

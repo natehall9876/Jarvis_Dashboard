@@ -40,7 +40,7 @@ create table public.jarvis_push_subscriptions (
 do $$ declare t text; begin
  foreach t in array array['jarvis_activity_preferences','jarvis_background_jobs','jarvis_reminders','jarvis_notifications','jarvis_push_subscriptions'] loop
  execute format('alter table public.%I enable row level security',t);
- execute format('revoke all on public.%I from anon,authenticated',t);
+ execute format('revoke all on public.%I from public,anon,authenticated',t);
  execute format('grant all on public.%I to service_role',t);
  execute format('create policy owner_read on public.%I for select to authenticated using (owner_id=(select auth.uid()) and exists(select 1 from public.app_members where user_id=(select auth.uid()) and active and role=''owner''))',t);
  end loop;
@@ -120,3 +120,14 @@ begin
 end $$;
 revoke all on function public.jarvis_guard_review_insert() from public,anon,authenticated;
 create trigger jarvis_review_insert_guard before insert on public.jarvis_background_jobs for each row execute function public.jarvis_guard_review_insert();
+-- Device receipts preserve retries after another device has already accepted a push.
+create table public.jarvis_push_deliveries (
+ notification_id uuid not null references public.jarvis_notifications(id) on delete cascade,
+ subscription_id uuid not null references public.jarvis_push_subscriptions(id) on delete cascade,
+ owner_id uuid not null references auth.users(id) on delete cascade,
+ sent_at timestamptz, attempts integer not null default 0, error text,
+ primary key(notification_id,subscription_id)
+);
+alter table public.jarvis_push_deliveries enable row level security;
+revoke all on public.jarvis_push_deliveries from public,anon,authenticated;
+grant all on public.jarvis_push_deliveries to service_role;

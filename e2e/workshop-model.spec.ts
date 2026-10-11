@@ -31,3 +31,17 @@ test("Pinch detection normalizes to hand size and refuses incomplete hands", () 
   expect(handPose(hand)?.pinched).toBe(true);
   hand[8] = { x: .65, y: .2 }; expect(handPose(hand)?.pinched).toBe(false);
 });
+
+test("Workshop review preserves source context and bounds long assumptions to advisor limit", () => {
+  const { buildWorkshopReview } = model();
+  const result = buildWorkshopReview("property-a", ["quote:q1", "job:j1"], "x".repeat(6000));
+  expect(result.prompt.length).toBeLessThanOrEqual(2000); expect(result.truncated).toBe(true);
+  expect(result.prompt).toContain("property-a"); expect(result.prompt).toContain("quote:q1 and job:j1"); expect(result.prompt).toContain("Do not invent facts, change records, or send anything"); expect(result.prompt).toContain("Remaining assumptions omitted");
+  expect(buildWorkshopReview("property-a", [], "Check access").truncated).toBe(false);
+});
+test("Core distinguishes real in-flight capability categories from recorded tool calls", () => {
+  const { workshopActivityNodes } = model();
+  expect(workshopActivityNodes(true, "Thinking through your request", ["finances"], ["get_invoices"])).toEqual([]);
+  expect(workshopActivityNodes(true, "Checking invoice records", ["finances"], [])).toEqual([{ id: "capability:finances", label: "Active capability: finances", kind: "capability" }]);
+  expect(workshopActivityNodes(false, null, ["finances"], ["get_invoices"])).toEqual([{ id: "tool:get_invoices", label: "Recorded tool: get invoices", kind: "tool" }]);
+});

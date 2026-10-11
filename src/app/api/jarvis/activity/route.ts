@@ -15,5 +15,5 @@ export async function POST(request:Request){try{
  const body=await request.json();if(!['operations','schedule','collections'].includes(body.kind))throw new ActivityError('Choose an available read-only review.',400);
  const {data,error}=await db.rpc('jarvis_enqueue_review',{p_kind:body.kind});
  if(error)throw new ActivityError(error.message.includes('already')||error.message.includes('limit')?error.message:'Review was not queued. Enable background reviews and check activity storage.',409);
- if(!data)throw new Error('Queue returned no durable job');return Response.json({job:data},{status:201});
+ const job=Array.isArray(data)?data[0]:data;if(!job?.id||job.status!=='queued')throw new Error('Queue returned no durable queued job');return Response.json({job},{status:201});
  }catch(e){return activityFailure(e);} }

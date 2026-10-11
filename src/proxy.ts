@@ -21,7 +21,7 @@ export async function proxy(request: NextRequest) {
 
   // Static product/legal information only. Exact routes avoid accidentally
   // making neighboring dashboard paths public. These pages load no business data.
-  if (new Set(["/about", "/privacy", "/terms", "/jarvis-sw.js"]).has(request.nextUrl.pathname)) {
+  if (new Set(["/about", "/privacy", "/terms", "/jarvis-sw.js", "/api/jarvis/activity/worker"]).has(request.nextUrl.pathname)) {
     return response;
   }
 

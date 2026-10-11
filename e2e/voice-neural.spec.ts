@@ -102,14 +102,14 @@ test("player starts before stream end, measures real samples and stop cancels al
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   let upstream!: ReadableStreamDefaultController<Uint8Array>, cancelled = false;
   const nodes: Array<{ stopped: boolean; onended: (() => void) | null }> = [];
-  class Context {
+  class Context extends EventTarget {
     state = "running"; currentTime = 0; destination = {};
     async resume() {} async close() {}
     createBuffer(_channels: number, length: number, rate: number) { return { duration: length / rate, copyToChannel() {} }; }
     createBufferSource() { const node = { buffer: null, stopped: false, onended: null as (() => void) | null, connect() {}, disconnect() {}, start() {}, stop() { this.stopped = true; this.onended?.(); } }; nodes.push(node); return node; }
     createAnalyser() { return { fftSize: 256, connect() {}, disconnect() {}, getFloatTimeDomainData(values: Float32Array) { values.fill(0.1); } }; }
   }
-  Object.defineProperty(globalThis, "window", { configurable: true, value: { AudioContext: Context, requestAnimationFrame: () => 1, cancelAnimationFrame() {} } });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { AudioContext: Context, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, setTimeout, clearTimeout } });
   try {
     const { NeuralSpeechPlayer } = loadServerModule<typeof import("../src/lib/jarvis/speech-client")>("src/lib/jarvis/speech-client.ts", {}, async () => new Response(new ReadableStream({ start(controller) { upstream = controller; }, cancel() { cancelled = true; } })));
     const player = new NeuralSpeechPlayer(); player.unlock();
@@ -127,4 +127,58 @@ test("player starts before stream end, measures real samples and stop cancels al
 test("player tells a locked browser to unlock before sending paid text", async () => {
   const { NeuralSpeechPlayer } = loadServerModule<typeof import("../src/lib/jarvis/speech-client")>("src/lib/jarvis/speech-client.ts", {}, async () => { throw new Error("must not send"); });
   await expect(new NeuralSpeechPlayer().play("Ready", new AbortController().signal, () => {}, () => {})).rejects.toMatchObject({ reason: "audio_locked" });
+});
+
+
+for (const interruption of ["suspended", "hidden", "watchdog"] as const) {
+  test(`player exits safely when playback is ${interruption} without onended`, async () => {
+    const priorWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const priorDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+    let watchdog: (() => void) | null = null;
+    const nodes: Array<{ stopped: boolean }> = [];
+    const page = Object.assign(new EventTarget(), { hidden: false });
+    class Context extends EventTarget {
+      state = "running"; currentTime = 0; destination = {};
+      static instance: Context;
+      constructor() { super(); Context.instance = this; }
+      async resume() {} async close() {}
+      createBuffer(_channels: number, length: number, rate: number) { return { duration: length / rate, copyToChannel() {} }; }
+      createBufferSource() { const node = { buffer: null, stopped: false, onended: null as (() => void) | null, connect() {}, disconnect() {}, start() {}, stop() { this.stopped = true; } }; nodes.push(node); return node; }
+      createAnalyser() { return { fftSize: 256, connect() {}, disconnect() {}, getFloatTimeDomainData(values: Float32Array) { values.fill(0); } }; }
+    }
+    Object.defineProperty(globalThis, "document", { configurable: true, value: page });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {
+      AudioContext: Context, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+      setTimeout(fn: () => void, ms: number) { expect(ms).toBeGreaterThanOrEqual(30000); expect(ms).toBeLessThanOrEqual(180000); watchdog = fn; return 1; },
+      clearTimeout() { watchdog = null; },
+    } });
+    try {
+      const { NeuralSpeechPlayer } = loadServerModule<typeof import("../src/lib/jarvis/speech-client")>("src/lib/jarvis/speech-client.ts", {}, async () => new Response(new Uint8Array([0, 0, 1, 0])));
+      const player = new NeuralSpeechPlayer(); player.unlock();
+      const levels: number[] = []; let firstAudio!: () => void;
+      const started = new Promise<void>(resolve => { firstAudio = resolve; });
+      const playback = player.play("Ready", new AbortController().signal, firstAudio, n => levels.push(n));
+      await started; await Promise.resolve(); await Promise.resolve();
+      if (interruption === "suspended") { Context.instance.state = "suspended"; Context.instance.dispatchEvent(new Event("statechange")); }
+      else if (interruption === "hidden") { page.hidden = true; page.dispatchEvent(new Event("visibilitychange")); }
+      else watchdog!();
+      await expect(playback).rejects.toMatchObject({ reason: interruption === "watchdog" ? "unavailable" : "audio_locked" });
+      expect(nodes.slice(1).every(node => node.stopped)).toBe(true); expect(watchdog).toBeNull(); expect(levels.at(-1)).toBe(0);
+      player.close();
+    } finally {
+      if (priorWindow) Object.defineProperty(globalThis, "window", priorWindow); else Reflect.deleteProperty(globalThis, "window");
+      if (priorDocument) Object.defineProperty(globalThis, "document", priorDocument); else Reflect.deleteProperty(globalThis, "document");
+    }
+  });
+}
+
+test("speech segments preserve sentence wording and bound pathological long input", () => {
+  const { splitSpeechText } = loadServerModule<typeof import("../src/lib/jarvis/voice-utils")>("src/lib/jarvis/voice-utils.ts");
+  for (const text of ["Recorded price is $124.50. Next job is ready. ".repeat(130), "one ".repeat(1500), "🪴".repeat(4000)]) {
+    const segments = splitSpeechText(text);
+    expect(segments.every(segment => segment.length <= 1600)).toBe(true);
+    expect(segments.join("")).toBe(text);
+  }
+  const sentence = "Your next job is ready. ".repeat(200);
+  expect(splitSpeechText(sentence).slice(0, -1).every(segment => segment.endsWith("ready. "))).toBe(true);
 });

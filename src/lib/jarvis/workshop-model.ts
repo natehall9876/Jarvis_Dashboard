@@ -42,3 +42,21 @@ export function handPose(points: HandPoint[]): { pinched: boolean; x: number; y:
   if (palm < 0.02) return null;
   return { pinched: distance(points[4], points[8]) / palm < 0.33, x: (points[4].x + points[8].x) / 2, y: (points[4].y + points[8].y) / 2, angle: Math.atan2(points[9].y - points[0].y, points[9].x - points[0].x) };
 }
+
+/** The advisor accepts at most 2,000 characters; retain source IDs and safety instructions first. */
+export function buildWorkshopReview(propertyId: string, optionIds: string[], assumptions: string): { prompt: string; truncated: boolean } {
+  const prefix = `Review recorded scope and pricing for property ${propertyId}. Compare ${optionIds.slice(0, 2).join(" and ") || "its recent estimates and jobs"}. Use current records. Identify differences and missing measurements. Do not invent facts, change records, or send anything. My unverified assumptions: `;
+  const note = " [Remaining assumptions omitted from this request.]";
+  const text = assumptions || "none";
+  const truncated = prefix.length + text.length > 2000;
+  const allowance = Math.max(0, 2000 - prefix.length - (truncated ? note.length : 0));
+  return { prompt: `${prefix}${text.slice(0, allowance)}${truncated ? note : ""}`, truncated };
+}
+
+export type WorkshopActivityNode = { id: string; label: string; kind: "capability" | "tool" };
+/** Progress labels identify a real tool phase. Don't reuse lingering capability highlights during a fresh request. */
+export function workshopActivityNodes(loading: boolean, progress: string | null, activeCapabilities: string[], toolsUsed: string[]): WorkshopActivityNode[] {
+  const toolPhases = new Set(["Preparing an action for your review", "Checking your connections", "Checking the Homeworks source", "Reviewing what needs your attention", "Checking invoice records", "Checking your schedule and jobs", "Looking up the customer record", "Checking your tasks", "Checking business records"]);
+  if (loading) return progress && toolPhases.has(progress) ? [...new Set(activeCapabilities)].slice(0, 8).map(id => ({ id: `capability:${id}`, label: `Active capability: ${id.replaceAll("_", " ")}`, kind: "capability" })) : [];
+  return [...new Set(toolsUsed)].slice(-8).map(id => ({ id: `tool:${id}`, label: `Recorded tool: ${id.replaceAll("_", " ")}`, kind: "tool" }));
+}

@@ -21,6 +21,28 @@ export function stripForSpeech(markdown: string): string {
     .trim();
 }
 
+/** Bound provider input while keeping every word in order. Prefer sentence endings;
+ * a single oversized sentence falls back to whitespace, then a Unicode-safe cut. */
+export function splitSpeechText(text: string, limit = 1600): string[] {
+  const segments: string[] = [];
+  let remaining = text;
+  while (remaining.length > limit) {
+    const prefix = remaining.slice(0, limit);
+    const sentenceEnds = [...prefix.matchAll(/[.!?](?:["'”’)]*)\s+/g)];
+    const lastSentence = sentenceEnds.at(-1);
+    let boundary = lastSentence ? lastSentence.index! + lastSentence[0].length : -1;
+    if (boundary <= 0) {
+      const spaces = [...prefix.matchAll(/\s+/g)];
+      const lastSpace = spaces.at(-1);
+      boundary = lastSpace ? lastSpace.index! + lastSpace[0].length : limit;
+    }
+    if (boundary === limit && /[\uD800-\uDBFF]/.test(remaining[boundary - 1])) boundary--;
+    segments.push(remaining.slice(0, boundary)); remaining = remaining.slice(boundary);
+  }
+  if (remaining) segments.push(remaining);
+  return segments.filter(segment => segment.trim());
+}
+
 /**
  * Streaming text arrives in fragments. Returns the complete sentences found at
  * or after `fromIndex` and the index to resume from, so speech can begin while

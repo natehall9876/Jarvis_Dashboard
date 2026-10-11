@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { EntityReference } from "@/lib/ai/tool-types";
 import type { ProposedAction } from "@/lib/ai/action-types";
 import type { JarvisVisualState } from "@/lib/jarvis/network-engine";
-import { parseNavigationIntent, stripForSpeech, toolToCapabilities, selectBrowserVoice } from "@/lib/jarvis/voice-utils";
+import { parseNavigationIntent, stripForSpeech, toolToCapabilities, selectBrowserVoice, splitSpeechText } from "@/lib/jarvis/voice-utils";
 import { deviceMemoryKey, readDeviceMemory, writeDeviceMemory, retainSessionExchanges, toolProgressLabel } from "@/lib/jarvis/device-memory";
 import { NeuralSpeechPlayer, SpeechPlaybackError, neuralPlaybackSupported, type SpeechEngine } from "@/lib/jarvis/speech-client";
 import { getFirstJobToday } from "@/lib/actions/jobs";
@@ -450,7 +450,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         resumeListening();
         return;
       }
-      speakQueueRef.current.push(...sentences);
+      speakQueueRef.current.push(...sentences.flatMap(sentence => splitSpeechText(sentence)));
       pumpSpeech();
     },
     [pumpSpeech, resumeListening],
@@ -475,7 +475,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
   }, []);
 
   const announce = useCallback(async (text: string): Promise<void> => {
-    const notice = stripForSpeech(text).slice(0, 4096);
+    const notice = stripForSpeech(text);
     if (!notice || !mountedRef.current || mutedRef.current || loadingRef.current || recognitionRef.current ||
         utteranceRef.current || neuralPlaybackRef.current || speakQueueRef.current.length || actionExecuting ||
         (speechEngineRef.current !== "neural" && !("speechSynthesis" in window))) return;

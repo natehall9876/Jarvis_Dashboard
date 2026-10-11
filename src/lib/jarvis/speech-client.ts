@@ -41,32 +41,51 @@ export class NeuralSpeechPlayer {
     signal.throwIfAborted();
     const context = this.context;
     if (!context || context.state !== "running") throw new SpeechPlaybackError("audio_locked");
-    const response = await fetch("/api/jarvis/speech", { method: "POST", signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
-    if (!response.ok || !response.body) {
-      const data = await response.json().catch(() => null);
-      throw new SpeechPlaybackError(response.status === 401 || response.status === 403 ? "unauthorized" : data?.reason === "not_configured" ? "not_configured" : "unavailable");
-    }
-    const reader = response.body.getReader();
+    const abort = new AbortController();
+    const page = typeof document === "undefined" ? null : document;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    let analyser: AnalyserNode | null = null;
+    let failure: SpeechPlaybackError | null = null;
     const nodes = new Set<AudioBufferSourceNode>();
-    const analyser = context.createAnalyser(); analyser.fftSize = 256; analyser.connect(context.destination);
-    const levels = new Float32Array(analyser.fftSize);
     let carry: number | null = null, nextAt = context.currentTime + 0.06, started = false, frame = 0;
     let resolveEnded: (() => void) | null = null;
     const ended = () => { if (!nodes.size) resolveEnded?.(); };
-    const measure = () => {
-      analyser.getFloatTimeDomainData(levels);
-      onLevel(Math.min(1, Math.sqrt(levels.reduce((sum, n) => sum + n * n, 0) / levels.length) * 3));
-      frame = window.requestAnimationFrame(measure);
-    };
     const stop = () => {
-      for (const node of nodes) { try { node.stop(); } catch {} node.disconnect(); }
-      nodes.clear(); ended(); void reader.cancel().catch(() => {});
+      for (const node of nodes) { node.onended = null; try { node.stop(); } catch {} node.disconnect(); }
+      nodes.clear(); ended(); void reader?.cancel().catch(() => {});
     };
-    signal.addEventListener("abort", stop, { once: true });
+    const interrupted = (reason: "audio_locked" | "unavailable") => {
+      failure ??= new SpeechPlaybackError(reason); abort.abort(); stop();
+    };
+    const stateChanged = () => { if (context.state !== "running") interrupted("audio_locked"); };
+    const visibilityChanged = () => { if (page?.hidden) interrupted("audio_locked"); };
+    const cancelled = () => { abort.abort(signal.reason); stop(); };
+    const check = () => { if (failure) throw failure; abort.signal.throwIfAborted(); };
+    signal.addEventListener("abort", cancelled, { once: true });
+    context.addEventListener("statechange", stateChanged);
+    page?.addEventListener("visibilitychange", visibilityChanged);
+    // Bounds both network stalls and missing onended events. Segments are at most
+    // 1600 chars; a generous three-minute ceiling permits natural spoken pacing.
+    const deadline = window.setTimeout(() => interrupted("unavailable"), Math.min(180_000, Math.max(30_000, text.length * 150)));
+    abort.signal.addEventListener("abort", stop, { once: true });
     try {
-      signal.throwIfAborted();
+      signal.throwIfAborted(); stateChanged(); visibilityChanged(); check();
+      const response = await fetch("/api/jarvis/speech", { method: "POST", signal: abort.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      check();
+      if (!response.ok || !response.body) {
+        const data = await response.json().catch(() => null); check();
+        throw new SpeechPlaybackError(response.status === 401 || response.status === 403 ? "unauthorized" : data?.reason === "not_configured" ? "not_configured" : "unavailable");
+      }
+      reader = response.body.getReader();
+      analyser = context.createAnalyser(); analyser.fftSize = 256; analyser.connect(context.destination);
+      const levels = new Float32Array(analyser.fftSize);
+      const measure = () => {
+        analyser!.getFloatTimeDomainData(levels);
+        onLevel(Math.min(1, Math.sqrt(levels.reduce((sum, n) => sum + n * n, 0) / levels.length) * 3));
+        frame = window.requestAnimationFrame(measure);
+      };
       while (true) {
-        const { done, value } = await reader.read(); signal.throwIfAborted();
+        const { done, value } = await reader.read(); check();
         if (done) break;
         const decoded = decodePcm(value, carry); carry = decoded.carry;
         if (!decoded.samples.length) continue;
@@ -78,10 +97,16 @@ export class NeuralSpeechPlayer {
       }
       if (!started || carry !== null) throw new SpeechPlaybackError("unavailable");
       if (nodes.size) await new Promise<void>(resolve => { resolveEnded = resolve; ended(); });
-      signal.throwIfAborted();
+      check();
+    } catch (error) {
+      if (failure) throw failure;
+      signal.throwIfAborted(); throw error;
     } finally {
-      signal.removeEventListener("abort", stop); stop();
-      window.cancelAnimationFrame(frame); analyser.disconnect(); reader.releaseLock(); onLevel(0);
+      window.clearTimeout(deadline);
+      signal.removeEventListener("abort", cancelled); abort.signal.removeEventListener("abort", stop);
+      context.removeEventListener("statechange", stateChanged); page?.removeEventListener("visibilitychange", visibilityChanged);
+      abort.abort(); stop();
+      window.cancelAnimationFrame(frame); analyser?.disconnect(); reader?.releaseLock(); onLevel(0);
     }
   }
 }

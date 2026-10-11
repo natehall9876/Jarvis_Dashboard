@@ -13,6 +13,6 @@ select cron.schedule('jarvis-activity-worker', '* * * * *', $job$
       'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'jarvis_activity_cron_secret')
     ),
     body := '{}'::jsonb,
-    timeout_milliseconds := 55000
+    timeout_milliseconds := 115000
   );
 $job$);

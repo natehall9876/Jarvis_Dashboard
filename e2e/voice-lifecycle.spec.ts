@@ -229,3 +229,18 @@ test("neural cancellation ignores late completion and resumes capture once", asy
     expect(h.sessions).toHaveLength(2); expect(h.render().listening).toBe(true); expect(h.render().speaking).toBe(false);
   } finally { h.dispose(); }
 });
+
+
+test("long final answers play every bounded segment in order without speaking deltas", async () => {
+  const answer = "Your recorded scope remains unchanged. Check access before scheduling. ".repeat(85).trim();
+  const body = `event: delta\ndata: ${JSON.stringify({ text: "Checking records." })}\n\nevent: done\ndata: ${JSON.stringify({ answer, references: [], toolsUsed: [] })}\n\n`;
+  const h = harness({ fetchImpl: async () => new Response(body) });
+  try {
+    await h.render().submit("Review the full scope.", { viaVoice: true });
+    for (let i = 0; i < 20 && h.render().speaking; i++) h.finish();
+    expect(h.spoken.length).toBeGreaterThan(1);
+    expect(h.spoken.every(utterance => utterance.text.length <= 1600)).toBe(true);
+    expect(h.spoken.map(utterance => utterance.text).join("")).toBe(answer);
+    expect(h.render().speaking).toBe(false);
+  } finally { h.dispose(); }
+});
