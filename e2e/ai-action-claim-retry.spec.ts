@@ -49,7 +49,14 @@ async function fixture(mode: "concurrent" | "changed" | "single") {
       } else if (table === "owner_tasks") {
         if (method === "POST") {
           const body = JSON.parse(String(init?.body));
-          const row = { ...body, id: "task-" + (tasks.length + 1), status: "open" };
+          const row = {
+            client_id: null,
+            property_id: null,
+            completed_at: null,
+            ...body,
+            id: typeof body.id === "string" ? body.id : "task-" + (tasks.length + 1),
+            status: "open",
+          };
           tasks.push(row); rows = [row];
         } else if (method === "GET") {
           rows = tasks.filter(row => "eq." + row.id === url.searchParams.get("id"));
