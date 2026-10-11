@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getJobById } from "@/lib/data/jobs";
 import { updateJobFields, updateJobStatus } from "@/lib/actions/jobs";
@@ -108,6 +109,10 @@ async function finalizeActionRequest(
 
 export async function executeProposedAction(action: unknown): Promise<ExecuteActionResult> {
   if (!isProposedAction(action)) return fail("invalid", "Invalid or unsupported action payload.");
+  if ((action.type === "create_task" || action.type === "add_job_note") &&
+      !/^[A-Za-z0-9_-]{1,128}$/.test(action.id)) {
+    return fail("invalid", "Invalid native action ID.");
+  }
 
   const supabase = await createSupabaseServerClient();
 
@@ -260,6 +265,16 @@ async function executeUpdateJobStatus(action: ProposedAction): Promise<ExecuteAc
 
 const MIGRATION_MESSAGE = "Notes and tasks aren't set up yet — run supabase/job-notes-tasks-migration.sql in the Supabase SQL editor first.";
 
+// Independent of payload and process lifetime. The native table PK arbitrates
+// concurrent/restarted inserts even when action_requests releases a failed attempt.
+function nativeInsertId(ownerId: string, action: ProposedAction): string {
+  const bytes = createHash("sha256").update(JSON.stringify(["jarvis-native-insert-v1", ownerId, action.type, action.id])).digest();
+  bytes[6] = (bytes[6] & 0x0f) | 0x80;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.subarray(0, 16).toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 async function executeAddJobNote(action: ProposedAction): Promise<ExecuteActionResult> {
   const jobId = action.target?.id;
   if (!jobId) return fail("invalid", "No job specified.");
@@ -274,29 +289,34 @@ async function executeAddJobNote(action: ProposedAction): Promise<ExecuteActionR
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: inserted, error } = await supabase
+  if (!user) return fail("auth", "You must be signed in to confirm this action.");
+  const id = nativeInsertId(user.id, action);
+  const { error } = await supabase
     .from("job_notes")
-    .insert({ job_id: jobId, body: note.value, source: "voice", created_by: user?.id ?? null })
-    .select("id, body")
-    .single();
-  if (error) return fail("server_error", isMissingTableError(error) ? MIGRATION_MESSAGE : error.message);
+    .insert({ id, job_id: jobId, body: note.value, source: "voice", created_by: user.id });
+  if (error && error.code !== "23505") return fail("server_error", isMissingTableError(error) ? MIGRATION_MESSAGE : error.message);
 
   // Verify by reading the row back rather than trusting the insert's return.
-  const { data: verify } = await supabase.from("job_notes").select("id").eq("id", inserted.id).maybeSingle();
-  if (!verify) return fail("server_error", "The note was submitted but couldn't be read back to verify.");
+  const { data: verify, error: readError } = await supabase.from("job_notes")
+    .select("id, job_id, body, source, created_by").eq("id", id).maybeSingle();
+  if (readError || !verify) return fail("server_error", "The note was submitted but couldn't be read back to verify.");
+  if (verify.id !== id || verify.created_by !== user.id || verify.job_id !== jobId ||
+      verify.body !== note.value || verify.source !== "voice") {
+    return fail("stale", "The existing note does not match this action; it was not changed.");
+  }
 
   await logActivity({
     entityType: "job",
     entityId: jobId,
     eventType: "job_note_added",
     summary: `Note added to ${jobLabel(job)}`,
-    detail: { note_id: inserted.id },
+    detail: { note_id: id },
     source: "jarvis",
   });
   return {
     ok: true,
     message: `Added the note to ${jobLabel(job)}.`,
-    result: { job_id: jobId, note_id: inserted.id },
+    result: { job_id: jobId, note_id: id },
     references: [{ type: "job", id: jobId, label: jobLabel(job) }],
   };
 }
@@ -310,22 +330,34 @@ async function executeCreateTask(action: ProposedAction): Promise<ExecuteActionR
     data: { user },
   } = await supabase.auth.getUser();
   const jobId = typeof action.payload.job_id === "string" ? action.payload.job_id : null;
-  const { data: inserted, error } = await supabase
+  if (!user) return fail("auth", "You must be signed in to confirm this action.");
+  const id = nativeInsertId(user.id, action);
+  const { error } = await supabase
     .from("owner_tasks")
     .insert({
+      id,
       title: validated.value.title,
       notes: validated.value.notes,
       due_date: validated.value.dueDate,
       job_id: jobId,
       source: "voice",
-      created_by: user?.id ?? null,
-    })
-    .select("id, title")
-    .single();
-  if (error) return fail("server_error", isMissingTableError(error) ? MIGRATION_MESSAGE : error.message);
+      created_by: user.id,
+    });
+  if (error && error.code !== "23505") return fail("server_error", isMissingTableError(error) ? MIGRATION_MESSAGE : error.message);
 
-  const { data: verify } = await supabase.from("owner_tasks").select("id, status").eq("id", inserted.id).maybeSingle();
-  if (!verify) return fail("server_error", "The task was submitted but couldn't be read back to verify.");
+  const { data: verify, error: readError } = await supabase.from("owner_tasks")
+    .select("id, title, notes, due_date, job_id, client_id, property_id, source, created_by, status, completed_at")
+    .eq("id", id).maybeSingle();
+  if (readError || !verify) return fail("server_error", "The task was submitted but couldn't be read back to verify.");
+  // Editable fields have no immutable original-payload copy in this schema.
+  // Fail closed on changes instead of overwriting them or claiming verification.
+  if (verify.id !== id || verify.created_by !== user.id || verify.source !== "voice" ||
+      verify.title !== validated.value.title || verify.notes !== validated.value.notes ||
+      verify.due_date !== validated.value.dueDate || verify.job_id !== jobId ||
+      verify.client_id !== null || verify.property_id !== null ||
+      verify.status !== "open" || verify.completed_at !== null) {
+    return fail("stale", "The existing task does not match this action or has changed; it was not changed.");
+  }
 
   // The task row carries who/when/how (created_by, created_at, source); only job-linked tasks also get a job timeline entry.
   if (jobId) {
@@ -333,15 +365,15 @@ async function executeCreateTask(action: ProposedAction): Promise<ExecuteActionR
       entityType: "job",
       entityId: jobId,
       eventType: "task_created",
-      summary: `Task created: ${inserted.title}`,
-      detail: { task_id: inserted.id, due_date: validated.value.dueDate },
+      summary: `Task created: ${validated.value.title}`,
+      detail: { task_id: id, due_date: validated.value.dueDate },
       source: "jarvis",
     });
   }
   return {
     ok: true,
-    message: `Added task "${inserted.title}"${validated.value.dueDate ? ` due ${validated.value.dueDate}` : ""}.`,
-    result: { task_id: inserted.id },
+    message: `Added task "${validated.value.title}"${validated.value.dueDate ? ` due ${validated.value.dueDate}` : ""}.`,
+    result: { task_id: id },
     references: [],
   };
 }

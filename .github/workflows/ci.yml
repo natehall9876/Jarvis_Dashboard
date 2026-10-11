@@ -68,3 +68,7 @@ jobs:
 
       - name: Intelligence diagnostics, ingestion, leases, and owner isolation
         run: npm run test:intelligence
+
+
+      - name: Native task and note insertion retry regressions
+        run: npm run test:native-inserts
