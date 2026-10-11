@@ -4,6 +4,8 @@ import { useState } from "react";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { isProposedAction, type ProposedAction } from "@/lib/ai/action-types";
 
+import type { ActionSettlement } from "@/lib/jarvis/action-receipts";
+
 const FIELD_LABELS: Record<string, string> = {
   scheduled_date: "Scheduled date",
   scheduled_start_time: "Start time",
@@ -32,7 +34,7 @@ export function ProposedActionCard({
   onExecutingChange,
 }: {
   action: ProposedAction;
-  onSettled?: (outcome: "confirmed" | "cancelled") => void;
+  onSettled?: (actionId: string, settlement: ActionSettlement) => void;
   /** True only while the confirmed write request is actually in flight. */
   onExecutingChange?: (executing: boolean) => void;
 }) {
@@ -48,10 +50,10 @@ export function ProposedActionCard({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      const json = (await res.json()) as { message?: string; error?: string; reason?: string };
+      const json = (await res.json()) as { message?: string; error?: string; reason?: string; result?: unknown; references?: unknown };
       if (res.ok) {
         setState({ kind: "done", message: json.message ?? "Done." });
-        onSettled?.("confirmed");
+        onSettled?.(action.id, { outcome: "confirmed", response: json });
       } else {
         const retryable = !["already_processed", "stale", "invalid", "not_found"].includes(json.reason ?? "");
         setState({ kind: "error", message: json.error ?? "Something went wrong.", retryable });
@@ -66,7 +68,7 @@ export function ProposedActionCard({
   function cancel() {
     // No network call — cancelling a proposal must never touch the database.
     setState({ kind: "done", message: "Cancelled — no changes were made." });
-    onSettled?.("cancelled");
+    onSettled?.(action.id, { outcome: "cancelled" });
   }
 
   if (!isProposedAction(action)) {
