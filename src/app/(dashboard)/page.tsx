@@ -15,6 +15,7 @@ import { WeatherCard } from "@/components/command-center/weather-card";
 import { getTodaysMission } from "@/lib/data/command-center";
 import { getWorkloadSummary } from "@/lib/data/jobs";
 import { WorkReviews } from "@/components/command-center/work-reviews";
+import { IntelligenceEntry } from "@/components/intelligence/command-center-entry";
 import { WorkspaceConnections } from "@/components/command-center/workspace-connections";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export default async function CommandCenterPage() {
         <CommandHero briefing={briefing} dataError={mission.error ?? (mission.data?.unavailableSections?.length ? "Some business data could not be checked. See Today's Mission." : null)} />
       </div>
 
+      <IntelligenceEntry />
       <WorkspaceConnections />
       <WorkReviews />
 

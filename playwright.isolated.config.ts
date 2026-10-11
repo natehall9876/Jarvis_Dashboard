@@ -31,6 +31,7 @@ export default defineConfig({
     "integration-owner-access.spec.ts",
     "integration-reliability.spec.ts",
     "jarvis-experience.spec.ts",
+    "intelligence-ui.spec.ts",
     "jarvis-memory.spec.ts",
     "job-not-found.spec.ts",
     "job-section-isolation.spec.ts",

@@ -65,3 +65,6 @@ jobs:
 
       - name: Durable activity, reminders, and database isolation
         run: npm run test:activity
+
+      - name: Intelligence diagnostics, ingestion, leases, and owner isolation
+        run: npm run test:intelligence
