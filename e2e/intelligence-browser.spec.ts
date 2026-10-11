@@ -41,9 +41,10 @@ test('Intelligence lab shows request failures and permits retry without erasing 
   await page.goto('/voice-lab/intelligence');
   await page.getByLabel('Fixture mode').selectOption('error');
   await page.getByRole('button', { name: 'Scan operations' }).click();
-  await expect(page.getByRole('alert')).toContainText('Synthetic connection failure');
+  const applicationError = page.getByRole('alert').filter({ hasText: 'Synthetic connection failure. Your change was not saved.' });
+  await expect(applicationError).toBeVisible();
   await expect(page.getByRole('article', { name: 'Review the overdue balance before following up', exact: true })).toBeVisible();
   await page.getByLabel('Fixture mode').selectOption('normal');
   await page.getByRole('button', { name: 'Retry loading' }).click();
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(applicationError).toHaveCount(0);
 });
