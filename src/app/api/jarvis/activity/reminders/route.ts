@@ -1,0 +1,2 @@
+import {activityOwner,activityFailure,check} from '@/lib/jarvis/background-auth';
+export async function GET(){try{const {db,ownerId}=await activityOwner();const r=await db.from('jarvis_reminders').select('id,title,starts_at,due_at,source_id,body,acknowledged_at,snoozed_until').eq('owner_id',ownerId).gte('starts_at',new Date().toISOString()).order('starts_at').limit(30);check(r.error);return Response.json({reminders:r.data});}catch(e){return activityFailure(e);}}

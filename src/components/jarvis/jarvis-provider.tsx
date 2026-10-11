@@ -7,6 +7,7 @@ import type { ProposedAction } from "@/lib/ai/action-types";
 import type { JarvisVisualState } from "@/lib/jarvis/network-engine";
 import { parseNavigationIntent, stripForSpeech, toolToCapabilities, selectBrowserVoice } from "@/lib/jarvis/voice-utils";
 import { deviceMemoryKey, readDeviceMemory, writeDeviceMemory, retainSessionExchanges, toolProgressLabel } from "@/lib/jarvis/device-memory";
+import { NeuralSpeechPlayer, SpeechPlaybackError, neuralPlaybackSupported, type SpeechEngine } from "@/lib/jarvis/speech-client";
 import { getFirstJobToday } from "@/lib/actions/jobs";
 
 /**
@@ -70,6 +71,12 @@ type JarvisContextValue = {
   stopResponse: () => void;
   voiceSupported: boolean;
   speechOutputSupported: boolean;
+  speechEngine: SpeechEngine;
+  speechStatus: string;
+  /** Actual neural output RMS (0 when unobservable); never decorative microphone data. */
+  audioLevel: number;
+  /** Foreground notice only; skips muted/busy sessions and never calls the advisor. */
+  announce: (text: string) => Promise<void>;
   muted: boolean;
   conversationMode: boolean;
   voiceError: string | null;
@@ -158,6 +165,13 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
   const [panelOpen, setPanelOpen] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
+  const [speechEngine, setSpeechEngine] = useState<SpeechEngine>("checking");
+  const speechEngineRef = useRef<SpeechEngine>("browser");
+  const [speechStatus, setSpeechStatus] = useState("Checking spoken audio");
+  const [audioLevel, setAudioLevel] = useState(0);
+  const neuralPlayerRef = useRef<NeuralSpeechPlayer | null>(null);
+  const neuralPlaybackRef = useRef<AbortController | null>(null);
+  const speechWaitersRef = useRef(new Set<() => void>());
   const [actionExecuting, setActionExecuting] = useState(false);
   const [flash, setFlash] = useState<"success" | "error" | null>(null);
   const [activeCapabilities, setActiveCapabilities] = useState<string[]>([]);
@@ -194,12 +208,35 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   useEffect(() => {
     mountedRef.current = true;
+    const speechDiscovery = new AbortController();
+    const speechWaiters = speechWaitersRef.current;
     // Browser capabilities and the persisted session can only be read on the
     // client, after hydration (reading them during render would mismatch the
     // server markup), so they are applied in a deferred callback.
     const init = window.setTimeout(() => {
       setVoiceSupported(Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition));
-      setSpeechOutputSupported("speechSynthesis" in window);
+      const browserSpeech = "speechSynthesis" in window;
+      setSpeechOutputSupported(browserSpeech);
+      speechEngineRef.current = browserSpeech ? "browser" : "unavailable";
+      setSpeechEngine(speechEngineRef.current);
+      setSpeechStatus(browserSpeech ? "Device voice fallback — streamed audio unavailable in this browser" : "Spoken audio unavailable");
+      if (neuralPlaybackSupported()) {
+        setSpeechStatus(browserSpeech ? "Device voice while checking neural speech" : "Checking neural speech");
+        neuralPlayerRef.current ??= new NeuralSpeechPlayer();
+        void fetch("/api/jarvis/speech", { signal: speechDiscovery.signal }).then(async response => {
+          if (!response.ok) throw new Error("Speech status unavailable");
+          const status = await response.json();
+          if (!mountedRef.current || speechDiscovery.signal.aborted) return;
+          if (status.engine === "neural") {
+            speechEngineRef.current = "neural"; setSpeechEngine("neural"); setSpeechOutputSupported(true);
+            setSpeechStatus(`AI-generated neural voice · ${status.voice ?? "cedar"} · British delivery`);
+          } else {
+            setSpeechStatus(browserSpeech ? "Device voice fallback — neural speech is not configured" : "Spoken audio unavailable — neural speech is not configured");
+          }
+        }).catch(() => {
+          if (mountedRef.current && !speechDiscovery.signal.aborted) setSpeechStatus(browserSpeech ? "Device voice fallback — neural availability could not be checked" : "Spoken audio unavailable");
+        });
+      }
       // Discard the previous unscoped session; it must not leak between accounts.
       try {
         window.sessionStorage.removeItem("jarvis.session.v1");
@@ -221,6 +258,13 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     return () => {
       window.clearTimeout(init);
       mountedRef.current = false;
+      speechDiscovery.abort();
+      neuralPlaybackRef.current?.abort();
+      neuralPlaybackRef.current = null;
+      neuralPlayerRef.current?.close();
+      neuralPlayerRef.current = null;
+      speechWaiters.forEach(resolve => resolve());
+      speechWaiters.clear();
       requestRef.current?.abort.abort();
       requestRef.current = null;
       speechEpoch.current++;
@@ -279,6 +323,10 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     // iOS Safari only allows speech that begins from a user gesture; speaking
     // an empty utterance inside the tap unlocks later, asynchronous speech.
     try {
+      if (neuralPlaybackSupported()) {
+        neuralPlayerRef.current ??= new NeuralSpeechPlayer();
+        neuralPlayerRef.current.unlock();
+      }
       if ("speechSynthesis" in window && !utteranceRef.current) {
         const unlock = new SpeechSynthesisUtterance("");
         unlock.onend = () => { if (speakQueueRef.current.length) pumpRef.current(); };
@@ -313,27 +361,58 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   const resumeListening = useCallback(() => {
     if (!mountedRef.current || !conversationModeRef.current || loadingRef.current ||
-        !streamDoneRef.current || recognitionRef.current || utteranceRef.current ||
+        !streamDoneRef.current || recognitionRef.current || utteranceRef.current || neuralPlaybackRef.current ||
         speakQueueRef.current.length || resumeTimerRef.current !== null) return;
     const epoch = speechEpochRef.current;
     resumeTimerRef.current = window.setTimeout(() => {
       resumeTimerRef.current = null;
       if (mountedRef.current && epoch === speechEpochRef.current && conversationModeRef.current &&
-          !loadingRef.current && !recognitionRef.current && !utteranceRef.current) {
+          !loadingRef.current && !recognitionRef.current && !utteranceRef.current && !neuralPlaybackRef.current) {
         startListeningRef.current();
       }
     }, 450);
   }, []);
 
   const pumpSpeech = useCallback(() => {
-    if (utteranceRef.current) return;
-    if (!("speechSynthesis" in window)) { resumeListening(); return; }
-    if (window.speechSynthesis.speaking) return;
+    if (utteranceRef.current || neuralPlaybackRef.current) return;
+    if (window.speechSynthesis?.speaking) return;
     const next = speakQueueRef.current.shift();
     if (!next) {
       setSpeaking(false);
+      speechWaitersRef.current.forEach(resolve => resolve()); speechWaitersRef.current.clear();
       resumeListening();
       return;
+    }
+    if (speechEngineRef.current === "neural" && neuralPlayerRef.current) {
+      const playback = new AbortController(); neuralPlaybackRef.current = playback;
+      const epoch = speechEpochRef.current;
+      // Busy includes audio generation, preventing hands-free capture and notice overlap.
+      setSpeaking(true);
+      void neuralPlayerRef.current.play(next, playback.signal, () => {}, level => {
+        if (mountedRef.current && epoch === speechEpochRef.current) setAudioLevel(level);
+      }).then(() => {
+        if (!mountedRef.current || epoch !== speechEpochRef.current || neuralPlaybackRef.current !== playback) return;
+        neuralPlaybackRef.current = null; setAudioLevel(0); pumpRef.current();
+      }).catch(error => {
+        if (!mountedRef.current || epoch !== speechEpochRef.current || neuralPlaybackRef.current !== playback) return;
+        neuralPlaybackRef.current = null; setAudioLevel(0);
+        if (error instanceof SpeechPlaybackError && error.reason === "not_configured" && "speechSynthesis" in window) {
+          speechEngineRef.current = "browser"; setSpeechEngine("browser");
+          setSpeechStatus("Device voice fallback — neural speech is not configured");
+          speakQueueRef.current.unshift(next); pumpRef.current(); return;
+        }
+        speakQueueRef.current = []; setSpeaking(false); disableConversation();
+        speechWaitersRef.current.forEach(resolve => resolve()); speechWaitersRef.current.clear();
+        reportVoiceError(error instanceof SpeechPlaybackError && error.reason === "audio_locked"
+          ? "Tap the microphone to enable spoken audio, then retry. Your reply is available here."
+          : error instanceof SpeechPlaybackError && error.reason === "unauthorized"
+            ? "Sign in again to use spoken audio. Your reply is available here."
+            : "Neural audio could not play. Retry, or read the reply here.");
+      });
+      return;
+    }
+    if (!("speechSynthesis" in window)) {
+      setSpeaking(false); speechWaitersRef.current.forEach(resolve => resolve()); speechWaitersRef.current.clear(); resumeListening(); return;
     }
     const utterance = new SpeechSynthesisUtterance(next);
     const voice = selectBrowserVoice(window.speechSynthesis.getVoices?.() ?? []);
@@ -353,6 +432,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       speakQueueRef.current = [];
       setSpeaking(false);
       disableConversation();
+      speechWaitersRef.current.forEach(resolve => resolve()); speechWaitersRef.current.clear();
       reportVoiceError("Spoken audio could not play. Tap the microphone to retry, or read the reply here.");
     };
     setSpeaking(true);
@@ -366,7 +446,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   const enqueueSpeech = useCallback(
     (sentences: string[]) => {
-      if (mutedRef.current || !sentences.length || !("speechSynthesis" in window)) {
+      if (mutedRef.current || !sentences.length || (speechEngineRef.current !== "neural" && !("speechSynthesis" in window))) {
         resumeListening();
         return;
       }
@@ -378,6 +458,10 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   const stopSpeaking = useCallback(() => {
     speechEpochRef.current++;
+    neuralPlaybackRef.current?.abort();
+    neuralPlaybackRef.current = null;
+    setAudioLevel(0);
+    speechWaitersRef.current.forEach(resolve => resolve()); speechWaitersRef.current.clear();
     if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
     resumeTimerRef.current = null;
     utteranceRef.current = null;
@@ -389,6 +473,17 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     }
     setSpeaking(false);
   }, []);
+
+  const announce = useCallback(async (text: string): Promise<void> => {
+    const notice = stripForSpeech(text).slice(0, 4096);
+    if (!notice || !mountedRef.current || mutedRef.current || loadingRef.current || recognitionRef.current ||
+        utteranceRef.current || neuralPlaybackRef.current || speakQueueRef.current.length || actionExecuting ||
+        (speechEngineRef.current !== "neural" && !("speechSynthesis" in window))) return;
+    await new Promise<void>(resolve => {
+      speechWaitersRef.current.add(resolve);
+      enqueueSpeech([notice]);
+    });
+  }, [actionExecuting, enqueueSpeech]);
 
   // UI interruption keeps an active hands-free conversation listening.
   // Internal cancellation above must stay side-effect free for submit/cleanup.
@@ -792,6 +887,10 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       stopResponse,
       voiceSupported,
       speechOutputSupported,
+      speechEngine,
+      speechStatus,
+      audioLevel,
+      announce,
       muted,
       conversationMode,
       voiceError,
@@ -829,6 +928,10 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       stopResponse,
       voiceSupported,
       speechOutputSupported,
+      speechEngine,
+      speechStatus,
+      audioLevel,
+      announce,
       muted,
       conversationMode,
       voiceError,

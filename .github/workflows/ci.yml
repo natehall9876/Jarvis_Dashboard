@@ -62,3 +62,6 @@ jobs:
 
       - name: Synthetic Homeworks ownership and sync database regressions
         run: npm run test:ownership:db
+
+      - name: Durable activity, reminders, and database isolation
+        run: npm run test:activity

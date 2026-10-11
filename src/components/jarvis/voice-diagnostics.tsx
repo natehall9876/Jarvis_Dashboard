@@ -27,7 +27,7 @@ const MIC_PERMISSION_LABEL: Record<string, string> = {
  */
 export function VoiceDiagnostics() {
   const jarvis = useJarvis();
-  const { voiceSupported, speechOutputSupported, micPermission, visualState, listening, speaking, loading, muted, conversationMode, lastVoiceError, lastVoiceErrorAt, lastTranscript, lastTranscriptAt } = jarvis;
+  const { voiceSupported, speechOutputSupported, speechEngine, speechStatus, micPermission, visualState, listening, speaking, loading, muted, conversationMode, lastVoiceError, lastVoiceErrorAt, lastTranscript, lastTranscriptAt } = jarvis;
 
   return (
     <details className="rounded-lg border border-[var(--color-border)] text-xs" data-testid="voice-diagnostics">
@@ -38,6 +38,8 @@ export function VoiceDiagnostics() {
           value={voiceSupported ? "Supported in this browser" : "Speech recognition is unavailable in this browser. Type your command in Jarvis instead."}
         />
         <Row label="Spoken replies (text-to-speech)" value={speechOutputSupported ? "Supported in this browser" : "Not supported in this browser"} />
+        <Row label="Speech engine" value={`${speechEngine} — ${speechStatus}`} />
+        <Row label="Audio activity" value={speechEngine === "neural" ? "Measured from generated audio during playback" : "Device speech amplitude is not available to this tab"} />
         <Row label="Microphone permission" value={MIC_PERMISSION_LABEL[micPermission] ?? micPermission} />
         <Row label="Current state" value={`${visualState}${listening ? " (listening)" : ""}${speaking ? " (speaking)" : ""}${loading ? " (waiting on Jarvis)" : ""}`} />
         <Row label="Muted" value={muted ? "Yes — spoken replies are off" : "No"} />

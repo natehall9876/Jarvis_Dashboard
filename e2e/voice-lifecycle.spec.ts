@@ -4,7 +4,7 @@ import { loadServerModule } from "./load-server-module";
 
 // Runs the actual provider callbacks with controlled browser event boundaries.
 // No real microphone, browser automation, provider request, or customer records.
-function harness(options: { startThrows?: boolean; fetchImpl?: typeof fetch } = {}) {
+function harness(options: { startThrows?: boolean; fetchImpl?: typeof fetch; speechMock?: Record<string, unknown> } = {}) {
   let cursor = 0, now = 0, serial = 0;
   const slots: unknown[] = [], pending: Array<() => void> = [];
   const timers = new Map<number, { at: number; fn: () => void }>();
@@ -69,6 +69,7 @@ function harness(options: { startThrows?: boolean; fetchImpl?: typeof fetch } = 
       useEffect(fn: () => void, deps?: unknown[]) { const i = cursor++; const old = slots[i] as unknown[] | undefined; if (!same(old, deps)) { slots[i] = deps; pending.push(fn); } },
     },
     "next/navigation": { useRouter: () => router, usePathname: () => "/" },
+    ...(options.speechMock ? { "@/lib/jarvis/speech-client": options.speechMock } : {}),
     "@/lib/actions/jobs": { getFirstJobToday: async () => ({ ok: true, job: null }) },
   }, options.fetchImpl);
   function render() {
@@ -177,5 +178,54 @@ test("interrupting spoken output resumes hands-free instead of stranding the cal
     expect(h.render().speaking).toBe(true);
     h.render().stopSpeaking(); h.advance(1000);
     expect(h.render().speaking).toBe(false); expect(h.render().listening).toBe(true); expect(h.sessions).toHaveLength(2);
+  } finally { h.dispose(); }
+});
+
+test("foreground announcements speak without advisor turns and finish or cancel cleanly", async () => {
+  let calls = 0;
+  const h = harness({ fetchImpl: async () => { calls++; throw new Error("must not call advisor"); } });
+  try {
+    let finished = false;
+    const notice = h.render().announce("Your estimate is in forty minutes.").then(() => { finished = true; });
+    expect(h.spoken.map(u => u.text)).toEqual(["Your estimate is in forty minutes."]);
+    expect(finished).toBe(false); h.finish(); await notice;
+    expect(finished).toBe(true); expect(calls).toBe(0); expect(h.render().exchanges).toEqual([]);
+    const cancelled = h.render().announce("Your work is saved."); h.render().stopSpeaking(); await cancelled;
+    expect(h.render().speaking).toBe(false);
+  } finally { h.dispose(); }
+});
+
+test("foreground announcements honor mute, listening and active output", async () => {
+  const h = harness();
+  try {
+    h.render().toggleMute(); await h.render().announce("Muted notice."); expect(h.spoken).toHaveLength(0);
+    h.render().toggleMute(); h.render().startListening(); await h.render().announce("Busy notice."); expect(h.spoken).toHaveLength(0);
+    h.render().stopListening(); const notice = h.render().announce("First notice."); await h.render().announce("Duplicate notice.");
+    expect(h.spoken.map(u => u.text)).toEqual(["First notice."]); h.finish(); await notice;
+  } finally { h.dispose(); }
+});
+
+
+test("neural cancellation ignores late completion and resumes capture once", async () => {
+  const playback: Array<{ signal: AbortSignal; finish: () => void }> = [];
+  const h = harness({
+    fetchImpl: async () => Response.json({ engine: "neural", voice: "cedar" }),
+    speechMock: {
+      neuralPlaybackSupported: () => true,
+      SpeechPlaybackError: class extends Error {},
+      NeuralSpeechPlayer: class {
+        unlock() {} close() {}
+        play(_text: string, signal: AbortSignal) { return new Promise<void>(finish => playback.push({ signal, finish })); }
+      },
+    },
+  });
+  try {
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); h.render(); }
+    expect(h.render().speechEngine).toBe("neural");
+    h.render().toggleConversationMode(); h.sessions[0].say("Open my schedule");
+    expect(h.render().speaking).toBe(true); h.advance(1000); expect(h.sessions).toHaveLength(1);
+    h.render().stopSpeaking(); expect(playback[0].signal.aborted).toBe(true);
+    playback[0].finish(); await Promise.resolve(); h.advance(1000);
+    expect(h.sessions).toHaveLength(2); expect(h.render().listening).toBe(true); expect(h.render().speaking).toBe(false);
   } finally { h.dispose(); }
 });

@@ -29,6 +29,8 @@ const FORBIDDEN = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "HOMEWORKS_WEBHOOK_SECRET",
   "HOMEWORKS_SYNC_SECRET",
+  "JARVIS_VAPID_PRIVATE_KEY",
+  "CRON_SECRET",
   "homeworks_claim_lease",
   "HOMEWORKS_API_KEY",
   "ZAPIER_WEBHOOK_URL",
@@ -46,7 +48,7 @@ const FORBIDDEN = [
 // substring match would always "fail". Flagged only if found immediately
 // adjacent to a `process.env.` read, which is what an actual leaked
 // reference looks like instead.
-const CONTEXTUAL = ["QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_CLIENT_ID", "GOOGLE_CALENDAR_CLIENT_SECRET", "GOOGLE_CALENDAR_CLIENT_ID", "HOMEWORKS_OAUTH_CLIENT_ID"];
+const CONTEXTUAL = ["OPENAI_API_KEY", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_CLIENT_ID", "GOOGLE_CALENDAR_CLIENT_SECRET", "GOOGLE_CALENDAR_CLIENT_ID", "HOMEWORKS_OAUTH_CLIENT_ID"];
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
