@@ -15,7 +15,8 @@
     "test:isolated": "playwright test --config playwright.isolated.config.ts",
     "test:persistence": "playwright test --config playwright.persistence.config.ts",
     "test:ownership:db": "node scripts/test-homeworks-ownership.mjs",
-    "test:activity": "node --test scripts/test-jarvis-background.mjs"
+    "test:activity": "node --test scripts/test-jarvis-background.mjs",
+    "test:intelligence": "node --test scripts/test-jarvis-intelligence.mjs"
   },
   "dependencies": {
     "@lookingglass/webxr": "0.6.0",

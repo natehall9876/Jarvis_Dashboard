@@ -16,6 +16,7 @@ import {
   Wrench,
   Briefcase,
   Orbit,
+  Telescope,
 } from "lucide-react";
 
 export type NavItem = {
@@ -26,6 +27,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", href: "/", icon: Home },
+  { label: "Intelligence", href: "/intelligence", icon: Telescope },
   { label: "Workshop", href: "/workshop", icon: Orbit },
   { label: "Homeworks live", href: "/homeworks", icon: CalendarDays },
   { label: "Schedule", href: "/schedule", icon: CalendarDays },
