@@ -6,6 +6,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: [
+    "ai-action-claim-retry.spec.ts",
     "ai-homeworks-ownership.spec.ts",
     "ai-provider-recovery.spec.ts",
     "ai-request-control.spec.ts",

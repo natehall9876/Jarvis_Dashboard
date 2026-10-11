@@ -65,15 +65,17 @@ async function claimActionRequest(action: ProposedAction, supabase: SupabaseServ
     if (!existing || existing.status === "executed" || existing.status === "executing") {
       return "already_processed";
     }
-    // A prior attempt ended in failed/stale/cancelled/invalid — legitimate
-    // to retry under the same id. `neq("status","executed")` keeps this
-    // reclaim from ever overwriting a genuine success even under a race.
-    const { error: reclaimError } = await supabase
+    // The status read above is only a hint: another request can claim or
+    // finish the action before this update. Atomically admit only retryable
+    // states and require a returned row; a zero-row update grants no claim.
+    const { data: reclaimed, error: reclaimError } = await supabase
       .from("action_requests")
       .update({ status: "executing", status_detail: null })
       .eq("id", action.id)
-      .neq("status", "executed");
-    return reclaimError ? "already_processed" : "claimed";
+      .in("status", ["failed", "stale", "cancelled", "invalid"])
+      .select("id")
+      .maybeSingle();
+    return !reclaimError && reclaimed?.id === action.id ? "claimed" : "already_processed";
   }
 
   // Most likely "relation \"action_requests\" does not exist" — migration
@@ -113,12 +115,12 @@ export async function executeProposedAction(action: unknown): Promise<ExecuteAct
 
   const claim = await claimActionRequest(action, supabase);
   if (claim === "already_processed") {
-    return fail("already_processed", "This action was already executed — refresh to see the current state.");
+    return fail("already_processed", "This action is already running or has been processed — refresh to check its current state.");
   }
   const usingMemoryGuard = claim === "db_unavailable";
   if (usingMemoryGuard) {
     if (processedActionIds.has(action.id)) {
-      return fail("already_processed", "This action was already executed — refresh to see the current state.");
+      return fail("already_processed", "This action is already running or has been processed — refresh to check its current state.");
     }
     processedActionIds.add(action.id);
   }
