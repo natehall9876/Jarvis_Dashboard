@@ -9,6 +9,7 @@ import { parseNavigationIntent, stripForSpeech, toolToCapabilities, selectBrowse
 import { deviceMemoryKey, readDeviceMemory, writeDeviceMemory, retainSessionExchanges, toolProgressLabel } from "@/lib/jarvis/device-memory";
 import { NeuralSpeechPlayer, SpeechPlaybackError, neuralPlaybackSupported, type SpeechEngine } from "@/lib/jarvis/speech-client";
 import { getFirstJobToday } from "@/lib/actions/jobs";
+import { advisorHistory, settleExchange, type ActionReceipt, type ActionSettlement } from "@/lib/jarvis/action-receipts";
 
 /**
  * The single, app-wide Jarvis session. It is mounted once in the dashboard
@@ -56,6 +57,7 @@ export type Exchange = {
   references: EntityReference[];
   toolsUsed: string[];
   proposedAction: ProposedAction | null;
+  actionReceipt?: ActionReceipt;
   viaVoice: boolean;
 };
 
@@ -115,7 +117,7 @@ type JarvisContextValue = {
   setPanelOpen: (open: boolean) => void;
   clear: () => void;
   setActionExecuting: (executing: boolean) => void;
-  noteActionSettled: (outcome: "confirmed" | "cancelled") => void;
+  noteActionSettled: (exchangeId: string, actionId: string, settlement: ActionSettlement) => void;
 };
 
 const JarvisContext = createContext<JarvisContextValue | null>(null);
@@ -559,11 +561,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       streamDoneRef.current = false;
       setExchanges((prev) => retainSessionExchanges([base, ...prev]));
 
-      const history = exchangesRef.current
-        .filter((e) => e.status === "done" && e.answer)
-        .slice(0, 6)
-        .reverse()
-        .map((e) => ({ question: e.question, answer: e.answer as string }));
+      const history = advisorHistory(exchangesRef.current);
 
       let full = "";
       const deadline = window.setTimeout(() => {
@@ -863,7 +861,13 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
   }, [memoryOwner, stopResponse]);
 
   const noteActionSettled = useCallback(
-    (outcome: "confirmed" | "cancelled") => {
+    (exchangeId: string, actionId: string, settlement: ActionSettlement) => {
+      setExchanges(prev => {
+        const next = settleExchange(prev, exchangeId, actionId, settlement);
+        exchangesRef.current = next;
+        return next;
+      });
+      const outcome = settlement.outcome;
       setActionExecuting(false);
       if (outcome === "confirmed") finishFlash("success", 1800);
       if (outcome === "confirmed") router.refresh();

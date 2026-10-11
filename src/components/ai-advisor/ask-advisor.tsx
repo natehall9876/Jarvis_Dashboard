@@ -201,12 +201,13 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
                         Checked: {Array.from(new Set(exchange.toolsUsed.map(humanizeToolName))).join(", ")}
                       </p>
                     ) : null}
+                    {exchange.actionReceipt ? <p className="mt-2 text-xs">{exchange.actionReceipt.message}</p> : null}
                     {exchange.proposedAction ? (
                       <ProposedActionCard
                         key={exchange.proposedAction.id}
                         action={exchange.proposedAction}
                         onExecutingChange={jarvis.setActionExecuting}
-                        onSettled={jarvis.noteActionSettled}
+                        onSettled={(actionId, settlement) => jarvis.noteActionSettled(exchange.id, actionId, settlement)}
                       />
                     ) : null}
                   </>

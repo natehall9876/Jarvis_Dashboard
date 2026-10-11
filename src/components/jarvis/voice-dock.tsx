@@ -95,8 +95,9 @@ export function VoiceDock() {
               {bubble.status === "cancelled" ? "Response stopped." : bubble.answer || jarvis.progress || "Thinking…"}
             </p>
           )}
+          {bubble.actionReceipt ? <p className="mt-2 text-xs">{bubble.actionReceipt.message}</p> : null}
           {bubble.proposedAction ? (
-            <ProposedActionCard key={bubble.proposedAction.id} action={bubble.proposedAction} onExecutingChange={jarvis.setActionExecuting} onSettled={jarvis.noteActionSettled} />
+            <ProposedActionCard key={bubble.proposedAction.id} action={bubble.proposedAction} onExecutingChange={jarvis.setActionExecuting} onSettled={(actionId, settlement) => jarvis.noteActionSettled(bubble.id, actionId, settlement)} />
           ) : null}
           <div className="mt-2 flex items-center gap-3 text-xs">
             <button type="button" onClick={() => setPanelOpen(true)} className="text-[var(--color-accent)] hover:underline">

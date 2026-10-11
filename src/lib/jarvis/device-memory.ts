@@ -1,6 +1,8 @@
 import type { Exchange } from "@/components/jarvis/jarvis-provider";
 import type { EntityReference } from "@/lib/ai/tool-types";
 
+import { validateReceipt } from "./action-receipts";
+
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const TYPES = new Set(["client", "property", "job", "invoice", "quote", "employee", "equipment", "route"]);
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -16,9 +18,10 @@ export function readDeviceMemory(raw: string | null, owner: string, now = Date.n
     const exchanges: Exchange[] = [];
     for (const value of saved.exchanges) {
       if (exchanges.length === 20) break;
-      if (!record(value) || value.status !== "done" || typeof value.id !== "string" || typeof value.question !== "string" || value.question.length > 2000 || typeof value.answer !== "string" || value.answer.length > 20000 || typeof value.createdAt !== "number" || !Number.isFinite(value.createdAt) || value.createdAt > now || now - value.createdAt > MAX_AGE) continue;
-      const references = Array.isArray(value.references) ? value.references.filter((ref): ref is EntityReference => record(ref) && typeof ref.type === "string" && TYPES.has(ref.type) && typeof ref.id === "string" && /^[\w-]+$/.test(ref.id) && typeof ref.label === "string").slice(0, 30) : [];
-      exchanges.push({ id: value.id, question: value.question, answer: value.answer, status: "done", error: null, references, toolsUsed: Array.isArray(value.toolsUsed) ? value.toolsUsed.filter((t): t is string => typeof t === "string").slice(0, 30) : [], proposedAction: null, viaVoice: value.viaVoice === true, createdAt: value.createdAt, restored: true });
+      if (!record(value) || value.status !== "done" || (typeof value.id !== "string" || !/^[\w-]{1,128}$/.test(value.id)) || typeof value.question !== "string" || value.question.length > 2000 || typeof value.answer !== "string" || value.answer.length > 20000 || typeof value.createdAt !== "number" || !Number.isFinite(value.createdAt) || value.createdAt > now || now - value.createdAt > MAX_AGE) continue;
+      const references = Array.isArray(value.references) ? value.references.filter((ref): ref is EntityReference => record(ref) && typeof ref.type === "string" && TYPES.has(ref.type) && typeof ref.id === "string" && /^[\w-]{1,128}$/.test(ref.id) && typeof ref.label === "string" && ref.label.length <= 300).slice(0, 30) : [];
+      const actionReceipt = validateReceipt(value.actionReceipt, now);
+      exchanges.push({ ...(actionReceipt ? { actionReceipt } : {}), id: value.id, question: value.question, answer: value.answer, status: "done", error: null, references, toolsUsed: Array.isArray(value.toolsUsed) ? value.toolsUsed.filter((t): t is string => typeof t === "string" && /^[\w-]{1,128}$/.test(t)).slice(0, 30) : [], proposedAction: null, viaVoice: value.viaVoice === true, createdAt: value.createdAt, restored: true });
     }
     return { exchanges, muted: saved.muted === true };
   } catch { return empty; }
