@@ -57,7 +57,13 @@ function fixture(options: { sourceFailure?: boolean } = {}) {
           if (table === "action_requests" && rows[table].some(row => row.id === body.id)) {
             return Response.json({ code: "23505", message: "duplicate action" }, { status: 409 });
           }
-          const inserted = { id: `${table}-${rows[table].length + 1}`, ...(table === "owner_tasks" ? { status: "open" } : {}), ...body };
+          // Match nullable column defaults from job-notes-tasks-migration.sql.
+          // PostgREST returns null for these fields, not missing properties.
+          const inserted = {
+            id: `${table}-${rows[table].length + 1}`,
+            ...(table === "owner_tasks" ? { status: "open", client_id: null, property_id: null, completed_at: null } : {}),
+            ...body,
+          };
           rows[table].push(inserted);
           selected = [inserted];
         } else if (method === "PATCH") {
