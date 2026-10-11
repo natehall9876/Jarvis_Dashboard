@@ -105,3 +105,7 @@ Homeworks partial writes and malformed sources, unknown sync history, Eastern
 financial periods, demo exclusions and incomplete owner summaries. Regression
 failures were observed before fixes. Production provider access and live
 persistence are still separate verification gates.
+
+## Action claim retries
+
+The credential-free ai-action-claim-retry.spec.ts loads the real executor and Supabase query builder. PGlite executes the claim predicates against synthetic action_requests rows; a barrier forces two retries to observe the same failed state. Tests require exactly one successful claimant and mutation, reject a zero-row reclaim after concurrent completion, and preserve an ordinary failed-action retry. Task writes and authentication remain fixtures; no production records are touched. This covers claim contention, not the separate insert-success/readback-failure retry risk.
