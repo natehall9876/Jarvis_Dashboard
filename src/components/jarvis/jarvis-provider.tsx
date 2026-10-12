@@ -420,7 +420,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     const voice = selectBrowserVoice(window.speechSynthesis.getVoices?.() ?? []);
     if (voice) utterance.voice = voice;
     utterance.lang = voice?.lang ?? "en-GB";
-    utterance.rate = 1;
+    utterance.rate = 1.15;
     utteranceRef.current = utterance;
     const epoch = speechEpochRef.current;
     utterance.onend = () => {

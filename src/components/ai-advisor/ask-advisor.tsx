@@ -115,7 +115,7 @@ export function AskAdvisor({ compact = false }: { compact?: boolean }) {
         ) : null}
       </div>
 
-      <p className="hud-memory text-[11px] leading-5 text-[var(--color-text-muted)]">{jarvis.memoryAvailable ? "Last 20 completed exchanges stay on this device for 7 days. Clear conversation forgets them." : "Conversation is available for this session."} {speechOutputSupported ? "Voice uses your browser’s speech service." : ""}</p>
+      <p className="hud-memory text-[11px] leading-5 text-[var(--color-text-muted)]">{jarvis.memoryAvailable ? "Last 20 completed exchanges stay on this device for 7 days. Clear conversation forgets them." : "Conversation is available for this session."} {speechOutputSupported ? (jarvis.speechEngine === "neural" ? "AI-generated natural voice." : "Basic device voice · 1.15× pace. Natural voice is not connected.") : ""}</p>
 
       {listening ? (
         <div className="flex items-center gap-1.5 text-xs text-[var(--color-accent)]">

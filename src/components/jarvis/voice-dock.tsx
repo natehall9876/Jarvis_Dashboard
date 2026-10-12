@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { Mic, Square, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Mic, Square, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 import { AskAdvisor } from "@/components/ai-advisor/ask-advisor";
 import { ProposedActionCard } from "@/components/ai-advisor/proposed-action-card";
@@ -174,9 +174,9 @@ export function VoiceDock() {
                 type="button"
                 onClick={() => setPanelOpen(false)}
                 aria-label="Close"
-                className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-2)]"
               >
-                <X className="h-4 w-4" />
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />Back
               </button>
             </div>
             {/*

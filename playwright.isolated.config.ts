@@ -38,6 +38,7 @@ export default defineConfig({
     "job-section-isolation.spec.ts",
     "mobile-viewport.spec.ts",
     "notes-tasks.spec.ts",
+    "navigation-voice-quality.spec.ts",
     "oauth-integrations.spec.ts",
     "oauth-public-pages.spec.ts",
     "oauth-state-safety.spec.ts",

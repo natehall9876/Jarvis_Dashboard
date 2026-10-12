@@ -132,6 +132,7 @@ test("final transcript releases capture before speech and selects the installed 
     h.render().startListening(); const old = h.sessions[0]; old.say("Open my schedule");
     expect(h.render().listening).toBe(false); expect(old.stopped).toBe(true);
     expect(h.spoken[0]?.voice).toMatchObject({ name: "Daniel (Enhanced)" });
+    expect(h.spoken[0]?.rate).toBe(1.15);
     old.say("Open my schedule"); expect(h.routes).toEqual(["/schedule"]);
   } finally { h.dispose(); }
 });
