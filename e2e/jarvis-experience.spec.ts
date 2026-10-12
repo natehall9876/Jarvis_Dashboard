@@ -8,7 +8,7 @@ import { parseNavigationIntent, stripForSpeech, takeSpeakableSentences, toolToCa
 
 test.describe("speech text preparation", () => {
   test("markdown is reduced to speakable plain text", () => {
-    expect(stripForSpeech("## Today\n- **10 jobs** scheduled\n- See [Rob Elliot](/clients/1)")).toBe("Today\n10 jobs scheduled\nSee Rob Elliot");
+    expect(stripForSpeech("## Today\n- **10 jobs** scheduled\n- See [Rob Elliot](/clients/1)")).toBe("Today. 10 jobs scheduled. See Rob Elliot");
     expect(stripForSpeech("Use `code` and ```block``` here")).toBe("Use code and here");
   });
 

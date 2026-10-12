@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -33,10 +33,10 @@ export function Modal({
           </div>
           <Link
             href={closeHref}
-            className="rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]"
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-2)]"
             aria-label="Close"
           >
-            <X className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />Back
           </Link>
         </div>
         <div className="max-h-[75vh] overflow-y-auto px-5 py-4">{children}</div>

@@ -17,7 +17,8 @@ export function stripForSpeech(markdown: string): string {
     .replace(/(\*\*|__|\*|_|~~)/g, "")
     .replace(/\|/g, " ")
     .replace(/[ \t]+/g, " ")
-    .replace(/\n{2,}/g, "\n")
+    .replace(/([.!?:;])\s*\n+/g, "$1 ")
+    .replace(/\n+/g, ". ")
     .trim();
 }
 
@@ -147,12 +148,12 @@ export function toolToCapabilities(tool: string): string[] {
 }
 
 
-/** Prefer an installed British voice; never claim a device voice is neural TTS. */
+/** Quality first, then British delivery; device voices remain device speech. */
 export function selectBrowserVoice<T extends { name: string; lang: string; default?: boolean }>(voices: T[]): T | undefined {
   const english = voices.filter(v => /^en(?:-|_)/i.test(v.lang));
   const score = (v: T) =>
-    (/^en[-_]GB$/i.test(v.lang) ? 100 : 0) +
-    (/natural|premium|enhanced|neural/i.test(v.name) ? 40 : 0) +
+    (/^en[-_]GB$/i.test(v.lang) ? 60 : 0) +
+    (/natural|premium|enhanced|neural/i.test(v.name) ? 200 : 0) +
     (/daniel|ryan|george|arthur|oliver/i.test(v.name) ? 20 : 0) +
     (v.default ? 1 : 0);
   return english.slice().sort((a, b) => score(b) - score(a))[0];

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { RecoveryRedirect } from "@/components/auth/recovery-redirect";
+import { NavigationControls } from "@/components/layout/navigation-controls";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-[var(--color-surface-0)]">
         <RecoveryRedirect />
+        <NavigationControls />
         {children}
       </body>
     </html>
