@@ -203,6 +203,22 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
   const hydratedRef = useRef(false);
   const memoryResetRef = useRef<string | null>(null);
 
+  const releaseCapture = useCallback(() => {
+    const recognition = recognitionRef.current;
+    // Invalidate first: stop/abort may synchronously deliver a final result,
+    // and some engines never deliver onend at all.
+    recognitionRef.current = null;
+    setListening(false);
+    setInterim("");
+    if (!recognition) return;
+    try {
+      if (recognition.abort) recognition.abort();
+      else recognition.stop();
+    } catch {
+      try { recognition.stop(); } catch { /* Already stopped. */ }
+    }
+  }, []);
+
   const later = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(fn, ms);
     timersRef.current.push(id);
@@ -508,17 +524,13 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
     streamDoneRef.current = true;
     conversationModeRef.current = false;
     setConversationMode(false);
-    const recognition = recognitionRef.current;
-    recognitionRef.current = null;
-    recognition?.abort?.();
-    setListening(false);
-    setInterim("");
+    releaseCapture();
     setLoading(false);
     setGotFirstToken(false);
     setProgress(null);
     setActiveCapabilities([]);
     stopSpeaking();
-  }, [patch, stopSpeaking]);
+  }, [patch, stopSpeaking, releaseCapture]);
 
   const finishFlash = useCallback((kind: "success" | "error", ms: number) => {
     setFlash(kind);
@@ -531,6 +543,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       if (!trimmed || loadingRef.current) return;
       const viaVoice = options.viaVoice ?? false;
       stopSpeaking();
+      releaseCapture();
       setVoiceError(null);
 
       const id = crypto.randomUUID();
@@ -547,7 +560,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         if (viaVoice) {
           streamDoneRef.current = true;
           enqueueSpeech([reply]);
-        }
+        } else resumeListening();
         return;
       }
 
@@ -679,7 +692,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         if (!speakQueueRef.current.length && !window.speechSynthesis?.speaking) pumpSpeech();
       }
     },
-    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopResponse, stopSpeaking],
+    [enqueueSpeech, later, finishFlash, patch, pathPrefix, pumpSpeech, router, stopResponse, stopSpeaking, releaseCapture, resumeListening],
   );
 
   const retry = useCallback(
@@ -727,10 +740,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
         silentEndsRef.current = 0;
         // Detach before stopping: a synchronous onend or late final cannot
         // reopen the microphone or execute this command twice.
-        recognitionRef.current = null;
-        setListening(false);
-        try { recognition.abort?.(); } catch { /* already ended */ }
-        setInterim("");
+        releaseCapture();
         setLastTranscript(finalText.trim());
         setLastTranscriptAt(new Date().toISOString());
         void submit(finalText.trim(), { viaVoice: true });
@@ -786,7 +796,7 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
       disableConversation();
       reportVoiceError("The microphone couldn't start. Check this site's microphone permission, then tap to retry.");
     }
-  }, [stopSpeaking, submit, reportVoiceError, disableConversation, resumeListening, unlockSpeech]);
+  }, [stopSpeaking, submit, reportVoiceError, disableConversation, resumeListening, unlockSpeech, releaseCapture]);
 
   useEffect(() => {
     startListeningRef.current = startListening;
@@ -794,22 +804,8 @@ export function JarvisProvider({ children, pathPrefix = "", memoryOwner = null }
 
   const stopListening = useCallback(() => {
     disableConversation();
-    const r = recognitionRef.current;
-    if (!r) {
-      setListening(false);
-      return;
-    }
-    try { r.stop(); } catch { recognitionRef.current = null; setListening(false); }
-    // If the engine never fires onend, force-release after a moment.
-    later(() => {
-      if (recognitionRef.current === r) {
-        r.abort?.();
-        recognitionRef.current = null;
-        setListening(false);
-        setInterim("");
-      }
-    }, 1500);
-  }, [later, disableConversation]);
+    releaseCapture();
+  }, [disableConversation, releaseCapture]);
 
   const toggleMute = useCallback(() => {
     const next = !mutedRef.current;
