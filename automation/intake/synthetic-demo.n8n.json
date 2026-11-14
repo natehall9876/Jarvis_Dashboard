@@ -1,0 +1,113 @@
+{
+  "name": "WeedEater — Synthetic intake demo (no live data)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "manual",
+      "name": "Run synthetic demo",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -250,
+        100
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture",
+      "name": "Synthetic fixture only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{json:{\n  \"inquiries\": [\n    {\n      \"source\": \"synthetic-demo\",\n      \"source_id\": \"demo-1\",\n      \"received_at\": \"2026-11-13T16:00:00-05:00\",\n      \"name\": \"Example Customer\",\n      \"phone\": \"401-555-0101\",\n      \"town\": \"Smithfield\",\n      \"region\": \"RI\",\n      \"service_requested\": \"Fall cleanup\",\n      \"message\": \"Could I get an estimate?\"\n    },\n    {\n      \"source\": \"synthetic-demo\",\n      \"source_id\": \"demo-2\",\n      \"received_at\": \"2026-11-13T16:05:00-05:00\",\n      \"name\": \"Example Customer\",\n      \"phone\": \"+1 (401) 555-0101\",\n      \"town\": \"Smithfield\",\n      \"region\": \"RI\",\n      \"service_requested\": \"Fall cleanup\",\n      \"message\": \"Following up on the estimate.\"\n    }\n  ],\n  \"existing_contacts\": [\n    {\n      \"id\": \"synthetic-contact-1\",\n      \"phone\": \"14015550101\"\n    }\n  ]\n}}];"
+      }
+    },
+    {
+      "id": "prepare-review",
+      "name": "Prepare draft-only review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function prepareReview(envelope, processedAt = new Date().toISOString()) {\n  if (!envelope || !Array.isArray(envelope.inquiries)) throw new Error('Expected an inquiries array.');\n  if (!Array.isArray(envelope.existing_contacts)) throw new Error('Expected existing_contacts array; use [] only when no index is available.');\n  if (envelope.inquiries.length > 1000 || envelope.existing_contacts.length > 10000) throw new Error('Batch exceeds review limit. Split the batch.');\n  const text = (value) => typeof value === 'string' ? value.trim() : '';\n  const timestamp = (value) => {\n    const s = text(value);\n    return /^\\d{4}-\\d{2}-\\d{2}T.*(?:Z|[+-]\\d{2}:\\d{2})$/.test(s) && Number.isFinite(Date.parse(s)) ? new Date(s).toISOString() : null;\n  };\n  if (!timestamp(processedAt)) throw new Error('processedAt must include a valid timezone.');\n  const phone = (value) => {\n    const s = text(value);\n    if (!s || /(?:ext\\.?|x|#)\\s*\\d+/i.test(s)) return null;\n    const digits = s.replace(/\\D/g, '');\n    if (/^[2-9]\\d{2}[2-9]\\d{6}$/.test(digits)) return '+1' + digits;\n    if (/^1[2-9]\\d{2}[2-9]\\d{6}$/.test(digits)) return '+' + digits;\n    return null; // Do not guess non-NANP numbers or strip extensions.\n  };\n  const email = (value) => {\n    const s = text(value).toLowerCase();\n    return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s) ? s : null;\n  };\n  const keys = (row) => [phone(row.phone) && 'phone:' + phone(row.phone), email(row.email) && 'email:' + email(row.email)].filter(Boolean);\n  const lookup = new Map();\n  for (const [index, contact] of envelope.existing_contacts.entries()) {\n    if (!contact || typeof contact !== 'object' || Array.isArray(contact)) throw new Error('Each existing contact must be an object.');\n    for (const key of keys(contact)) {\n      if (!lookup.has(key)) lookup.set(key, []);\n      lookup.get(key).push(text(contact.id) || 'contact-index:' + index);\n    }\n  }\n  const inquiryKeys = envelope.inquiries.map((row) => {\n    if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Each inquiry must be an object.');\n    return keys(row);\n  });\n  const sourceKeys = envelope.inquiries.map((row) => text(row.source) && text(row.source_id)\n    ? encodeURIComponent(text(row.source)) + ':' + encodeURIComponent(text(row.source_id)) : null);\n  return envelope.inquiries.map((row, index) => {\n    const missing = [];\n    const source = text(row.source) || null;\n    const sourceId = text(row.source_id) || null;\n    const receivedAt = timestamp(row.received_at);\n    const lastConfirmedAt = timestamp(row.last_confirmed_at);\n    const normalizedPhone = phone(row.phone);\n    const normalizedEmail = email(row.email);\n    const address = text(row.property_address) || null;\n    const town = text(row.town).toLowerCase().replace(/\\s+/g, ' ');\n    const region = text(row.region).toUpperCase();\n    const neighborhood = text(row.neighborhood).toLowerCase();\n    const photos = Array.isArray(row.photo_refs) ? row.photo_refs.filter((p) => typeof p === 'string' && p.trim()).map((p) => p.trim()) : [];\n    if (!source) missing.push('source');\n    if (!sourceId) missing.push('source_id');\n    if (!receivedAt) missing.push('received_at_with_timezone');\n    if (!lastConfirmedAt) missing.push('last_confirmed_at');\n    if (!text(row.name)) missing.push('name');\n    if (!normalizedPhone && !normalizedEmail) missing.push('usable_contact');\n    if (text(row.phone) && !normalizedPhone) missing.push('phone_format_or_extension');\n    if (text(row.email) && !normalizedEmail) missing.push('email_format');\n    if (!address) missing.push('property_address');\n    if (!town || !region) missing.push('town_and_region');\n    if (!photos.length) missing.push('property_photos');\n    if (!text(row.service_requested)) missing.push('service_requested');\n    const matches = [...new Set(inquiryKeys[index].flatMap((key) => lookup.get(key) || []))];\n    const relatedBatch = envelope.inquiries.flatMap((_, j) => j !== index && inquiryKeys[index].some((key) => inquiryKeys[j].includes(key)) ? [j] : []);\n    const repeatSources = sourceKeys[index] ? sourceKeys.flatMap((key, j) => j !== index && key === sourceKeys[index] ? [j] : []) : [];\n    const possibleDuplicate = matches.length > 0 || relatedBatch.length > 0 || repeatSources.length > 0;\n    let routeFit = 'needs_location_verification';\n    if (town && region) routeFit = (region === 'RI' || region === 'RHODE ISLAND') && ['smithfield', 'greenville'].includes(town) ? 'core_area_candidate' : 'route_review_required';\n    if (town === 'esmond' || neighborhood === 'esmond') routeFit = 'excluded_area_review';\n    const asks = [];\n    if (!address) asks.push('the property address');\n    if (!photos.length) asks.push('a few current photos of the areas needing work');\n    if (!text(row.service_requested)) asks.push('which services you need');\n    const request = asks.length ? ' Could you send ' + asks.join(', ').replace(/, ([^,]*)$/, ' and $1') + '?' : ' I’ll review the details before confirming a price or availability.';\n    const reply = 'Hi, thanks for reaching out to WeedEater Lawn Care.' + request;\n    return {\n      schema_version: 1,\n      review_key: sourceKeys[index],\n      review_status: 'needs_verification',\n      source,\n      source_id: sourceId,\n      source_url: text(row.source_url) || null,\n      received_at: receivedAt,\n      processed_at: timestamp(processedAt),\n      last_confirmed_at: lastConfirmedAt,\n      last_confirmed_at_status: lastConfirmedAt ? 'source_claim_unverified' : 'unknown',\n      raw_source_payload: JSON.parse(JSON.stringify(row)),\n      customer: {name: text(row.name) || null, phone: normalizedPhone, email: normalizedEmail},\n      property: {address, town: text(row.town) || null, region: text(row.region) || null, neighborhood: text(row.neighborhood) || null, photo_refs: photos},\n      service_requested: text(row.service_requested) || null,\n      message: text(row.message) || null,\n      duplicate_review: {\n        possible_duplicate: possibleDuplicate,\n        exact_contact_candidates: matches,\n        related_batch_indexes: relatedBatch,\n        repeat_source_batch_indexes: repeatSources,\n        keys: inquiryKeys[index],\n        contact_index_status: envelope.existing_contacts.length ? 'provided_index_unverified' : 'no_contact_index_provided',\n        automatically_merged: false,\n      },\n      route_fit: routeFit,\n      route_fit_note: 'Area screening only. Verify the exact address, neighborhood, travel and existing route before accepting.',\n      missing_or_unverified: missing,\n      price: null,\n      scheduled_at: null,\n      follow_up_due_at: null,\n      next_action: possibleDuplicate ? 'review_matching_conversations_before_contact' : 'review_source_and_draft',\n      draft: {status: 'draft_only', body: reply, requires_owner_review: true, contact_hold: possibleDuplicate, sent: false},\n      persistence: 'returned_to_caller_only',\n    };\n  });\n}\nreturn $input.all().flatMap((item) => prepareReview(item.json).map((json) => ({json})));"
+      }
+    },
+    {
+      "id": "review-output",
+      "name": "Review output — no sending or CRM writes",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        640,
+        100
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "safety-note",
+      "name": "Read before connecting sources",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        60,
+        -190
+      ],
+      "parameters": {
+        "height": 220,
+        "width": 720,
+        "content": "## Draft-only intake review\nAccepts { inquiries: [...], existing_contacts: [...] }. No credentials, schedules, webhook, database writes or send nodes. Returns every source record, duplicate candidates and draft text. Match candidates require review; never auto-merge. Output is not a durable master tracker. Use an authenticated staging writer only after its separate implementation and tests."
+      }
+    }
+  ],
+  "connections": {
+    "Run synthetic demo": {
+      "main": [
+        [
+          {
+            "node": "Synthetic fixture only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthetic fixture only": {
+      "main": [
+        [
+          {
+            "node": "Prepare draft-only review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare draft-only review": {
+      "main": [
+        [
+          {
+            "node": "Review output — no sending or CRM writes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "tags": []
+}
