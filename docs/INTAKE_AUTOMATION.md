@@ -103,8 +103,8 @@ separately developed master-tracker Site.
 From the repository root:
 
 ```sh
-node automation/intake/build-workflows.cjs
-node --test automation/intake/prepare-review.test.cjs
+node automation/intake/build-workflows.mjs
+node --test automation/intake/prepare-review.test.mjs
 git diff --check
 ```
 

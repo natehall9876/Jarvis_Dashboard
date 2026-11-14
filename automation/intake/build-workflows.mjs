@@ -1,7 +1,8 @@
-'use strict';
-const fs = require('node:fs');
-const path = require('node:path');
-const {prepareReview} = require('./prepare-review.cjs');
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {prepareReview} from './prepare-review.cjs';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const code = `${prepareReview.toString()}\nreturn $input.all().flatMap((item) => prepareReview(item.json).map((json) => ({json})));`;
 const demo = {
   inquiries: [

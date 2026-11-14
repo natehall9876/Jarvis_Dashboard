@@ -1,10 +1,11 @@
-'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const {prepareReview} = require('./prepare-review.cjs');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import {fileURLToPath} from 'node:url';
+import {prepareReview} from './prepare-review.cjs';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const at = '2026-11-14T01:00:00Z';
 const inquiry = (extra={}) => ({source:'synthetic',source_id:'1',received_at:at,name:'Example',phone:'401-555-0101',town:'Smithfield',region:'RI',service_requested:'Fall cleanup',...extra});
 const run = (rows, contacts=[]) => prepareReview({inquiries:rows,existing_contacts:contacts},at);
