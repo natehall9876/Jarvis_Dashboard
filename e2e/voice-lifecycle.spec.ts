@@ -149,6 +149,93 @@ test("stop listening prevents a scheduled restart", () => {
     expect(h.render().conversationMode).toBe(false); expect(h.render().listening).toBe(false); expect(h.sessions).toHaveLength(1);
   } finally { h.dispose(); }
 });
+
+test("stop listening discards a final transcript delivered during stop", () => {
+  const h = harness(); try {
+    h.render().toggleConversationMode();
+    const old = h.sessions[0];
+    old.stop = () => { old.say("Open my schedule"); old.onend?.(); };
+    old.abort = () => { old.stopped = true; old.say("Open my schedule"); old.onend?.(); };
+    h.render().stopListening();
+    old.say("Open my schedule"); h.advance(2000);
+    expect(h.routes).toEqual([]);
+    expect(h.render().exchanges).toEqual([]);
+    expect(h.render().listening).toBe(false);
+    expect(h.render().conversationMode).toBe(false);
+    expect(old.stopped).toBe(true);
+  } finally { h.dispose(); }
+});
+
+test("stop listening releases a silent engine immediately so the next tap works", () => {
+  const h = harness(); try {
+    h.render().startListening();
+    const old = h.sessions[0];
+    old.stop = () => { old.stopped = true; };
+    old.abort = () => { old.stopped = true; };
+    h.render().stopListening();
+    expect(h.render().listening).toBe(false);
+    h.render().startListening();
+    expect(h.sessions).toHaveLength(2);
+    old.onend?.(); old.say("Open my schedule");
+    expect(h.render().listening).toBe(true);
+    expect(h.routes).toEqual([]);
+  } finally { h.dispose(); }
+});
+
+test("a typed request releases capture before fetching and ignores the old transcript", async () => {
+  let capturedDuringFetch = true;
+  const h = harness({ fetchImpl: async () => {
+    capturedDuringFetch = h.render().listening;
+    return new Response('event: done\ndata: {"answer":"Ready.","references":[],"toolsUsed":[]}\n\n');
+  } });
+  try {
+    h.render().toggleConversationMode();
+    const old = h.sessions[0];
+    await h.render().submit("What needs my attention?");
+    old.say("Open my schedule");
+    expect(capturedDuringFetch).toBe(false);
+    expect(old.stopped).toBe(true);
+    expect(h.routes).toEqual([]);
+    expect(h.render().exchanges).toHaveLength(1);
+    expect(h.render().exchanges[0].answer).toBe("Ready.");
+    h.advance(1000);
+    expect(h.render().conversationMode).toBe(true);
+    expect(h.sessions).toHaveLength(2);
+    expect(h.render().listening).toBe(true);
+  } finally { h.dispose(); }
+});
+
+test("typed navigation releases capture and resumes an active hands-free session once", async () => {
+  const h = harness(); try {
+    h.render().toggleConversationMode();
+    const old = h.sessions[0];
+    await h.render().submit("Open my schedule");
+    expect(old.stopped).toBe(true);
+    expect(h.render().listening).toBe(false);
+    h.advance(1000);
+    expect(h.sessions).toHaveLength(2);
+    expect(h.render().listening).toBe(true);
+    expect(h.routes).toEqual(["/schedule"]);
+    expect(h.spoken).toEqual([]);
+  } finally { h.dispose(); }
+});
+
+for (const mode of ["missing", "throws"] as const) {
+  test(`hang-up falls back to stop when recognition abort ${mode}`, () => {
+    const h = harness(); try {
+      h.render().toggleConversationMode();
+      const old = h.sessions[0];
+      Object.defineProperty(old, "abort", { value: mode === "missing" ? undefined : () => { throw new Error("already stopping"); } });
+      old.stop = () => { old.stopped = true; old.say("Open my schedule"); old.onend?.(); };
+      h.render().stopResponse(); h.advance(1000);
+      expect(old.stopped).toBe(true);
+      expect(h.render().listening).toBe(false);
+      expect(h.render().conversationMode).toBe(false);
+      expect(h.routes).toEqual([]);
+      expect(h.sessions).toHaveLength(1);
+    } finally { h.dispose(); }
+  });
+}
 test("speech failure ends the call and exposes a recovery message", () => {
   const h = harness(); try {
     h.render().toggleConversationMode(); h.render().startListening(); h.sessions[0].say("Open my schedule");
